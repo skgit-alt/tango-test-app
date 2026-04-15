@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
@@ -8,9 +8,11 @@ export default function WaitingResultPage() {
   const supabase = createClient()
   const router = useRouter()
   const [testTitle, setTestTitle] = useState('')
+  const testIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    // 最新のテストを取得して監視
+    let cancelled = false
+
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/auth/login'); return }
@@ -30,6 +32,7 @@ export default function WaitingResultPage() {
       if (!testData) { router.push('/student'); return }
 
       setTestTitle(testData.title)
+      testIdRef.current = session.test_id
 
       // 既に公開済みならすぐに遷移
       if (testData.status === 'published') {
@@ -37,29 +40,47 @@ export default function WaitingResultPage() {
         return
       }
 
-      // Realtime でテストステータスを監視
+      // ポーリング：2秒ごとに公開状態を確認
+      const poll = async () => {
+        if (cancelled || !testIdRef.current) return
+        const { data } = await supabase
+          .from('tests')
+          .select('status')
+          .eq('id', testIdRef.current)
+          .single()
+        if (data?.status === 'published' && !cancelled) {
+          router.push('/student/result')
+        }
+      }
+
+      const interval = setInterval(poll, 2000)
+
+      // Realtimeも併用
       const channel = supabase
         .channel('waiting-result')
         .on(
           'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'tests',
-            filter: `id=eq.${session.test_id}`,
-          },
+          { event: 'UPDATE', schema: 'public', table: 'tests', filter: `id=eq.${session.test_id}` },
           (payload) => {
-            if (payload.new?.status === 'published') {
+            if (payload.new?.status === 'published' && !cancelled) {
               router.push('/student/result')
             }
           }
         )
         .subscribe()
 
-      return () => { supabase.removeChannel(channel) }
+      return () => {
+        cancelled = true
+        clearInterval(interval)
+        supabase.removeChannel(channel)
+      }
     }
 
-    init()
+    const cleanup = init()
+    return () => {
+      cancelled = true
+      cleanup.then(fn => fn?.())
+    }
   }, [supabase, router])
 
   return (
