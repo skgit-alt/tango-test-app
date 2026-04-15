@@ -37,55 +37,32 @@ export default function ActiveTestBanner({
       if (!cancelled) setTest(data ?? null)
     }
 
-    // 初回即時取得 + 3秒ごとにポーリング
     poll()
     const interval = setInterval(poll, 3000)
-
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-    }
+    return () => { cancelled = true; clearInterval(interval) }
   }, [supabase])
 
-  if (!test) return null
+  if (!test || !['waiting', 'open'].includes(test.status)) return null
 
-  // 自分のクラスが開放されているか
   const classOpen = (test.open_classes ?? []).includes(studentClass)
-  const canEnter = test.status === 'open' || test.status === 'waiting'
-
-  if (!canEnter) return null
+  const isFullyOpen = test.status === 'open'
+  const myClassStarted = isFullyOpen || classOpen
 
   return (
-    <div className="bg-blue-600 rounded-2xl p-5 text-white">
-      <p className="text-blue-200 text-sm mb-1">
-        {test.status === 'open'
-          ? '実施中のテスト'
-          : classOpen
-          ? `${studentClass} のテストが開始されました`
-          : '実施予定のテスト'}
+    <div className={`rounded-2xl p-5 text-white ${myClassStarted ? 'bg-green-600' : 'bg-blue-600'}`}>
+      <p className="text-sm mb-1 opacity-80">
+        {isFullyOpen ? '✅ 全クラス実施中' : classOpen ? `✅ ${studentClass} 開始済み` : '⏳ テスト配信中（開始待ち）'}
       </p>
       <p className="font-bold text-lg">{test.title}</p>
-      <p className="text-blue-200 text-sm mt-1">{test.mode}問モード</p>
+      <p className="text-sm mt-1 opacity-80">{test.mode}問モード</p>
 
-      {(test.status === 'open' || classOpen) && (
-        <Link
-          href="/student/waiting"
-          className="mt-4 block w-full bg-white text-blue-600 py-3 rounded-xl font-bold text-center hover:bg-blue-50 active:scale-95 transition-all"
-        >
-          テスト待機画面へ →
-        </Link>
-      )}
-
-      {test.status === 'waiting' && !classOpen && (
-        <div className="mt-3 flex items-center gap-2">
-          <div className="flex gap-1">
-            <span className="w-1.5 h-1.5 bg-blue-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-            <span className="w-1.5 h-1.5 bg-blue-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-            <span className="w-1.5 h-1.5 bg-blue-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-          </div>
-          <p className="text-blue-200 text-sm">開始を待っています...</p>
-        </div>
-      )}
+      {/* 状態にかかわらず常にボタンを表示 */}
+      <Link
+        href="/student/waiting"
+        className="mt-4 block w-full bg-white py-3 rounded-xl font-bold text-center hover:opacity-90 active:scale-95 transition-all text-gray-800"
+      >
+        {myClassStarted ? 'テスト待機画面へ →' : '待機画面で待つ →'}
+      </Link>
     </div>
   )
 }

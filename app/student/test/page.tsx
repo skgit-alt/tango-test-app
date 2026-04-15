@@ -17,32 +17,26 @@ export default async function TestPage() {
   if (!student) redirect('/auth/login')
   if (!student.test_name) redirect('/student/register')
 
-  // アクティブなテストを取得
-  // 全クラス開放(status='open') または 自分のクラスが open_classes に含まれる(status='waiting') どちらも対応
-  const { data: candidates } = await supabase
-    .from('tests')
-    .select('*')
-    .in('status', ['open', 'waiting'])
-    .order('created_at', { ascending: false })
-    .limit(5)
-
-  const test = (candidates ?? []).find((t) =>
-    t.status === 'open' ||
-    (t.open_classes ?? []).includes(student.class_name)
-  ) ?? null
-
-  if (!test) redirect('/student/waiting')
-
-  // セッションを取得
+  // 未提出のセッションを探す（セッションが存在 = 開始許可済み）
   const { data: session } = await supabase
     .from('sessions')
     .select('*')
-    .eq('test_id', test.id)
     .eq('student_id', student.id)
+    .eq('is_submitted', false)
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle()
 
   if (!session) redirect('/student/waiting')
-  if (session.is_submitted) redirect('/student/waiting-result')
+
+  // セッションのtest_idからテストを取得（statusは問わない）
+  const { data: test } = await supabase
+    .from('tests')
+    .select('*')
+    .eq('id', session.test_id)
+    .single()
+
+  if (!test) redirect('/student/waiting')
 
   // 問題を全取得
   const { data: questions } = await supabase
