@@ -128,7 +128,7 @@ export default function TestClient({
   const handlePageChange = async (newPage: number) => {
     setCurrentPage(newPage)
     await saveCurrentPage(newPage)
-    topRef.current?.scrollIntoView({ behavior: 'smooth' })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleAnswer = (questionId: string, choice: number) => {
