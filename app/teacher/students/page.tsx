@@ -17,6 +17,8 @@ export default function StudentsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTestName, setEditTestName] = useState('')
   const [searchText, setSearchText] = useState('')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [deleting, setDeleting] = useState(false)
 
   const fetchStudents = async () => {
     const { data } = await supabase
@@ -29,6 +31,65 @@ export default function StudentsPage() {
   }
 
   useEffect(() => { fetchStudents() }, [])
+
+  const filtered = students.filter((s) => {
+    if (!searchText) return true
+    const q = searchText.toLowerCase()
+    return (
+      s.name.toLowerCase().includes(q) ||
+      s.class_name.toLowerCase().includes(q) ||
+      s.email.toLowerCase().includes(q) ||
+      (s.test_name ?? '').toLowerCase().includes(q)
+    )
+  })
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((s) => selectedIds.has(s.id))
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) { next.delete(id) } else { next.add(id) }
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (allFilteredSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        filtered.forEach((s) => next.delete(s.id))
+        return next
+      })
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        filtered.forEach((s) => next.add(s.id))
+        return next
+      })
+    }
+  }
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) return
+    const confirmed = confirm(`選択した ${selectedIds.size} 名を削除しますか？\nこの操作は元に戻せません。`)
+    if (!confirmed) return
+
+    setDeleting(true)
+    setError('')
+    try {
+      const ids = Array.from(selectedIds)
+      const { error } = await supabase.from('students').delete().in('id', ids)
+      if (error) throw error
+      setSuccess(`${ids.length}名を削除しました`)
+      setSelectedIds(new Set())
+      await fetchStudents()
+    } catch (err) {
+      console.error(err)
+      setError('削除に失敗しました')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -116,22 +177,11 @@ export default function StudentsPage() {
     XLSX.writeFile(wb, '生徒情報テンプレート.xlsx')
   }
 
-  const filtered = students.filter((s) => {
-    if (!searchText) return true
-    const q = searchText.toLowerCase()
-    return (
-      s.name.toLowerCase().includes(q) ||
-      s.class_name.toLowerCase().includes(q) ||
-      s.email.toLowerCase().includes(q) ||
-      (s.test_name ?? '').toLowerCase().includes(q)
-    )
-  })
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">生徒管理</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => fileRef.current?.click()}
             disabled={uploading}
@@ -163,8 +213,19 @@ export default function StudentsPage() {
       {success && <div className="bg-green-50 text-green-700 rounded-xl p-4 text-sm">{success}</div>}
 
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="font-semibold text-gray-800">生徒一覧 ({students.length}名)</h2>
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <h2 className="font-semibold text-gray-800">生徒一覧 ({students.length}名)</h2>
+            {selectedIds.size > 0 && (
+              <button
+                onClick={handleDeleteSelected}
+                disabled={deleting}
+                className="bg-red-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-red-600 transition disabled:opacity-50"
+              >
+                {deleting ? '削除中...' : `選択した ${selectedIds.size} 名を削除`}
+              </button>
+            )}
+          </div>
           <input
             type="text"
             value={searchText}
@@ -185,6 +246,14 @@ export default function StudentsPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-600">
                 <tr>
+                  <th className="px-4 py-3 text-center w-10">
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                    />
+                  </th>
                   <th className="px-4 py-3 text-left">クラス</th>
                   <th className="px-4 py-3 text-left">番号</th>
                   <th className="px-4 py-3 text-left">名前</th>
@@ -195,7 +264,15 @@ export default function StudentsPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filtered.map((s) => (
-                  <tr key={s.id} className="hover:bg-gray-50">
+                  <tr key={s.id} className={`hover:bg-gray-50 ${selectedIds.has(s.id) ? 'bg-blue-50' : ''}`}>
+                    <td className="px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(s.id)}
+                        onChange={() => toggleSelect(s.id)}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                      />
+                    </td>
                     <td className="px-4 py-3 text-gray-700">{s.class_name}</td>
                     <td className="px-4 py-3 text-gray-700">{s.seat_number}</td>
                     <td className="px-4 py-3 text-gray-800 font-medium">{s.name}</td>
