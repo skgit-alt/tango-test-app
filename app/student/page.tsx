@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { calcPoints } from '@/lib/supabase/types'
 import { Chart300, Chart50 } from './ScoreChart'
+import ActiveTestBanner from './ActiveTestBanner'
 
 export default async function StudentHomePage() {
   const supabase = await createClient()
@@ -19,10 +20,10 @@ export default async function StudentHomePage() {
   if (!student) redirect('/auth/login')
   if (!student.test_name) redirect('/student/register')
 
-  // アクティブなテストを取得
+  // アクティブなテストを取得（open_classes含む）
   const { data: activeTest } = await supabase
     .from('tests')
-    .select('id, title, mode, status')
+    .select('id, title, mode, status, open_classes')
     .in('status', ['waiting', 'open', 'finished', 'published'])
     .order('created_at', { ascending: false })
     .limit(1)
@@ -119,26 +120,14 @@ export default async function StudentHomePage() {
           )}
         </div>
 
-        {/* テスト情報 */}
-        {activeTest && (
-          <div className="bg-blue-600 rounded-2xl p-5 text-white">
-            <p className="text-blue-200 text-sm mb-1">実施中のテスト</p>
-            <p className="font-bold text-lg">{activeTest.title}</p>
-            <p className="text-blue-200 text-sm mt-1">{activeTest.mode}問モード</p>
-          </div>
-        )}
+        {/* テスト情報バナー（3秒ごとにポーリングして自動更新） */}
+        <ActiveTestBanner
+          studentClass={student.class_name}
+          initialTest={activeTest as any}
+        />
 
         {/* アクションボタン */}
         <div className="space-y-3">
-          {activeTest && (activeTest.status === 'waiting' || activeTest.status === 'open') && (
-            <Link
-              href="/student/waiting"
-              className="block w-full bg-blue-600 text-white py-4 rounded-2xl font-bold text-center text-lg hover:bg-blue-700 active:bg-blue-800 transition shadow-md"
-            >
-              テスト待機画面へ
-            </Link>
-          )}
-
           <Link
             href="/student/ranking"
             className="block w-full bg-white border border-gray-200 text-gray-700 py-3 rounded-2xl font-semibold text-center hover:bg-gray-50 active:bg-gray-100 transition"
