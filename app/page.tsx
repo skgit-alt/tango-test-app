@@ -9,15 +9,18 @@ export default async function HomePage() {
     redirect('/auth/login')
   }
 
-  // 先生かどうか判定してリダイレクト
   const { data: admin } = await supabase
     .from('admins')
-    .select('id')
+    .select('id, role')
     .eq('email', user.email)
     .single()
 
   if (admin) {
-    redirect('/teacher')
+    if (admin.role === 'admin') {
+      redirect('/teacher')
+    } else {
+      redirect('/teacher/monitor')
+    }
   } else {
     redirect('/student')
   }
