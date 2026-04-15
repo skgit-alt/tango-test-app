@@ -45,6 +45,8 @@ export default function TestManagerClient({
   const [loading, setLoading] = useState(false)
   const [actionError, setActionError] = useState('')
   const [showPreview, setShowPreview] = useState(false)
+  const [classes, setClasses] = useState<string[]>([])
+  const [loadingClass, setLoadingClass] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     const { data: sessData } = await supabase
@@ -70,6 +72,11 @@ export default function TestManagerClient({
   useEffect(() => {
     fetchData()
 
+    // クラス一覧を取得
+    supabase.from('students').select('class_name').order('class_name').then(({ data }) => {
+      if (data) setClasses([...new Set(data.map(s => s.class_name))].filter(Boolean).sort())
+    })
+
     const channel = supabase
       .channel(`test-${test.id}`)
       .on(
@@ -93,6 +100,19 @@ export default function TestManagerClient({
 
     return () => { supabase.removeChannel(channel) }
   }, [fetchData, supabase, test.id])
+
+  const handleOpenClass = async (className: string) => {
+    const current = test.open_classes ?? []
+    if (current.includes(className)) return
+    setLoadingClass(className)
+    const newClasses = [...current, className]
+    const { error } = await supabase
+      .from('tests')
+      .update({ open_classes: newClasses })
+      .eq('id', test.id)
+    if (error) setActionError(`${className}の開始に失敗しました`)
+    setLoadingClass(null)
+  }
 
   const handleOpenTest = async () => {
     setLoading(true)
@@ -183,15 +203,6 @@ export default function TestManagerClient({
           >
             問題プレビュー
           </button>
-          {test.status === 'waiting' && (
-            <button
-              onClick={handleOpenTest}
-              disabled={loading}
-              className="bg-green-600 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-green-700 transition disabled:opacity-50"
-            >
-              テスト開始
-            </button>
-          )}
           {(test.status === 'open' || test.status === 'finished') && (
             <button
               onClick={handlePublishResult}
@@ -230,6 +241,47 @@ export default function TestManagerClient({
           </div>
         ))}
       </div>
+
+      {/* クラス別開始 */}
+      {(test.status === 'waiting' || test.status === 'open') && classes.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-3">
+          <h2 className="font-semibold text-gray-800">クラス別開始</h2>
+          <div className="flex flex-wrap gap-2">
+            {classes.map((cls) => {
+              const opened = (test.open_classes ?? []).includes(cls) || test.status === 'open'
+              const isLoading = loadingClass === cls
+              return (
+                <button
+                  key={cls}
+                  onClick={() => handleOpenClass(cls)}
+                  disabled={opened || isLoading || test.status === 'open'}
+                  className={`px-4 py-2 rounded-xl text-sm font-semibold transition active:scale-95 ${
+                    opened
+                      ? 'bg-green-100 text-green-700 cursor-default'
+                      : 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50'
+                  }`}
+                >
+                  {isLoading ? '...' : opened ? `${cls} ✓` : `${cls} 開始`}
+                </button>
+              )
+            })}
+          </div>
+          {test.status === 'waiting' && (
+            <button
+              onClick={handleOpenTest}
+              disabled={loading}
+              className="w-full bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 active:scale-95 transition disabled:opacity-50"
+            >
+              全クラス一括開始
+            </button>
+          )}
+          {test.status === 'open' && (
+            <div className="bg-green-50 text-green-700 rounded-xl px-4 py-3 text-sm font-semibold text-center">
+              ✅ 全クラス実施中
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 生徒状況一覧 */}
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">

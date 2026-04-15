@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Student, Test, Session } from '@/lib/supabase/types'
 
 export default function WaitingClient({
   student,
-  test,
+  test: initialTest,
   existingSession,
 }: {
   student: Student
@@ -16,11 +16,32 @@ export default function WaitingClient({
 }) {
   const supabase = createClient()
   const router = useRouter()
+  const [test, setTest] = useState<Test>(initialTest)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // テストのステータス変化をリアルタイムで監視
+  useEffect(() => {
+    const channel = supabase
+      .channel(`waiting-test-${test.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'tests', filter: `id=eq.${test.id}` },
+        (payload) => {
+          if (payload.new) setTest(payload.new as Test)
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [supabase, test.id])
+
+  // 自分のクラスが開放されているか判定
+  const classOpen = (test.open_classes ?? []).includes(student.class_name)
+  const canStart = test.status === 'open' || classOpen
+
   const handleStartTest = async () => {
-    if (test.status !== 'open') {
+    if (!canStart) {
       setError('先生がまだテストを開始していません。少しお待ちください。')
       return
     }
@@ -35,7 +56,6 @@ export default function WaitingClient({
       const now = new Date().toISOString()
 
       if (existingSession) {
-        // 既存セッションの開始時刻を更新（まだ started_at が null の場合）
         if (!existingSession.started_at) {
           await supabase
             .from('sessions')
@@ -43,7 +63,6 @@ export default function WaitingClient({
             .eq('id', existingSession.id)
         }
       } else {
-        // 新規セッション作成
         const { error: sessionError } = await supabase
           .from('sessions')
           .insert({
@@ -85,7 +104,7 @@ export default function WaitingClient({
         </div>
 
         {/* ステータス表示 */}
-        {test.status === 'waiting' && (
+        {!canStart && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
             <p className="text-yellow-800 text-sm font-medium">先生のテスト開始を待っています...</p>
             <div className="flex justify-center mt-3">
@@ -98,9 +117,11 @@ export default function WaitingClient({
           </div>
         )}
 
-        {test.status === 'open' && (
+        {canStart && (
           <div className="bg-green-50 border border-green-200 rounded-xl p-3">
-            <p className="text-green-700 text-sm font-medium">テストが開始されました！</p>
+            <p className="text-green-700 text-sm font-medium">
+              {test.status === 'open' ? 'テストが開始されました！' : `${student.class_name} のテストが開始されました！`}
+            </p>
           </div>
         )}
 
@@ -110,10 +131,10 @@ export default function WaitingClient({
 
         <button
           onClick={handleStartTest}
-          disabled={loading || test.status === 'waiting'}
+          disabled={loading || !canStart}
           className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold text-lg hover:bg-blue-700 active:bg-blue-800 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
         >
-          {loading ? '準備中...' : test.status === 'waiting' ? '開始を待っています...' : 'テスト開始'}
+          {loading ? '準備中...' : !canStart ? '開始を待っています...' : 'テスト開始'}
         </button>
 
         <a href="/student" className="block text-sm text-gray-400 hover:text-gray-600 transition">

@@ -28,6 +28,7 @@ export interface Test {
   opened_at: string | null
   published_at: string | null
   created_at: string
+  open_classes: string[] | null
 }
 
 export interface Question {
