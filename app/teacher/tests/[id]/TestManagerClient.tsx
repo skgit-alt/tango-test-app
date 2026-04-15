@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Test, Session, CheatLog, Student } from '@/lib/supabase/types'
+import { Test, Session, CheatLog, Student, Question } from '@/lib/supabase/types'
 import * as XLSX from 'xlsx'
 
 interface SessionWithStudent extends Session {
@@ -29,12 +29,14 @@ const statusColor: Record<string, string> = {
   published: 'bg-blue-100 text-blue-800',
 }
 
+type PreviewQuestion = Pick<Question, 'id' | 'order_num' | 'question_text' | 'choice1' | 'choice2' | 'choice3' | 'choice4' | 'choice5' | 'correct_answer' | 'points'>
+
 export default function TestManagerClient({
   test: initialTest,
-  totalQuestions,
+  questions,
 }: {
   test: Test
-  totalQuestions: number
+  questions: PreviewQuestion[]
 }) {
   const supabase = createClient()
   const [test, setTest] = useState<Test>(initialTest)
@@ -42,6 +44,7 @@ export default function TestManagerClient({
   const [cheatLogs, setCheatLogs] = useState<CheatLogWithStudent[]>([])
   const [loading, setLoading] = useState(false)
   const [actionError, setActionError] = useState('')
+  const [showPreview, setShowPreview] = useState(false)
 
   const fetchData = useCallback(async () => {
     const { data: sessData } = await supabase
@@ -173,7 +176,13 @@ export default function TestManagerClient({
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setShowPreview(true)}
+            className="bg-white border border-gray-300 text-gray-700 px-4 py-2.5 rounded-xl font-medium hover:bg-gray-50 transition text-sm"
+          >
+            問題プレビュー
+          </button>
           {test.status === 'waiting' && (
             <button
               onClick={handleOpenTest}
@@ -288,6 +297,81 @@ export default function TestManagerClient({
           </div>
         )}
       </div>
+
+      {/* 問題プレビューモーダル */}
+      {showPreview && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex flex-col">
+          {/* モーダルヘッダー */}
+          <div className="bg-blue-600 text-white px-4 py-4 flex items-center gap-3 shrink-0">
+            <button
+              onClick={() => setShowPreview(false)}
+              className="text-blue-200 hover:text-white transition"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <div>
+              <h2 className="font-bold text-lg leading-tight">問題プレビュー</h2>
+              <p className="text-blue-200 text-sm">{test.title} — {questions.length}問 / 正解は緑でハイライト</p>
+            </div>
+          </div>
+
+          {/* スクロールエリア */}
+          <div className="flex-1 overflow-y-auto bg-gray-50">
+            <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
+              {questions.length === 0 && (
+                <div className="text-center text-gray-400 py-12">問題がありません</div>
+              )}
+              {questions.map((q) => {
+                const choices = [
+                  { num: 1, text: q.choice1 },
+                  { num: 2, text: q.choice2 },
+                  { num: 3, text: q.choice3 },
+                  { num: 4, text: q.choice4 },
+                  { num: 5, text: q.choice5 },
+                ].filter((c) => c.text && c.text !== 'None' && c.text !== 'null')
+
+                return (
+                  <div key={q.id} className="bg-white rounded-2xl border-2 border-gray-200 p-5">
+                    <div className="flex items-start gap-3 mb-4">
+                      <span className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-lg shrink-0 mt-0.5">
+                        {q.order_num}
+                      </span>
+                      <p className="text-gray-800 font-medium leading-relaxed flex-1">{q.question_text}</p>
+                      <span className="text-xs text-gray-400 shrink-0">{q.points}点</span>
+                    </div>
+                    <div className="space-y-2">
+                      {choices.map((choice) => {
+                        const isCorrect = choice.num === q.correct_answer
+                        return (
+                          <div
+                            key={choice.num}
+                            className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border-2 text-sm ${
+                              isCorrect
+                                ? 'border-green-400 bg-green-50 text-green-800 font-medium'
+                                : 'border-gray-100 text-gray-600'
+                            }`}
+                          >
+                            <span className="text-gray-400 text-xs shrink-0">
+                              {['①', '②', '③', '④', '⑤'][choice.num - 1]}
+                            </span>
+                            <span className="flex-1">{choice.text}</span>
+                            {isCorrect && (
+                              <span className="text-green-600 text-xs font-bold shrink-0">✓ 正解</span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+              <div className="h-4" />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 不正ログ */}
       {cheatLogs.length > 0 && (

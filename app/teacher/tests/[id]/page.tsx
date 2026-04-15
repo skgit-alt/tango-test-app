@@ -20,14 +20,14 @@ export default async function TestDetailPage({
 
   const { data: questions } = await supabase
     .from('questions')
-    .select('id, order_num, question_text, correct_answer, points')
+    .select('id, order_num, question_text, choice1, choice2, choice3, choice4, choice5, correct_answer, points')
     .eq('test_id', id)
     .order('order_num')
 
   return (
     <TestManagerClient
       test={test}
-      totalQuestions={questions?.length ?? 0}
+      questions={questions ?? []}
     />
   )
 }
