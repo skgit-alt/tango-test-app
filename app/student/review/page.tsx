@@ -45,10 +45,11 @@ export default async function ReviewPage() {
     )
   }
 
-  const test = session.tests as { title: string; status: string; mode: number } | null
+  const test = session.tests as { title: string; status: string; mode: number } | { title: string; status: string; mode: number }[] | null
+  const testObj = Array.isArray(test) ? test[0] : test
 
   // 結果公開前は確認できない
-  if (test?.status !== 'published') {
+  if (testObj?.status !== 'published') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-blue-50 p-4">
         <div className="bg-white rounded-2xl shadow p-8 text-center max-w-sm w-full space-y-3">
@@ -92,7 +93,7 @@ export default async function ReviewPage() {
             <h1 className="font-bold text-lg">回答確認</h1>
           </div>
           <div className="flex items-center gap-4 text-sm text-blue-200 ml-8">
-            <span>{test?.title}</span>
+            <span>{testObj?.title}</span>
             <span>正解: {correctCount} / {totalCount}</span>
             <span>{session.score}点</span>
           </div>

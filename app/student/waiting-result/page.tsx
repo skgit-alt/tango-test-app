@@ -25,7 +25,8 @@ export default function WaitingResultPage() {
 
       if (!session) { router.push('/student'); return }
 
-      const testData = session.tests as { title: string; status: string } | null
+      const testRaw = session.tests as { title: string; status: string } | { title: string; status: string }[] | null
+      const testData = Array.isArray(testRaw) ? testRaw[0] : testRaw
       if (!testData) { router.push('/student'); return }
 
       setTestTitle(testData.title)
