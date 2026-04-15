@@ -16,13 +16,15 @@ export default async function TeacherLayout({
 
   const { data: admin } = await supabase
     .from('admins')
-    .select('id')
+    .select('id, role')
     .eq('email', user.email)
     .single()
 
   if (!admin) {
     redirect('/')
   }
+
+  const isAdmin = admin.role === 'admin'
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -33,8 +35,13 @@ export default async function TeacherLayout({
           </a>
           <nav className="hidden sm:flex items-center gap-4 text-sm text-gray-600">
             <a href="/teacher" className="hover:text-blue-600 transition">テスト一覧</a>
-            <a href="/teacher/students" className="hover:text-blue-600 transition">生徒管理</a>
-            <a href="/teacher/points" className="hover:text-blue-600 transition">ポイント管理</a>
+            {isAdmin && (
+              <>
+                <a href="/teacher/students" className="hover:text-blue-600 transition">生徒管理</a>
+                <a href="/teacher/points" className="hover:text-blue-600 transition">ポイント管理</a>
+                <a href="/teacher/admins" className="hover:text-blue-600 transition font-medium text-purple-600">スタッフ管理</a>
+              </>
+            )}
           </nav>
           <LogoutButton />
         </div>
