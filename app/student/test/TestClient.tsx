@@ -125,10 +125,10 @@ export default function TestClient({
     await supabase.from('sessions').update({ current_page: page }).eq('id', session.id)
   }, [supabase, session.id])
 
-  const handlePageChange = async (newPage: number) => {
+  const handlePageChange = (newPage: number) => {
     setCurrentPage(newPage)
-    await saveCurrentPage(newPage)
     window.scrollTo({ top: 0, behavior: 'smooth' })
+    saveCurrentPage(newPage) // fire and forget
   }
 
   const handleAnswer = (questionId: string, choice: number) => {
@@ -235,12 +235,12 @@ export default function TestClient({
             {test.mode === 300 ? (
               <div className="flex gap-3">
                 {currentPage > 1 && (
-                  <button onClick={() => handlePageChange(currentPage - 1)} className="flex-1 bg-white border border-gray-300 text-gray-700 py-4 rounded-2xl font-semibold hover:bg-gray-50 transition">← 前のページ</button>
+                  <button onClick={() => handlePageChange(currentPage - 1)} className="flex-1 bg-white border border-gray-300 text-gray-700 py-4 rounded-2xl font-semibold hover:bg-gray-50 active:bg-gray-200 active:scale-95 transition-all">← 前のページ</button>
                 )}
                 {currentPage < totalPages ? (
-                  <button onClick={() => handlePageChange(currentPage + 1)} className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-semibold hover:bg-blue-700 transition shadow-md">次のページ →</button>
+                  <button onClick={() => handlePageChange(currentPage + 1)} className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-semibold hover:bg-blue-700 active:bg-blue-800 active:scale-95 transition-all shadow-md">次のページ →</button>
                 ) : (
-                  <button onClick={submitTest} disabled={submitting} className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 transition disabled:opacity-50 shadow-md">{submitting ? '送信中...' : '回答を送信する'}</button>
+                  <button onClick={submitTest} disabled={submitting} className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 active:bg-green-800 active:scale-95 transition-all disabled:opacity-50 shadow-md">{submitting ? '送信中...' : '回答を送信する'}</button>
                 )}
               </div>
             ) : (
