@@ -7,7 +7,8 @@ interface AnswerWithQuestion {
   question_id: string
   selected_answer: number | null
   is_correct: boolean | null
-  questions: Question | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  questions: any
 }
 
 export default async function ReviewPage() {
