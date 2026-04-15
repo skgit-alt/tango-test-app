@@ -105,13 +105,16 @@ export default function StudentsPage() {
       const sheet = workbook.Sheets[workbook.SheetNames[0]]
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null })
 
-      const upsertData = rows.map((row) => ({
-        email: String(row['email'] ?? row['メール'] ?? ''),
-        name: String(row['name'] ?? row['名前'] ?? ''),
-        class_name: String(row['class_name'] ?? row['クラス'] ?? ''),
-        seat_number: Number(row['seat_number'] ?? row['出席番号'] ?? 0),
-        test_name: (row['test_name'] ?? row['テストネーム']) ? String(row['test_name'] ?? row['テストネーム']) : null,
-      })).filter((r) => r.email && r.name)
+      const upsertData = rows.map((row) => {
+        const seatRaw = Number(row['seat_number'] ?? row['出席番号'] ?? 0)
+        return {
+          email: String(row['email'] ?? row['メール'] ?? '').trim(),
+          name: String(row['name'] ?? row['名前'] ?? '').trim(),
+          class_name: String(row['class_name'] ?? row['クラス'] ?? '').trim(),
+          seat_number: isNaN(seatRaw) ? 0 : seatRaw,
+          test_name: (row['test_name'] ?? row['テストネーム']) ? String(row['test_name'] ?? row['テストネーム']).trim() : null,
+        }
+      }).filter((r) => r.email && r.name)
 
       if (upsertData.length === 0) {
         setError('有効なデータが見つかりませんでした。列名を確認してください。')
