@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { calcPoints } from '@/lib/supabase/types'
+import { Chart300, Chart50 } from './ScoreChart'
 
 export default async function StudentHomePage() {
   const supabase = await createClient()
@@ -38,7 +40,9 @@ export default async function StudentHomePage() {
     (s) => (s.tests as any)?.status === 'published'
   )
   const sessions300 = publishedSessions.filter((s) => (s.tests as any)?.mode === 300)
-  const sessions50 = publishedSessions.filter((s) => (s.tests as any)?.mode === 50)
+  const sessions50 = publishedSessions
+    .filter((s) => (s.tests as any)?.mode === 50)
+    .map((s) => ({ ...s, points: calcPoints(s.score ?? 0) }))
 
   // 50問モードの場合はポイント情報を取得
   let totalPoints = 0
@@ -151,6 +155,14 @@ export default async function StudentHomePage() {
             </Link>
           )}
         </div>
+
+        {/* グラフ */}
+        {sessions300.length >= 2 && (
+          <Chart300 sessions={sessions300 as any} />
+        )}
+        {sessions50.length >= 2 && (
+          <Chart50 sessions={sessions50 as any} />
+        )}
 
         {/* 過去の結果 - 300問テスト */}
         {sessions300.length > 0 && (
