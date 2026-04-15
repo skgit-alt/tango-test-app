@@ -5,6 +5,14 @@ import { createClient } from '@/lib/supabase/client'
 import { Student } from '@/lib/supabase/types'
 import * as XLSX from 'xlsx'
 
+type EditForm = {
+  name: string
+  class_name: string
+  seat_number: string
+  email: string
+  test_name: string
+}
+
 export default function StudentsPage() {
   const supabase = createClient()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -14,11 +22,15 @@ export default function StudentsPage() {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editTestName, setEditTestName] = useState('')
   const [searchText, setSearchText] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
+
+  // 編集モーダル
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null)
+  const [editForm, setEditForm] = useState<EditForm>({ name: '', class_name: '', seat_number: '', email: '', test_name: '' })
+  const [saving, setSaving] = useState(false)
+  const [editError, setEditError] = useState('')
 
   const fetchStudents = async () => {
     const { data } = await supabase
@@ -91,6 +103,65 @@ export default function StudentsPage() {
     }
   }
 
+  const openEdit = (s: Student) => {
+    setEditingStudent(s)
+    setEditForm({
+      name: s.name,
+      class_name: s.class_name,
+      seat_number: String(s.seat_number),
+      email: s.email,
+      test_name: s.test_name ?? '',
+    })
+    setEditError('')
+  }
+
+  const handleSave = async () => {
+    if (!editingStudent) return
+    if (!editForm.name.trim()) { setEditError('名前を入力してください'); return }
+    if (!editForm.class_name.trim()) { setEditError('クラスを入力してください'); return }
+    if (!editForm.email.trim()) { setEditError('メールを入力してください'); return }
+
+    setSaving(true)
+    setEditError('')
+
+    const seatNum = parseInt(editForm.seat_number, 10)
+
+    try {
+      const { error } = await supabase
+        .from('students')
+        .update({
+          name: editForm.name.trim(),
+          class_name: editForm.class_name.trim(),
+          seat_number: isNaN(seatNum) ? 0 : seatNum,
+          email: editForm.email.trim(),
+          test_name: editForm.test_name.trim() || null,
+        })
+        .eq('id', editingStudent.id)
+
+      if (error) throw error
+
+      setStudents((prev) => prev.map((s) =>
+        s.id === editingStudent.id
+          ? {
+              ...s,
+              name: editForm.name.trim(),
+              class_name: editForm.class_name.trim(),
+              seat_number: isNaN(seatNum) ? 0 : seatNum,
+              email: editForm.email.trim(),
+              test_name: editForm.test_name.trim() || null,
+            }
+          : s
+      ))
+      setSuccess(`${editForm.name.trim()} の情報を更新しました`)
+      setEditingStudent(null)
+    } catch (err) {
+      console.error(err)
+      setEditError('更新に失敗しました')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -121,7 +192,6 @@ export default function StudentsPage() {
         return
       }
 
-      // 50件ずつ分割してアップロード
       const CHUNK_SIZE = 50
       for (let i = 0; i < upsertData.length; i += CHUNK_SIZE) {
         const chunk = upsertData.slice(i, i + CHUNK_SIZE)
@@ -139,23 +209,6 @@ export default function StudentsPage() {
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
-    }
-  }
-
-  const handleSaveTestName = async (id: string) => {
-    const trimmed = editTestName.trim()
-    const { error } = await supabase
-      .from('students')
-      .update({ test_name: trimmed || null })
-      .eq('id', id)
-
-    if (error) {
-      setError('更新に失敗しました')
-    } else {
-      setStudents((prev) =>
-        prev.map((s) => (s.id === id ? { ...s, test_name: trimmed || null } : s))
-      )
-      setEditingId(null)
     }
   }
 
@@ -186,6 +239,57 @@ export default function StudentsPage() {
 
   return (
     <div className="space-y-6">
+
+      {/* 編集モーダル */}
+      {editingStudent && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
+            <h2 className="text-lg font-bold text-gray-800">生徒情報を修正</h2>
+
+            <div className="space-y-3">
+              {[
+                { label: '名前', key: 'name', type: 'text', placeholder: '山田 太郎' },
+                { label: 'クラス', key: 'class_name', type: 'text', placeholder: '2-A' },
+                { label: '出席番号', key: 'seat_number', type: 'number', placeholder: '1' },
+                { label: 'メール', key: 'email', type: 'email', placeholder: 'student@school.ed.jp' },
+                { label: 'テストネーム', key: 'test_name', type: 'text', placeholder: '未設定のまま可' },
+              ].map(({ label, key, type, placeholder }) => (
+                <div key={key}>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
+                  <input
+                    type={type}
+                    value={editForm[key as keyof EditForm]}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, [key]: e.target.value }))}
+                    placeholder={placeholder}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {editError && (
+              <div className="bg-red-50 text-red-700 rounded-xl px-4 py-3 text-sm">{editError}</div>
+            )}
+
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl font-semibold hover:bg-blue-700 transition disabled:opacity-50"
+              >
+                {saving ? '保存中...' : '保存する'}
+              </button>
+              <button
+                onClick={() => setEditingStudent(null)}
+                className="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-xl font-semibold hover:bg-gray-200 transition"
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">生徒管理</h1>
         <div className="flex gap-2 flex-wrap">
@@ -285,46 +389,17 @@ export default function StudentsPage() {
                     <td className="px-4 py-3 text-gray-800 font-medium">{s.name}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{s.email}</td>
                     <td className="px-4 py-3">
-                      {editingId === s.id ? (
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={editTestName}
-                            onChange={(e) => setEditTestName(e.target.value)}
-                            className="border border-gray-300 rounded-lg px-2 py-1 text-sm w-32 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                            autoFocus
-                          />
-                          <button
-                            onClick={() => handleSaveTestName(s.id)}
-                            className="text-green-600 hover:text-green-800 text-xs font-medium"
-                          >
-                            保存
-                          </button>
-                          <button
-                            onClick={() => setEditingId(null)}
-                            className="text-gray-400 hover:text-gray-600 text-xs"
-                          >
-                            取消
-                          </button>
-                        </div>
-                      ) : (
-                        <span className={s.test_name ? 'text-gray-800' : 'text-gray-400 italic'}>
-                          {s.test_name ?? '未設定'}
-                        </span>
-                      )}
+                      <span className={s.test_name ? 'text-gray-800' : 'text-gray-400 italic'}>
+                        {s.test_name ?? '未設定'}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {editingId !== s.id && (
-                        <button
-                          onClick={() => {
-                            setEditingId(s.id)
-                            setEditTestName(s.test_name ?? '')
-                          }}
-                          className="text-blue-600 hover:text-blue-800 text-xs font-medium"
-                        >
-                          修正
-                        </button>
-                      )}
+                      <button
+                        onClick={() => openEdit(s)}
+                        className="text-blue-600 hover:text-blue-800 text-xs font-medium hover:underline"
+                      >
+                        修正
+                      </button>
                     </td>
                   </tr>
                 ))}
