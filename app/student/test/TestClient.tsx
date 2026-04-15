@@ -29,6 +29,7 @@ export default function TestClient({
 
   const [answers, setAnswers] = useState<Record<string, number | null>>(initialAnswers)
   const [currentPage, setCurrentPage] = useState(session.current_page ?? 1)
+  const [flagged, setFlagged] = useState<Set<string>>(new Set())
   const [timeLeft, setTimeLeft] = useState<number>(() => {
     if (!session.started_at) return test.time_limit
     const elapsed = Math.floor((Date.now() - new Date(session.started_at).getTime()) / 1000)
@@ -43,15 +44,14 @@ export default function TestClient({
   const [contentHidden, setContentHidden] = useState(false)
   const cheatCountRef = useRef(0)
   const submittingRef = useRef(false)
+  const topRef = useRef<HTMLDivElement>(null)
 
   const totalPages = test.mode === 300 ? 3 : 1
 
-  // ページごとの問題
   const pageQuestions = test.mode === 300
     ? questions.slice((currentPage - 1) * QUESTIONS_PER_PAGE, currentPage * QUESTIONS_PER_PAGE)
     : questions
 
-  // テスト送信
   const submitTest = useCallback(async () => {
     if (submittingRef.current) return
     submittingRef.current = true
@@ -70,7 +70,6 @@ export default function TestClient({
 
       if (error) {
         console.error('submit_test RPC error:', error)
-        // フォールバック: 手動で answers を insert して sessions を更新
         const upsertData = answersArray.map((a) => ({
           session_id: session.id,
           question_id: a.question_id,
@@ -93,7 +92,6 @@ export default function TestClient({
     }
   }, [answers, questions, session.id, supabase, router])
 
-  // タイマー
   useEffect(() => {
     if (timeLeft <= 0) {
       submitTest()
@@ -112,15 +110,10 @@ export default function TestClient({
     return () => clearInterval(timer)
   }, [timeLeft, submitTest])
 
-  // 不正検知: ログを記録するヘルパー
   const logCheat = useCallback(async (eventType: 'tab_leave' | 'app_switch' | 'split_view') => {
     if (submittingRef.current) return
     cheatCountRef.current += 1
-    setCheatWarning({
-      visible: true,
-      count: cheatCountRef.current,
-      eventType,
-    })
+    setCheatWarning({ visible: true, count: cheatCountRef.current, eventType })
     setContentHidden(true)
 
     await supabase.from('cheat_logs').insert({
@@ -130,35 +123,27 @@ export default function TestClient({
     })
   }, [supabase, session.id])
 
-  // visibilitychange → tab_leave
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        logCheat('tab_leave')
-      }
+      if (document.visibilityState === 'hidden') logCheat('tab_leave')
     }
     document.addEventListener('visibilitychange', handleVisibility)
     return () => document.removeEventListener('visibilitychange', handleVisibility)
   }, [logCheat])
 
-  // blur → app_switch
   useEffect(() => {
     const handleBlur = () => {
-      if (!document.hidden) {
-        logCheat('app_switch')
-      }
+      if (!document.hidden) logCheat('app_switch')
     }
     window.addEventListener('blur', handleBlur)
     return () => window.removeEventListener('blur', handleBlur)
   }, [logCheat])
 
-  // resize → split_view（画面幅が大幅に変化）
   useEffect(() => {
     let initialWidth = window.innerWidth
     const handleResize = () => {
       const currentWidth = window.innerWidth
-      const delta = Math.abs(currentWidth - initialWidth)
-      if (delta > 200) {
+      if (Math.abs(currentWidth - initialWidth) > 200) {
         logCheat('split_view')
         initialWidth = currentWidth
       }
@@ -167,21 +152,26 @@ export default function TestClient({
     return () => window.removeEventListener('resize', handleResize)
   }, [logCheat])
 
-  // 現在ページをDBに保存
   const saveCurrentPage = useCallback(async (page: number) => {
-    await supabase
-      .from('sessions')
-      .update({ current_page: page })
-      .eq('id', session.id)
+    await supabase.from('sessions').update({ current_page: page }).eq('id', session.id)
   }, [supabase, session.id])
 
   const handlePageChange = async (newPage: number) => {
     setCurrentPage(newPage)
     await saveCurrentPage(newPage)
+    topRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
   const handleAnswer = (questionId: string, choice: number) => {
     setAnswers((prev) => ({ ...prev, [questionId]: choice }))
+  }
+
+  const toggleFlag = (questionId: string) => {
+    setFlagged((prev) => {
+      const next = new Set(prev)
+      if (next.has(questionId)) { next.delete(questionId) } else { next.add(questionId) }
+      return next
+    })
   }
 
   const handleDismissWarning = () => {
@@ -195,18 +185,8 @@ export default function TestClient({
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
   }
 
-  const answeredCount = questions.filter((q) => answers[q.id] != null).length
-  const timerColor = timeLeft <= 30 ? 'text-red-600' : timeLeft <= 60 ? 'text-orange-500' : 'text-gray-800'
-
-  const cheatEventLabel: Record<string, string> = {
-    tab_leave: 'タブ離脱',
-    app_switch: 'アプリ切替',
-    split_view: '画面分割',
-  }
-
-  return (
+  const answeredCount = questions.filter((q) => answers[q.id] != null).length  return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* 不正行為警告モーダル */}
       {cheatWarning.visible && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl">
@@ -231,7 +211,6 @@ export default function TestClient({
         </div>
       )}
 
-      {/* ヘッダー（タイマー） */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="text-sm text-gray-500">
@@ -239,17 +218,16 @@ export default function TestClient({
               <span className="font-medium">{currentPage} / {totalPages} ページ</span>
             )}
           </div>
-
           <div className={`text-2xl font-bold tabular-nums ${timerColor}`}>
             {formatTime(timeLeft)}
           </div>
-
-          <div className="text-sm text-gray-500">
-            {answeredCount} / {questions.length}
+          <div className="flex items-center gap-3 text-sm text-gray-500">
+            {flaggedCount > 0 && (
+              <span className="text-yellow-600 font-medium">★ {flaggedCount}</span>
+            )}
+            <span>{answeredCount} / {questions.length}</span>
           </div>
         </div>
-
-        {/* プログレスバー */}
         <div className="h-1 bg-gray-100">
           <div
             className="h-full bg-blue-500 transition-all duration-1000"
@@ -258,7 +236,6 @@ export default function TestClient({
         </div>
       </header>
 
-      {/* メインコンテンツ */}
       {contentHidden ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center text-gray-400">
@@ -268,12 +245,13 @@ export default function TestClient({
         </div>
       ) : (
         <div className="flex-1 max-w-3xl mx-auto w-full px-4 py-6 space-y-6">
+          <div ref={topRef} />
+
           {pageQuestions.map((q, pageIndex) => {
             const globalIndex = test.mode === 300
               ? (currentPage - 1) * QUESTIONS_PER_PAGE + pageIndex
               : pageIndex
 
-            // 選択肢の作成（Noneまたはnullの選択肢を除外）
             const allChoices = [
               { num: 1, text: q.choice1 },
               { num: 2, text: q.choice2 },
@@ -286,18 +264,31 @@ export default function TestClient({
             )
 
             const selected = answers[q.id]
+            const isFlagged = flagged.has(q.id)
 
             return (
-              <div key={q.id} className="bg-white rounded-2xl border border-gray-200 p-5">
-                {/* 問題番号と問題文 */}
+              <div
+                key={q.id}
+                className={`rounded-2xl border-2 p-5 transition-colors ${
+                  isFlagged ? 'bg-yellow-50 border-yellow-400' : 'bg-white border-gray-200'
+                }`}
+              >
                 <div className="flex items-start gap-3 mb-4">
                   <span className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-lg shrink-0 mt-0.5">
                     {globalIndex + 1}
                   </span>
-                  <p className="text-gray-800 font-medium leading-relaxed">{q.question_text}</p>
+                  <p className="text-gray-800 font-medium leading-relaxed flex-1">{q.question_text}</p>
+                  <button
+                    onClick={() => toggleFlag(q.id)}
+                    className={`shrink-0 text-xl transition-colors ${
+                      isFlagged ? 'text-yellow-500' : 'text-gray-300 hover:text-yellow-400'
+                    }`}
+                    title="自信がない"
+                  >
+                    ★
+                  </button>
                 </div>
 
-                {/* 選択肢 */}
                 <div className="space-y-2">
                   {validChoices.map((choice) => {
                     const isSelected = selected === choice.num
@@ -323,7 +314,6 @@ export default function TestClient({
             )
           })}
 
-          {/* ページング・送信ボタン */}
           <div className="sticky bottom-4">
             {test.mode === 300 ? (
               <div className="flex gap-3">
@@ -369,3 +359,9 @@ export default function TestClient({
     </div>
   )
 }
+  const flaggedCount = flagged.size
+  const timerColor = timeLeft <= 30 ? 'text-red-600' : timeLeft <= 60 ? 'text-orange-500' : 'text-gray-800'
+  const cheatEventLabel: Record<string, string> = {
+    tab_leave: 'タブ離脱', app_switch: 'アプリ切替', split_view: '画面分割',
+    
+  }
