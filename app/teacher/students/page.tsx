@@ -118,17 +118,21 @@ export default function StudentsPage() {
         return
       }
 
-      const { error: upsertError } = await supabase
-        .from('students')
-        .upsert(upsertData, { onConflict: 'email' })
-
-      if (upsertError) throw upsertError
+      // 50件ずつ分割してアップロード
+      const CHUNK_SIZE = 50
+      for (let i = 0; i < upsertData.length; i += CHUNK_SIZE) {
+        const chunk = upsertData.slice(i, i + CHUNK_SIZE)
+        const { error: upsertError } = await supabase
+          .from('students')
+          .upsert(chunk, { onConflict: 'email' })
+        if (upsertError) throw new Error(`${upsertError.message} (行 ${i + 1}〜${i + chunk.length})`)
+      }
 
       setSuccess(`${upsertData.length}名の生徒情報を登録しました`)
       await fetchStudents()
     } catch (err) {
       console.error(err)
-      setError('アップロードに失敗しました')
+      setError(err instanceof Error ? err.message : 'アップロードに失敗しました')
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
