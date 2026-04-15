@@ -53,15 +53,17 @@ export default async function RankingPage() {
     if (sessions) {
       const ranked = sessions
         .filter((s) => {
-          const st = s.students as { test_name: string | null } | null
-          return st?.test_name
+          const st = s.students as { test_name: string | null } | { test_name: string | null }[] | null
+          const stObj = Array.isArray(st) ? st[0] : st
+          return stObj?.test_name
         })
         .map((s) => {
-          const st = s.students as { test_name: string | null } | null
+          const st = s.students as { test_name: string | null } | { test_name: string | null }[] | null
+          const stObj = Array.isArray(st) ? st[0] : st
           const score = s.score as number
           const pts = latestTest.mode === 50 ? calcPoints(score) : null
           return {
-            test_name: st?.test_name ?? '',
+            test_name: stObj?.test_name ?? '',
             score,
             points: pts,
           }
@@ -87,10 +89,11 @@ export default async function RankingPage() {
 
     const grouped: Record<string, { test_name: string; total: number }> = {}
     cyclePts.forEach((p) => {
-      const st = p.students as { test_name: string | null } | null
-      if (!st?.test_name) return
+      const st = p.students as { test_name: string | null } | { test_name: string | null }[] | null
+      const stObj = Array.isArray(st) ? st[0] : st
+      if (!stObj?.test_name) return
       if (!grouped[p.student_id]) {
-        grouped[p.student_id] = { test_name: st.test_name, total: 0 }
+        grouped[p.student_id] = { test_name: stObj.test_name ?? '', total: 0 }
       }
       grouped[p.student_id].total += p.points_earned
     })
