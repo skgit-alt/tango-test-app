@@ -26,6 +26,20 @@ export default async function StudentHomePage() {
     .limit(1)
     .maybeSingle()
 
+  // 過去の全提出済みセッションを取得
+  const { data: pastSessions } = await supabase
+    .from('sessions')
+    .select('id, score, submitted_at, tests(id, title, mode, status, pass_score)')
+    .eq('student_id', student.id)
+    .eq('is_submitted', true)
+    .order('submitted_at', { ascending: false })
+
+  const publishedSessions = (pastSessions ?? []).filter(
+    (s) => (s.tests as any)?.status === 'published'
+  )
+  const sessions300 = publishedSessions.filter((s) => (s.tests as any)?.mode === 300)
+  const sessions50 = publishedSessions.filter((s) => (s.tests as any)?.mode === 50)
+
   // 50問モードの場合はポイント情報を取得
   let totalPoints = 0
   let rank = 0
@@ -136,14 +150,77 @@ export default async function StudentHomePage() {
               今回の結果を見る
             </Link>
           )}
-
-          <Link
-            href="/student/review"
-            className="block w-full bg-white border border-gray-200 text-gray-700 py-3 rounded-2xl font-semibold text-center hover:bg-gray-50 active:bg-gray-100 transition"
-          >
-            回答を確認する
-          </Link>
         </div>
+
+        {/* 過去の結果 - 300問テスト */}
+        {sessions300.length > 0 && (
+          <div>
+            <h3 className="text-sm font-bold text-gray-500 mb-3 px-1">📝 300問テストの結果</h3>
+            <div className="space-y-2">
+              {sessions300.map((s) => {
+                const test = s.tests as any
+                const passed = test.pass_score !== null ? s.score >= test.pass_score : null
+                return (
+                  <Link
+                    key={s.id}
+                    href={`/student/result?sessionId=${s.id}`}
+                    className="block bg-white rounded-xl border border-gray-200 px-4 py-3 hover:bg-gray-50 transition"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-gray-800 text-sm">{test.title}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {new Date(s.submitted_at).toLocaleDateString('ja-JP')}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-gray-800">{s.score}点</p>
+                        {passed !== null && (
+                          <p className={`text-xs font-medium ${passed ? 'text-green-600' : 'text-red-500'}`}>
+                            {passed ? '合格' : '不合格'}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 過去の結果 - 50問テスト */}
+        {sessions50.length > 0 && (
+          <div>
+            <h3 className="text-sm font-bold text-gray-500 mb-3 px-1">⚡ 50問テストの結果</h3>
+            <div className="space-y-2">
+              {sessions50.map((s) => {
+                const test = s.tests as any
+                return (
+                  <Link
+                    key={s.id}
+                    href={`/student/result?sessionId=${s.id}`}
+                    className="block bg-white rounded-xl border border-gray-200 px-4 py-3 hover:bg-gray-50 transition"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-gray-800 text-sm">{test.title}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {new Date(s.submitted_at).toLocaleDateString('ja-JP')}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-gray-800">{s.score}点</p>
+                      </div>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="h-4" />
       </div>
     </div>
   )

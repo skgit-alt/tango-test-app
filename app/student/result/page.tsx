@@ -3,7 +3,13 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { calcPoints } from '@/lib/supabase/types'
 
-export default async function ResultPage() {
+export default async function ResultPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sessionId?: string }>
+}) {
+  const { sessionId } = await searchParams
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -17,15 +23,20 @@ export default async function ResultPage() {
 
   if (!student) redirect('/auth/login')
 
-  // 最新の提出済みセッションを取得
-  const { data: session } = await supabase
+  // sessionIdが指定されていればそのセッションを、なければ最新を取得
+  let query = supabase
     .from('sessions')
     .select('*, tests(*)')
     .eq('student_id', student.id)
     .eq('is_submitted', true)
-    .order('submitted_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+
+  if (sessionId) {
+    query = query.eq('id', sessionId)
+  } else {
+    query = query.order('submitted_at', { ascending: false }).limit(1)
+  }
+
+  const { data: session } = await query.maybeSingle()
 
   if (!session) {
     return (
@@ -138,7 +149,7 @@ export default async function ResultPage() {
           {/* アクションボタン */}
           <div className="space-y-2 pt-2">
             <Link
-              href="/student/review"
+              href={`/student/review?sessionId=${session.id}`}
               className="block w-full bg-blue-600 text-white py-3 rounded-xl font-semibold text-center hover:bg-blue-700 transition"
             >
               回答を確認する
