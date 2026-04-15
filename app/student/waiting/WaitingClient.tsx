@@ -20,20 +20,40 @@ export default function WaitingClient({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // テストのステータス変化をリアルタイムで監視
+  // テストのステータス変化を監視（ポーリング2秒 + Realtimeの二重構成）
   useEffect(() => {
+    let cancelled = false
+
+    // ポーリング：2秒ごとに最新状態を取得（Realtimeの遅延をカバー）
+    const poll = async () => {
+      if (cancelled) return
+      const { data } = await supabase
+        .from('tests')
+        .select('*')
+        .eq('id', test.id)
+        .single()
+      if (data && !cancelled) setTest(data as Test)
+    }
+
+    const interval = setInterval(poll, 2000)
+
+    // Realtimeも併用（より速く届いたほうを使う）
     const channel = supabase
       .channel(`waiting-test-${test.id}`)
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'tests', filter: `id=eq.${test.id}` },
         (payload) => {
-          if (payload.new) setTest(payload.new as Test)
+          if (payload.new && !cancelled) setTest(payload.new as Test)
         }
       )
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+      supabase.removeChannel(channel)
+    }
   }, [supabase, test.id])
 
   // 自分のクラスが開放されているか判定
