@@ -219,7 +219,7 @@ export default function TestManagerClient({
       {/* 統計カード */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: '総問題数', value: totalQuestions, color: 'text-gray-800' },
+          { label: '総問題数', value: questions.length, color: 'text-gray-800' },
           { label: '接続済み', value: sessions.length, color: 'text-blue-600' },
           { label: '開始済み', value: startedCount, color: 'text-green-600' },
           { label: '提出済み', value: submittedCount, color: 'text-purple-600' },
