@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
 
 type ActiveTest = {
   id: string
@@ -19,7 +18,6 @@ export default function ActiveTestBanner({
   studentClass: string
   initialTest: ActiveTest | null
 }) {
-  const supabase = createClient()
   const [test, setTest] = useState<ActiveTest | null>(initialTest)
 
   useEffect(() => {
@@ -27,20 +25,27 @@ export default function ActiveTestBanner({
 
     const poll = async () => {
       if (cancelled) return
-      const { data } = await supabase
-        .from('tests')
-        .select('id, title, mode, status, open_classes')
-        .in('status', ['waiting', 'open'])
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      if (!cancelled) setTest(data ?? null)
+      try {
+        const res = await fetch('/api/student/active-test', { cache: 'no-store' })
+        if (!res.ok) return // 失敗したときは前の値を保持
+        const data: ActiveTest | null = await res.json()
+        if (!cancelled) setTest(data)
+      } catch (e) {
+        // ネットワークエラー時は前の値を保持
+        console.error('[ActiveTestBanner] poll error:', e)
+      }
     }
 
-    poll()
+    // 初回は少し遅らせて initialTest を先に表示する
+    const timeout = setTimeout(poll, 500)
     const interval = setInterval(poll, 3000)
-    return () => { cancelled = true; clearInterval(interval) }
-  }, [supabase])
+
+    return () => {
+      cancelled = true
+      clearTimeout(timeout)
+      clearInterval(interval)
+    }
+  }, [])
 
   if (!test || !['waiting', 'open'].includes(test.status)) return null
 
