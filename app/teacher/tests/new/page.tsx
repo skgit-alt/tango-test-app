@@ -28,11 +28,9 @@ export default function NewTestPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [preview, setPreview] = useState(false)
+  const [dragging, setDragging] = useState(false)
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
+  const processFile = async (file: File) => {
     setFileName(file.name)
     setError('')
 
@@ -78,6 +76,34 @@ export default function NewTestPage() {
       console.error(err)
       setError('ファイルの読み込みに失敗しました。Excelファイルを確認してください。')
     }
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    await processFile(file)
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragging(false)
+  }
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragging(false)
+    const file = e.dataTransfer.files?.[0]
+    if (!file) return
+    if (!file.name.endsWith('.xlsx')) {
+      setError('.xlsx ファイルをドロップしてください')
+      return
+    }
+    await processFile(file)
   }
 
   const handleSubmit = async () => {
@@ -169,13 +195,22 @@ export default function NewTestPage() {
           </div>
           <div
             onClick={() => fileRef.current?.click()}
-            className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-blue-400 transition"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition ${
+              dragging
+                ? 'border-blue-500 bg-blue-50 scale-[1.01]'
+                : 'border-gray-300 hover:border-blue-400'
+            }`}
           >
-            <div className="text-3xl mb-2">📊</div>
+            <div className="text-3xl mb-2">{dragging ? '📂' : '📊'}</div>
             {fileName ? (
               <p className="text-gray-700 font-medium">{fileName}</p>
+            ) : dragging ? (
+              <p className="text-blue-500 font-medium">ここで離してください</p>
             ) : (
-              <p className="text-gray-400">クリックしてExcelファイルを選択</p>
+              <p className="text-gray-400">クリックまたはExcelファイルをドラッグ&ドロップ</p>
             )}
           </div>
           <input
