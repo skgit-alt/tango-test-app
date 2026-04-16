@@ -47,6 +47,9 @@ export default function TestManagerClient({
   const [showPreview, setShowPreview] = useState(false)
   const [classes, setClasses] = useState<string[]>([])
   const [loadingClass, setLoadingClass] = useState<string | null>(null)
+  // テスト名編集
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleInput, setTitleInput] = useState(test.title)
 
   const fetchData = useCallback(async () => {
     const { data: sessData } = await supabase
@@ -126,6 +129,35 @@ export default function TestManagerClient({
     setLoading(false)
   }
 
+  // 待機状態に戻す（open_classes・opened_atもリセット）
+  const handleResetToWaiting = async () => {
+    if (!confirm('テストを待機状態に戻しますか？\n開始済みのクラスもリセットされます。\n※すでに開始した生徒のセッションはそのまま残ります。')) return
+    setLoading(true)
+    setActionError('')
+    const { error } = await supabase
+      .from('tests')
+      .update({ status: 'waiting', open_classes: null, opened_at: null })
+      .eq('id', test.id)
+    if (error) setActionError('待機状態への変更に失敗しました')
+    setLoading(false)
+  }
+
+  // テスト名を保存
+  const handleSaveTitle = async () => {
+    const trimmed = titleInput.trim()
+    if (!trimmed) return
+    const { error } = await supabase
+      .from('tests')
+      .update({ title: trimmed })
+      .eq('id', test.id)
+    if (error) {
+      setActionError('テスト名の保存に失敗しました')
+    } else {
+      setTest((prev) => ({ ...prev, title: trimmed }))
+      setEditingTitle(false)
+    }
+  }
+
   const handlePublishResult = async () => {
     setLoading(true)
     setActionError('')
@@ -180,13 +212,41 @@ export default function TestManagerClient({
       {/* ヘッダー */}
       <div className="flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-3 mb-2">
+          <div className="flex items-center gap-3 mb-2 flex-wrap">
             <a href="/teacher" className="text-gray-400 hover:text-gray-600 transition">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </a>
-            <h1 className="text-2xl font-bold text-gray-800">{test.title}</h1>
+
+            {editingTitle ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={titleInput}
+                  onChange={(e) => setTitleInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSaveTitle(); if (e.key === 'Escape') setEditingTitle(false) }}
+                  className="border border-blue-400 rounded-lg px-3 py-1.5 text-lg font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 min-w-[280px]"
+                  autoFocus
+                />
+                <button onClick={handleSaveTitle} className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition">保存</button>
+                <button onClick={() => { setEditingTitle(false); setTitleInput(test.title) }} className="bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-gray-200 transition">キャンセル</button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-gray-800">{test.title}</h1>
+                <button
+                  onClick={() => { setTitleInput(test.title); setEditingTitle(true) }}
+                  className="text-gray-400 hover:text-blue-500 transition p-1 rounded"
+                  title="テスト名を編集"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+              </div>
+            )}
+
             <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor[test.status]}`}>
               {statusLabel[test.status]}
             </span>
@@ -246,7 +306,19 @@ export default function TestManagerClient({
       {/* クラス別開始 */}
       {(test.status === 'waiting' || test.status === 'open') && classes.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-3">
-          <h2 className="font-semibold text-gray-800">クラス別開始</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-gray-800">クラス別開始</h2>
+            {/* 待機状態に戻すボタン：open_classesに1つ以上開始済み、またはstatus=open の場合に表示 */}
+            {(test.status === 'open' || (test.open_classes ?? []).length > 0) && (
+              <button
+                onClick={handleResetToWaiting}
+                disabled={loading}
+                className="text-sm text-orange-600 border border-orange-300 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-lg font-medium transition disabled:opacity-50"
+              >
+                ↩ 待機状態に戻す
+              </button>
+            )}
+          </div>
           <div className="flex flex-wrap gap-2">
             {classes.map((cls) => {
               const opened = (test.open_classes ?? []).includes(cls) || test.status === 'open'
