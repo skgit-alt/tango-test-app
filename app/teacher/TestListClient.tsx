@@ -85,6 +85,52 @@ export default function TestListClient({ tests: initialTests }: { tests: Test[] 
     }
   }
 
+  const tests50 = tests.filter((t) => t.mode === 50)
+  const tests300 = tests.filter((t) => t.mode === 300)
+
+  const renderTestItem = (test: Test) => (
+    <div
+      key={test.id}
+      className={`bg-white rounded-2xl border-2 p-5 flex items-center gap-3 transition ${
+        selectedIds.has(test.id) ? 'border-red-300 bg-red-50' : 'border-gray-200'
+      }`}
+    >
+      <input
+        type="checkbox"
+        checked={selectedIds.has(test.id)}
+        onChange={() => toggleSelect(test.id)}
+        className="w-4 h-4 rounded border-gray-300 text-red-500 cursor-pointer shrink-0"
+        onClick={(e) => e.stopPropagation()}
+      />
+      <Link
+        href={`/teacher/tests/${test.id}`}
+        className="flex-1 flex items-center justify-between min-w-0 hover:opacity-75 transition"
+      >
+        <div className="min-w-0">
+          <div className="flex items-center gap-3 mb-1 flex-wrap">
+            <h2 className="font-semibold text-gray-800">{test.title}</h2>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor[test.status]}`}>
+              {statusLabel[test.status]}
+            </span>
+            {test.mode === 50 && test.round_number != null && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
+                第{test.round_number}回
+              </span>
+            )}
+          </div>
+          <div className="text-sm text-gray-500 flex items-center gap-3 flex-wrap">
+            <span>制限時間: {test.time_limit}秒</span>
+            {test.pass_score && <span>合格点: {test.pass_score}点</span>}
+            <span>作成: {new Date(test.created_at).toLocaleDateString('ja-JP')}</span>
+          </div>
+        </div>
+        <svg className="w-5 h-5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </Link>
+    </div>
+  )
+
   if (tests.length === 0) {
     return (
       <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center text-gray-400">
@@ -95,9 +141,9 @@ export default function TestListClient({ tests: initialTests }: { tests: Test[] 
   }
 
   return (
-    <div>
+    <div className="space-y-6">
       {/* 一括操作バー */}
-      <div className="flex items-center gap-3 mb-3">
+      <div className="flex items-center gap-3">
         <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-gray-600">
           <input
             type="checkbox"
@@ -118,46 +164,31 @@ export default function TestListClient({ tests: initialTests }: { tests: Test[] 
         )}
       </div>
 
-      <div className="grid gap-4">
-        {tests.map((test) => (
-          <div
-            key={test.id}
-            className={`bg-white rounded-2xl border-2 p-5 flex items-center gap-3 transition ${
-              selectedIds.has(test.id) ? 'border-red-300 bg-red-50' : 'border-gray-200'
-            }`}
-          >
-            <input
-              type="checkbox"
-              checked={selectedIds.has(test.id)}
-              onChange={() => toggleSelect(test.id)}
-              className="w-4 h-4 rounded border-gray-300 text-red-500 cursor-pointer shrink-0"
-              onClick={(e) => e.stopPropagation()}
-            />
-            <Link
-              href={`/teacher/tests/${test.id}`}
-              className="flex-1 flex items-center justify-between min-w-0 hover:opacity-75 transition"
-            >
-              <div className="min-w-0">
-                <div className="flex items-center gap-3 mb-1 flex-wrap">
-                  <h2 className="font-semibold text-gray-800">{test.title}</h2>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor[test.status]}`}>
-                    {statusLabel[test.status]}
-                  </span>
-                </div>
-                <div className="text-sm text-gray-500 flex items-center gap-3 flex-wrap">
-                  <span>{test.mode}問モード</span>
-                  <span>制限時間: {test.time_limit}秒</span>
-                  {test.pass_score && <span>合格点: {test.pass_score}点</span>}
-                  <span>作成: {new Date(test.created_at).toLocaleDateString('ja-JP')}</span>
-                </div>
-              </div>
-              <svg className="w-5 h-5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
+      {/* 50問テスト */}
+      {tests50.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-bold text-gray-500 flex items-center gap-2">
+            <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">⚡ 50問テスト</span>
+            <span className="text-gray-400 font-normal">{tests50.length}件</span>
+          </h2>
+          <div className="grid gap-3">
+            {tests50.map(renderTestItem)}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
+
+      {/* 300問テスト */}
+      {tests300.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-bold text-gray-500 flex items-center gap-2">
+            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full">📝 300問テスト</span>
+            <span className="text-gray-400 font-normal">{tests300.length}件</span>
+          </h2>
+          <div className="grid gap-3">
+            {tests300.map(renderTestItem)}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
