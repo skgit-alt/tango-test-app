@@ -11,13 +11,21 @@ type ActiveTest = {
   open_classes: string[] | null
 }
 
+// 状態・モードごとの色定義
+function cardColor(mode: number, started: boolean): string {
+  if (started) return 'bg-green-600'           // 開始済み → 緑
+  if (mode === 50) return 'bg-violet-600'       // 50問・未開始 → 紫
+  return 'bg-orange-500'                        // 300問・未開始 → オレンジ
+}
+
 function TestCard({ test, studentClass }: { test: ActiveTest; studentClass: string }) {
   const classOpen = (test.open_classes ?? []).includes(studentClass)
   const isFullyOpen = test.status === 'open'
   const myClassStarted = isFullyOpen || classOpen
+  const bgColor = cardColor(test.mode, myClassStarted)
 
   return (
-    <div className={`rounded-2xl p-4 text-white flex flex-col gap-3 ${myClassStarted ? 'bg-green-600' : 'bg-blue-600'}`}>
+    <div className={`rounded-2xl p-4 text-white flex flex-col gap-3 ${bgColor}`}>
       <div>
         <p className="text-xs opacity-80 mb-0.5">
           {isFullyOpen ? '✅ 全クラス実施中' : classOpen ? `✅ ${studentClass}` : '⏳ 開始待ち'}
