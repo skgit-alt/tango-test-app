@@ -61,24 +61,42 @@ export default async function StudentHomePage() {
   let rank = 0
 
   if (has50modeActive || latestTest?.mode === 50) {
-    const { data: allPoints } = await supabase
-      .from('points')
-      .select('student_id, points_earned, cycle')
+    // ランキング設定を取得
+    const { data: rankingSettings } = await admin
+      .from('ranking_settings')
+      .select('from_round, to_round')
+      .eq('id', 1)
+      .maybeSingle()
 
-    if (allPoints && allPoints.length > 0) {
-      const maxCycle = allPoints.reduce((m, p) => Math.max(m, p.cycle), 1)
-      const cyclePts = allPoints.filter((p) => p.cycle === maxCycle)
+    if (rankingSettings) {
+      // 期間内の対象テストIDを取得
+      const { data: targetTests } = await admin
+        .from('tests')
+        .select('id')
+        .eq('mode', 50)
+        .gte('round_number', rankingSettings.from_round)
+        .lte('round_number', rankingSettings.to_round)
+        .not('round_number', 'is', null)
 
-      const grouped: Record<string, number> = {}
-      cyclePts.forEach((p) => {
-        grouped[p.student_id] = (grouped[p.student_id] ?? 0) + p.points_earned
-      })
+      if (targetTests && targetTests.length > 0) {
+        const testIds = targetTests.map((t: { id: string }) => t.id)
+        const { data: allPoints } = await admin
+          .from('points')
+          .select('student_id, points_earned')
+          .in('test_id', testIds)
 
-      totalPoints = grouped[student.id] ?? 0
+        if (allPoints && allPoints.length > 0) {
+          const grouped: Record<string, number> = {}
+          allPoints.forEach((p: { student_id: string; points_earned: number }) => {
+            grouped[p.student_id] = (grouped[p.student_id] ?? 0) + p.points_earned
+          })
 
-      const sorted = Object.values(grouped).sort((a, b) => b - a)
-      const rankIndex = sorted.findIndex((pts) => pts <= totalPoints)
-      rank = rankIndex + 1
+          totalPoints = grouped[student.id] ?? 0
+          const sorted = Object.values(grouped).sort((a, b) => b - a)
+          const rankIndex = sorted.findIndex((pts) => pts <= totalPoints)
+          rank = rankIndex + 1
+        }
+      }
     }
   }
 

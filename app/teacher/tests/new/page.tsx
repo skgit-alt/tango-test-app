@@ -23,6 +23,7 @@ export default function NewTestPage() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [title, setTitle] = useState('')
+  const [roundNumber, setRoundNumber] = useState<string>('')
   const [questions, setQuestions] = useState<QuestionRow[]>([])
   const [fileName, setFileName] = useState('')
   const [loading, setLoading] = useState(false)
@@ -124,6 +125,8 @@ export default function NewTestPage() {
       const time_limit = mode === 300 ? 1200 : 180
       const pass_score = mode === 300 ? 285 : null
 
+      const roundNum = mode === 50 && roundNumber.trim() !== '' ? parseInt(roundNumber) : null
+
       const { data: test, error: testError } = await supabase
         .from('tests')
         .insert({
@@ -132,6 +135,7 @@ export default function NewTestPage() {
           status: 'waiting',
           time_limit,
           pass_score,
+          round_number: roundNum,
         })
         .select()
         .single()
@@ -221,6 +225,27 @@ export default function NewTestPage() {
             className="hidden"
           />
         </div>
+
+        {/* 50問モード: 第何回 */}
+        {mode === 50 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              第何回目のテストか <span className="text-gray-400 text-xs font-normal">（通算ポイントランキング用）</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-600 text-sm">第</span>
+              <input
+                type="number"
+                min={1}
+                value={roundNumber}
+                onChange={(e) => setRoundNumber(e.target.value)}
+                placeholder="例: 3"
+                className="w-24 border border-gray-300 rounded-xl px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-gray-600 text-sm">回</span>
+            </div>
+          </div>
+        )}
 
         {/* 自動判定結果 */}
         {mode && (

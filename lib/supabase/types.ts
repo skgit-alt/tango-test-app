@@ -29,6 +29,15 @@ export interface Test {
   published_at: string | null
   created_at: string
   open_classes: string[] | null
+  round_number: number | null
+}
+
+export interface RankingSettings {
+  id: number
+  from_round: number
+  to_round: number
+  label: string
+  updated_at: string
 }
 
 export interface Question {

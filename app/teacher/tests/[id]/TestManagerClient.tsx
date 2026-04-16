@@ -50,6 +50,9 @@ export default function TestManagerClient({
   // テスト名編集
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleInput, setTitleInput] = useState(test.title)
+  // 第何回編集
+  const [editingRound, setEditingRound] = useState(false)
+  const [roundInput, setRoundInput] = useState(String(test.round_number ?? ''))
 
   const fetchData = useCallback(async () => {
     const { data: sessData } = await supabase
@@ -127,6 +130,22 @@ export default function TestManagerClient({
       .eq('id', test.id)
     if (error) setActionError('テスト開始に失敗しました')
     setLoading(false)
+  }
+
+  // 第何回を保存
+  const handleSaveRound = async () => {
+    const val = roundInput.trim() === '' ? null : parseInt(roundInput)
+    if (roundInput.trim() !== '' && (isNaN(val!) || val! < 1)) return
+    const { error } = await supabase
+      .from('tests')
+      .update({ round_number: val })
+      .eq('id', test.id)
+    if (error) {
+      setActionError('回数の保存に失敗しました')
+    } else {
+      setTest((prev) => ({ ...prev, round_number: val }))
+      setEditingRound(false)
+    }
   }
 
   // 待機状態に戻す（open_classes・opened_atもリセット）
@@ -251,10 +270,49 @@ export default function TestManagerClient({
               {statusLabel[test.status]}
             </span>
           </div>
-          <p className="text-sm text-gray-500 ml-8">
-            {test.mode}問モード / 制限時間 {test.time_limit}秒
-            {test.pass_score && ` / 合格点 ${test.pass_score}点`}
-          </p>
+          <div className="text-sm text-gray-500 ml-8 flex items-center gap-3 flex-wrap">
+            <span>
+              {test.mode}問モード / 制限時間 {test.time_limit}秒
+              {test.pass_score ? ` / 合格点 ${test.pass_score}点` : ''}
+            </span>
+            {/* 50問モードのみ「第何回」を表示・編集 */}
+            {test.mode === 50 && (
+              <span className="flex items-center gap-1">
+                {editingRound ? (
+                  <>
+                    <span>第</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={roundInput}
+                      onChange={(e) => setRoundInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSaveRound(); if (e.key === 'Escape') setEditingRound(false) }}
+                      className="w-16 border border-blue-400 rounded px-2 py-0.5 text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      autoFocus
+                    />
+                    <span>回</span>
+                    <button onClick={handleSaveRound} className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700">保存</button>
+                    <button onClick={() => setEditingRound(false)} className="text-xs text-gray-500 hover:text-gray-700">✕</button>
+                  </>
+                ) : (
+                  <>
+                    <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                      {test.round_number != null ? `第${test.round_number}回` : '回数未設定'}
+                    </span>
+                    <button
+                      onClick={() => { setRoundInput(String(test.round_number ?? '')); setEditingRound(true) }}
+                      className="text-gray-400 hover:text-blue-500 transition"
+                      title="回数を編集"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                  </>
+                )}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-2 flex-wrap">
