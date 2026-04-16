@@ -37,9 +37,9 @@ export default async function TeacherLayout({
             <a href="/teacher" className="hover:text-blue-600 transition">テスト一覧</a>
             {isAdmin && (
               <>
-                <a href="/teacher/students" className="hover:text-blue-600 transition">生徒管理</a>
                 <a href="/teacher/points" className="hover:text-blue-600 transition">ポイント管理</a>
                 <a href="/teacher/admins" className="hover:text-blue-600 transition font-medium text-purple-600">スタッフ管理</a>
+                <a href="/teacher/students" className="hover:text-blue-600 transition">生徒管理</a>
               </>
             )}
           </nav>
