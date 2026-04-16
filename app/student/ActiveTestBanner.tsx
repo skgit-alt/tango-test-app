@@ -13,12 +13,12 @@ type ActiveTest = {
 
 export default function ActiveTestBanner({
   studentClass,
-  initialTest,
+  initialTests,
 }: {
   studentClass: string
-  initialTest: ActiveTest | null
+  initialTests: ActiveTest[]
 }) {
-  const [test, setTest] = useState<ActiveTest | null>(initialTest)
+  const [tests, setTests] = useState<ActiveTest[]>(initialTests)
 
   useEffect(() => {
     let cancelled = false
@@ -27,16 +27,14 @@ export default function ActiveTestBanner({
       if (cancelled) return
       try {
         const res = await fetch('/api/student/active-test', { cache: 'no-store' })
-        if (!res.ok) return // 失敗したときは前の値を保持
-        const data: ActiveTest | null = await res.json()
-        if (!cancelled) setTest(data)
+        if (!res.ok) return
+        const data: ActiveTest[] = await res.json()
+        if (!cancelled) setTests(data ?? [])
       } catch (e) {
-        // ネットワークエラー時は前の値を保持
         console.error('[ActiveTestBanner] poll error:', e)
       }
     }
 
-    // 初回は少し遅らせて initialTest を先に表示する
     const timeout = setTimeout(poll, 500)
     const interval = setInterval(poll, 3000)
 
@@ -47,27 +45,40 @@ export default function ActiveTestBanner({
     }
   }, [])
 
-  if (!test || !['waiting', 'open'].includes(test.status)) return null
-
-  const classOpen = (test.open_classes ?? []).includes(studentClass)
-  const isFullyOpen = test.status === 'open'
-  const myClassStarted = isFullyOpen || classOpen
+  const activeTests = tests.filter((t) => ['waiting', 'open'].includes(t.status))
+  if (activeTests.length === 0) return null
 
   return (
-    <div className={`rounded-2xl p-5 text-white ${myClassStarted ? 'bg-green-600' : 'bg-blue-600'}`}>
-      <p className="text-sm mb-1 opacity-80">
-        {isFullyOpen ? '✅ 全クラス実施中' : classOpen ? `✅ ${studentClass} 開始済み` : '⏳ テスト配信中（開始待ち）'}
-      </p>
-      <p className="font-bold text-lg">{test.title}</p>
-      <p className="text-sm mt-1 opacity-80">{test.mode}問モード</p>
+    <div className="space-y-3">
+      {activeTests.map((test) => {
+        const classOpen = (test.open_classes ?? []).includes(studentClass)
+        const isFullyOpen = test.status === 'open'
+        const myClassStarted = isFullyOpen || classOpen
 
-      {/* 状態にかかわらず常にボタンを表示 */}
-      <Link
-        href="/student/waiting"
-        className="mt-4 block w-full bg-white py-3 rounded-xl font-bold text-center hover:opacity-90 active:scale-95 transition-all text-gray-800"
-      >
-        {myClassStarted ? 'テスト待機画面へ →' : '待機画面で待つ →'}
-      </Link>
+        return (
+          <div
+            key={test.id}
+            className={`rounded-2xl p-5 text-white ${myClassStarted ? 'bg-green-600' : 'bg-blue-600'}`}
+          >
+            <p className="text-sm mb-1 opacity-80">
+              {isFullyOpen
+                ? '✅ 全クラス実施中'
+                : classOpen
+                ? `✅ ${studentClass} 開始済み`
+                : '⏳ テスト配信中（開始待ち）'}
+            </p>
+            <p className="font-bold text-lg">{test.title}</p>
+            <p className="text-sm mt-1 opacity-80">{test.mode}問モード</p>
+
+            <Link
+              href={`/student/waiting?testId=${test.id}`}
+              className="mt-4 block w-full bg-white py-3 rounded-xl font-bold text-center hover:opacity-90 active:scale-95 transition-all text-gray-800"
+            >
+              {myClassStarted ? 'テスト待機画面へ →' : '待機画面で待つ →'}
+            </Link>
+          </div>
+        )
+      })}
     </div>
   )
 }

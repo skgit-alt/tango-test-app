@@ -21,9 +21,17 @@ export default async function StudentHomePage() {
   if (!student) redirect('/auth/login')
   if (!student.test_name) redirect('/student/register')
 
-  // アクティブなテストを取得（RLSバイパスで確実に取得）
   const admin = createAdminClient()
-  const { data: activeTest } = await admin
+
+  // 配信中テストを全件取得（RLSバイパス）
+  const { data: activeTests } = await admin
+    .from('tests')
+    .select('id, title, mode, status, open_classes')
+    .in('status', ['waiting', 'open'])
+    .order('created_at', { ascending: false })
+
+  // 最新テスト（結果表示用・ポイント表示用）
+  const { data: latestTest } = await admin
     .from('tests')
     .select('id, title, mode, status, open_classes')
     .in('status', ['waiting', 'open', 'finished', 'published'])
@@ -47,11 +55,12 @@ export default async function StudentHomePage() {
     .filter((s) => (s.tests as any)?.mode === 50)
     .map((s) => ({ ...s, points: calcPoints(s.score ?? 0) }))
 
-  // 50問モードの場合はポイント情報を取得
+  // 50問モードのアクティブテストがあればポイント情報を取得
+  const has50modeActive = (activeTests ?? []).some((t) => t.mode === 50)
   let totalPoints = 0
   let rank = 0
 
-  if (activeTest?.mode === 50) {
+  if (has50modeActive || latestTest?.mode === 50) {
     const { data: allPoints } = await supabase
       .from('points')
       .select('student_id, points_earned, cycle')
@@ -108,7 +117,7 @@ export default async function StudentHomePage() {
             <div className="text-4xl">👤</div>
           </div>
 
-          {activeTest?.mode === 50 && (
+          {(has50modeActive || latestTest?.mode === 50) && (
             <div className="mt-4 pt-4 border-t border-gray-100 flex gap-6">
               <div className="text-center">
                 <p className="text-2xl font-bold text-blue-600">{totalPoints}pt</p>
@@ -122,10 +131,10 @@ export default async function StudentHomePage() {
           )}
         </div>
 
-        {/* テスト情報バナー（3秒ごとにポーリングして自動更新） */}
+        {/* テスト一覧バナー（3秒ごとにポーリングして自動更新） */}
         <ActiveTestBanner
           studentClass={student.class_name}
-          initialTest={activeTest as any}
+          initialTests={(activeTests ?? []) as any}
         />
 
         {/* アクションボタン */}
@@ -137,7 +146,7 @@ export default async function StudentHomePage() {
             ランキングを見る
           </Link>
 
-          {activeTest && activeTest.status === 'published' && (
+          {latestTest && latestTest.status === 'published' && (
             <Link
               href="/student/result"
               className="block w-full bg-green-600 text-white py-3 rounded-2xl font-semibold text-center hover:bg-green-700 transition"

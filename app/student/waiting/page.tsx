@@ -3,7 +3,11 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import WaitingClient from './WaitingClient'
 
-export default async function WaitingPage() {
+export default async function WaitingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ testId?: string }>
+}) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -18,15 +22,32 @@ export default async function WaitingPage() {
   if (!student) redirect('/auth/login')
   if (!student.test_name) redirect('/student/register')
 
-  // アクティブなテストを取得（RLSバイパスで確実に取得）
+  const { testId } = await searchParams
   const admin = createAdminClient()
-  const { data: test } = await admin
-    .from('tests')
-    .select('*')
-    .in('status', ['waiting', 'open'])
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+
+  // testIdが指定されていればそのテストを、なければ最新のものを取得
+  let test = null
+  if (testId) {
+    const { data } = await admin
+      .from('tests')
+      .select('*')
+      .eq('id', testId)
+      .in('status', ['waiting', 'open'])
+      .maybeSingle()
+    test = data
+  }
+
+  if (!test) {
+    // フォールバック: 最新のwating/openテスト
+    const { data } = await admin
+      .from('tests')
+      .select('*')
+      .in('status', ['waiting', 'open'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    test = data
+  }
 
   if (!test) {
     return (
