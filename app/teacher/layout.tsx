@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import LogoutButton from './LogoutButton'
+import TeacherNav from './TeacherNav'
 
 export default async function TeacherLayout({
   children,
@@ -33,16 +34,7 @@ export default async function TeacherLayout({
           <a href="/teacher" className="font-bold text-blue-600 text-lg">
             単語テスト管理
           </a>
-          <nav className="hidden sm:flex items-center gap-4 text-sm text-gray-600">
-            <a href="/teacher" className="hover:text-blue-600 transition">テスト一覧</a>
-            {isAdmin && (
-              <>
-                <a href="/teacher/points" className="hover:text-blue-600 transition">ポイント管理</a>
-                <a href="/teacher/admins" className="hover:text-blue-600 transition font-medium text-purple-600">スタッフ管理</a>
-                <a href="/teacher/students" className="hover:text-blue-600 transition">生徒管理</a>
-              </>
-            )}
-          </nav>
+          <TeacherNav isAdmin={isAdmin} />
           <LogoutButton />
         </div>
       </header>
