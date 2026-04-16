@@ -88,7 +88,8 @@ export default function TestManagerClient({
         'postgres_changes',
         { event: '*', schema: 'public', table: 'tests', filter: `id=eq.${test.id}` },
         (payload) => {
-          if (payload.new) setTest(payload.new as Test)
+          // IDを検証して自分のテストの更新のみ適用する
+          if (payload.new && payload.new.id === test.id) setTest(payload.new as Test)
         }
       )
       .on(

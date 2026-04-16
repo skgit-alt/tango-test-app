@@ -23,28 +23,35 @@ export default function WaitingClient({
   // テストのステータス変化を監視（ポーリング2秒 + Realtimeの二重構成）
   useEffect(() => {
     let cancelled = false
+    const testId = initialTest.id
 
-    // ポーリング：2秒ごとに最新状態を取得（Realtimeの遅延をカバー）
+    // ポーリング：2秒ごとに最新状態を取得（サービスロール経由で正確なデータを取得）
     const poll = async () => {
       if (cancelled) return
-      const { data } = await supabase
-        .from('tests')
-        .select('*')
-        .eq('id', test.id)
-        .single()
-      if (data && !cancelled) setTest(data as Test)
+      try {
+        const res = await fetch(`/api/student/test-status?testId=${testId}`, { cache: 'no-store' })
+        if (!res.ok) return
+        const data: Test | null = await res.json()
+        // IDを必ず確認してから反映
+        if (data && data.id === testId && !cancelled) setTest(data)
+      } catch (e) {
+        console.error('[WaitingClient] poll error:', e)
+      }
     }
 
     const interval = setInterval(poll, 2000)
 
     // Realtimeも併用（より速く届いたほうを使う）
+    // ※ Supabaseのフィルタはサーバー側で完全に保証されないため、IDを必ず検証する
     const channel = supabase
       .channel(`waiting-test-${test.id}`)
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'tests', filter: `id=eq.${test.id}` },
         (payload) => {
-          if (payload.new && !cancelled) setTest(payload.new as Test)
+          if (payload.new && payload.new.id === test.id && !cancelled) {
+            setTest(payload.new as Test)
+          }
         }
       )
       .subscribe()

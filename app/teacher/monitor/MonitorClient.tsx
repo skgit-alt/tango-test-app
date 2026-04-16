@@ -22,8 +22,11 @@ export default function MonitorClient({ tests: initialTests, classes }: { tests:
     const channel = supabase
       .channel('monitor-tests')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tests' }, (payload) => {
-        if (payload.new) {
-          setTestList(prev => prev.map(t => t.id === payload.new.id ? { ...t, ...payload.new } as Test : t))
+        // IDが存在する場合のみ、該当テストを更新する
+        if (payload.new && payload.new.id) {
+          setTestList(prev => prev.map(t =>
+            t.id === payload.new.id ? { ...t, ...payload.new } as Test : t
+          ))
         }
       })
       .subscribe()
