@@ -30,6 +30,7 @@ export interface Test {
   created_at: string
   open_classes: string[] | null
   round_number: number | null
+  scheduled_at: string | null
 }
 
 export interface RankingSettings {

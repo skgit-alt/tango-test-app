@@ -55,6 +55,13 @@ export default function TestManagerClient({
   const [roundInput, setRoundInput] = useState(String(test.round_number ?? ''))
   // 提出リセット
   const [resettingId, setResettingId] = useState<string | null>(null)
+  // 予約開始
+  const [scheduledAt, setScheduledAt] = useState<string>(
+    test.scheduled_at
+      ? new Date(test.scheduled_at).toISOString().slice(0, 16)  // datetime-local 形式
+      : ''
+  )
+  const [savingSchedule, setSavingSchedule] = useState(false)
 
   const fetchData = useCallback(async () => {
     const { data: sessData } = await supabase
@@ -132,6 +139,29 @@ export default function TestManagerClient({
       .eq('id', test.id)
     if (error) setActionError('テスト開始に失敗しました')
     setLoading(false)
+  }
+
+  // 予約開始を設定・解除
+  const handleSaveSchedule = async () => {
+    setSavingSchedule(true)
+    setActionError('')
+    const value = scheduledAt ? new Date(scheduledAt).toISOString() : null
+    const { error } = await supabase
+      .from('tests')
+      .update({ scheduled_at: value })
+      .eq('id', test.id)
+    if (error) setActionError('予約の保存に失敗しました')
+    else setTest((prev) => ({ ...prev, scheduled_at: value }))
+    setSavingSchedule(false)
+  }
+
+  const handleCancelSchedule = async () => {
+    if (!confirm('予約を解除しますか？')) return
+    setSavingSchedule(true)
+    await supabase.from('tests').update({ scheduled_at: null }).eq('id', test.id)
+    setTest((prev) => ({ ...prev, scheduled_at: null }))
+    setScheduledAt('')
+    setSavingSchedule(false)
   }
 
   // 提出をリセット（回答削除 + セッション未提出に戻す）
@@ -381,6 +411,64 @@ export default function TestManagerClient({
           </div>
         ))}
       </div>
+
+      {/* 予約開始 */}
+      {test.status === 'waiting' && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-gray-800">予約開始</h2>
+              <p className="text-xs text-gray-400 mt-0.5">指定日時に全クラスを自動で開始します</p>
+            </div>
+            {test.scheduled_at && (
+              <span className="text-xs bg-yellow-100 text-yellow-700 font-medium px-3 py-1 rounded-full">
+                🕐 予約済み
+              </span>
+            )}
+          </div>
+
+          {test.scheduled_at && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-yellow-800">
+                  {new Date(test.scheduled_at).toLocaleString('ja-JP', {
+                    year: 'numeric', month: 'long', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit',
+                  })} に自動開始
+                </p>
+                <p className="text-xs text-yellow-600 mt-0.5">その時刻になると全クラスが一斉に開始されます</p>
+              </div>
+              <button
+                onClick={handleCancelSchedule}
+                disabled={savingSchedule}
+                className="text-xs text-red-500 border border-red-200 bg-white hover:bg-red-50 px-3 py-1.5 rounded-lg font-medium transition ml-3 shrink-0"
+              >
+                予約を解除
+              </button>
+            </div>
+          )}
+
+          <div className="flex items-end gap-3 flex-wrap">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">日時を選択</label>
+              <input
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={(e) => setScheduledAt(e.target.value)}
+                min={new Date().toISOString().slice(0, 16)}
+                className="border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <button
+              onClick={handleSaveSchedule}
+              disabled={savingSchedule || !scheduledAt}
+              className="bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-50"
+            >
+              {savingSchedule ? '保存中...' : test.scheduled_at ? '予約を更新' : '予約を設定'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* クラス別開始 */}
       {(test.status === 'waiting' || test.status === 'open') && classes.length > 0 && (

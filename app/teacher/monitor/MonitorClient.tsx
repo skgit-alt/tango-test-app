@@ -19,6 +19,15 @@ export default function MonitorClient({ tests: initialTests, classes }: { tests:
   const supabase = createClient()
 
   useEffect(() => {
+    // 予約自動開始のフォールバックトリガー（30秒ごと）
+    const triggerAutoStart = () => {
+      fetch('/api/cron/auto-start', {
+        headers: { 'x-internal-trigger': '1' },
+      }).catch(() => {})
+    }
+    triggerAutoStart()
+    const autoStartInterval = setInterval(triggerAutoStart, 30_000)
+
     const channel = supabase
       .channel('monitor-tests')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tests' }, (payload) => {
@@ -30,7 +39,11 @@ export default function MonitorClient({ tests: initialTests, classes }: { tests:
         }
       })
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+
+    return () => {
+      clearInterval(autoStartInterval)
+      supabase.removeChannel(channel)
+    }
   }, [supabase])
 
   const handleOpenClass = async (testId: string, className: string) => {
