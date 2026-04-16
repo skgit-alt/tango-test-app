@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import WaitingClient from './WaitingClient'
 
@@ -17,8 +18,9 @@ export default async function WaitingPage() {
   if (!student) redirect('/auth/login')
   if (!student.test_name) redirect('/student/register')
 
-  // アクティブなテストを取得
-  const { data: test } = await supabase
+  // アクティブなテストを取得（RLSバイパスで確実に取得）
+  const admin = createAdminClient()
+  const { data: test } = await admin
     .from('tests')
     .select('*')
     .in('status', ['waiting', 'open'])

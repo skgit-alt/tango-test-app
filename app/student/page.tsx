@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { calcPoints } from '@/lib/supabase/types'
@@ -20,8 +21,9 @@ export default async function StudentHomePage() {
   if (!student) redirect('/auth/login')
   if (!student.test_name) redirect('/student/register')
 
-  // アクティブなテストを取得（open_classes含む）
-  const { data: activeTest } = await supabase
+  // アクティブなテストを取得（RLSバイパスで確実に取得）
+  const admin = createAdminClient()
+  const { data: activeTest } = await admin
     .from('tests')
     .select('id, title, mode, status, open_classes')
     .in('status', ['waiting', 'open', 'finished', 'published'])

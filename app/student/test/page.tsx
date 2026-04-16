@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import TestClient from './TestClient'
 
@@ -29,8 +30,9 @@ export default async function TestPage() {
 
   if (!session) redirect('/student/waiting')
 
-  // セッションのtest_idからテストを取得（statusは問わない）
-  const { data: test } = await supabase
+  // セッションのtest_idからテストを取得（RLSバイパス）
+  const admin = createAdminClient()
+  const { data: test } = await admin
     .from('tests')
     .select('*')
     .eq('id', session.test_id)
@@ -38,8 +40,8 @@ export default async function TestPage() {
 
   if (!test) redirect('/student/waiting')
 
-  // 問題を全取得
-  const { data: questions } = await supabase
+  // 問題を全取得（RLSバイパス）
+  const { data: questions } = await admin
     .from('questions')
     .select('*')
     .eq('test_id', test.id)

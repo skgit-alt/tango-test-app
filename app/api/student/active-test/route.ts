@@ -1,15 +1,18 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
+  // まず認証チェック（通常クライアントで）
   const supabase = await createClient()
-
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return NextResponse.json(null, { status: 401 })
   }
 
-  const { data, error } = await supabase
+  // データ取得はサービスロール（RLSバイパス）で
+  const admin = createAdminClient()
+  const { data, error } = await admin
     .from('tests')
     .select('id, title, mode, status, open_classes')
     .in('status', ['waiting', 'open'])
