@@ -53,6 +53,8 @@ export default function TestManagerClient({
   // 第何回編集
   const [editingRound, setEditingRound] = useState(false)
   const [roundInput, setRoundInput] = useState(String(test.round_number ?? ''))
+  // 提出リセット
+  const [resettingId, setResettingId] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     const { data: sessData } = await supabase
@@ -130,6 +132,25 @@ export default function TestManagerClient({
       .eq('id', test.id)
     if (error) setActionError('テスト開始に失敗しました')
     setLoading(false)
+  }
+
+  // 提出をリセット（回答削除 + セッション未提出に戻す）
+  const handleResetSession = async (sessionId: string, studentName: string) => {
+    if (!confirm(`${studentName} の提出をリセットしますか？\n回答データが削除され、もう一度受け直せるようになります。`)) return
+    setResettingId(sessionId)
+    try {
+      await supabase.from('answers').delete().eq('session_id', sessionId)
+      await supabase
+        .from('sessions')
+        .update({ is_submitted: false, score: null, submitted_at: null, current_page: 1 })
+        .eq('id', sessionId)
+      await fetchData()
+    } catch (err) {
+      console.error(err)
+      setActionError('リセットに失敗しました')
+    } finally {
+      setResettingId(null)
+    }
   }
 
   // 第何回を保存
@@ -439,6 +460,7 @@ export default function TestManagerClient({
                   <th className="px-4 py-3 text-center">ページ</th>
                   <th className="px-4 py-3 text-center">提出</th>
                   <th className="px-4 py-3 text-right">点数</th>
+                  <th className="px-4 py-3 text-center">再受験</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -472,6 +494,17 @@ export default function TestManagerClient({
                       </td>
                       <td className="px-4 py-3 text-right font-medium text-gray-800">
                         {s.score !== null ? `${s.score}点` : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {s.is_submitted && (
+                          <button
+                            onClick={() => handleResetSession(s.id, s.students?.name ?? '生徒')}
+                            disabled={resettingId === s.id}
+                            className="text-xs text-orange-600 border border-orange-300 bg-orange-50 hover:bg-orange-100 px-2 py-1 rounded-lg font-medium transition disabled:opacity-50"
+                          >
+                            {resettingId === s.id ? '...' : 'リセット'}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
