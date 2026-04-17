@@ -64,25 +64,14 @@ export default function TestManagerClient({
   const [savingSchedule, setSavingSchedule] = useState(false)
 
   const fetchData = useCallback(async () => {
-    const { data: sessData } = await supabase
-      .from('sessions')
-      .select('*, students(name, class_name, seat_number, test_name)')
-      .eq('test_id', test.id)
-      .order('created_at')
-
-    if (sessData) setSessions(sessData as SessionWithStudent[])
-
-    const { data: cheatData } = await supabase
-      .from('cheat_logs')
-      .select('*, sessions(students(name, class_name, seat_number))')
-      .in(
-        'session_id',
-        (sessData ?? []).map((s) => s.id)
-      )
-      .order('occurred_at', { ascending: false })
-
-    if (cheatData) setCheatLogs(cheatData as CheatLogWithStudent[])
-  }, [supabase, test.id])
+    // admin権限APIでRLSをバイパスしてセッション取得
+    const res = await fetch(`/api/teacher/test-sessions?testId=${test.id}`)
+    if (res.ok) {
+      const data = await res.json()
+      if (data.sessions) setSessions(data.sessions as SessionWithStudent[])
+      if (data.cheatLogs) setCheatLogs(data.cheatLogs as CheatLogWithStudent[])
+    }
+  }, [test.id])
 
   useEffect(() => {
     fetchData()

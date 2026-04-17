@@ -77,9 +77,6 @@ export default function WaitingClient({
     setError('')
 
     try {
-      // 130人同時接続対策: ランダム遅延 0~2000ms
-      await new Promise((resolve) => setTimeout(resolve, Math.random() * 2000))
-
       // APIルート経由でセッション作成（admin権限でRLSを回避）
       const res = await fetch('/api/student/start-test', {
         method: 'POST',

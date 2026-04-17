@@ -39,8 +39,8 @@ export default async function StudentHomePage() {
     .limit(1)
     .maybeSingle()
 
-  // 過去の全提出済みセッションを取得
-  const { data: pastSessions } = await supabase
+  // 過去の全提出済みセッションを取得（RLSバイパス）
+  const { data: pastSessions } = await admin
     .from('sessions')
     .select('id, score, submitted_at, tests(id, title, mode, status, pass_score)')
     .eq('student_id', student.id)
