@@ -15,11 +15,11 @@ export default async function StudentHomePage() {
   const { data: student } = await supabase
     .from('students')
     .select('*')
-    .eq('email', user.email)
+    .eq('id', user.id)
     .single()
 
   if (!student) redirect('/auth/login')
-  if (!student.test_name) redirect('/student/register')
+  if (!student.test_name) redirect('/student/change-password')
 
   const admin = createAdminClient()
 

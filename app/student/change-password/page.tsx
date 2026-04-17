@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
 function validateTestName(value: string): string {
@@ -16,7 +15,6 @@ function validateTestName(value: string): string {
 }
 
 export default function ChangePasswordPage() {
-  const supabase = createClient()
   const router = useRouter()
 
   const [newPassword, setNewPassword] = useState('')
@@ -44,36 +42,20 @@ export default function ChangePasswordPage() {
 
     setLoading(true)
     try {
-      // テストネームの重複チェック
-      const { data: existing } = await supabase
-        .from('students')
-        .select('id')
-        .eq('test_name', testName.trim())
-        .maybeSingle()
+      // サーバー側API経由でパスワード変更（Cookieは変化しない）
+      const res = await fetch('/api/student/complete-setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: newPassword, testName: testName.trim() }),
+      })
 
-      if (existing) {
-        setError('そのテストネームは既に使用されています。別のテストネームを選んでください。')
-        setLoading(false)
+      const result = await res.json()
+      if (!res.ok) {
+        setError(result.error ?? '保存に失敗しました。もう一度お試しください。')
         return
       }
 
-      // パスワード変更前にメールアドレスを取得しておく
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user?.email) throw new Error('ユーザー情報が取得できません')
-
-      // パスワード変更
-      const { error: pwError } = await supabase.auth.updateUser({ password: newPassword })
-      if (pwError) throw pwError
-
-      // RPC経由でテストネーム保存 & must_change_password を false に（スキーマキャッシュ回避）
-      const { error: rpcError } = await supabase.rpc('complete_student_setup', {
-        p_test_name: testName.trim(),
-      })
-      if (rpcError) throw rpcError
-
-      // パスワード変更後は新しいパスワードで再ログインしてCookieを確実に更新
-      await supabase.auth.signInWithPassword({ email: user.email, password: newPassword })
-
+      // セッションはそのまま維持されているのでそのまま移動
       window.location.href = '/student'
     } catch (e) {
       console.error(e)
