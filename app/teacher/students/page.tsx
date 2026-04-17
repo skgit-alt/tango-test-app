@@ -30,6 +30,12 @@ export default function StudentsPage() {
   const [saving, setSaving] = useState(false)
   const [editError, setEditError] = useState('')
 
+  const [resetTarget, setResetTarget] = useState<Student | null>(null)
+  const [resetPassword, setResetPassword] = useState('')
+  const [resetConfirm, setResetConfirm] = useState('')
+  const [resetting, setResetting] = useState(false)
+  const [resetError, setResetError] = useState('')
+
   const fetchStudents = async () => {
     const { data } = await supabase
       .from('students')
@@ -102,6 +108,38 @@ export default function StudentsPage() {
       setError('削除に失敗しました')
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const openReset = (s: Student) => {
+    setResetTarget(s)
+    setResetPassword('')
+    setResetConfirm('')
+    setResetError('')
+  }
+
+  const handleReset = async () => {
+    if (!resetTarget) return
+    if (resetPassword.length < 6) { setResetError('パスワードは6文字以上で入力してください'); return }
+    if (resetPassword !== resetConfirm) { setResetError('パスワードが一致しません'); return }
+
+    setResetting(true)
+    setResetError('')
+    try {
+      const res = await fetch('/api/teacher/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: resetTarget.id, password: resetPassword }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error ?? 'リセットに失敗しました')
+      setSuccess(`${resetTarget.name} のパスワードをリセットしました`)
+      setResetTarget(null)
+      await fetchStudents()
+    } catch (err) {
+      setResetError(err instanceof Error ? err.message : 'リセットに失敗しました')
+    } finally {
+      setResetting(false)
     }
   }
 
@@ -274,6 +312,58 @@ export default function StudentsPage() {
         </div>
       )}
 
+      {/* パスワードリセットモーダル */}
+      {resetTarget && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
+            <div>
+              <h2 className="text-lg font-bold text-gray-800">パスワードリセット</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                <span className="font-medium text-gray-700">{resetTarget.name}</span>（{resetTarget.student_id}）の新しいパスワードを設定します。
+              </p>
+              <p className="text-xs text-orange-600 bg-orange-50 rounded-lg px-3 py-2 mt-2">
+                リセット後、生徒は次回ログイン時に初回設定画面が表示されます。
+              </p>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">新しいパスワード</label>
+                <input
+                  type="password"
+                  value={resetPassword}
+                  onChange={(e) => { setResetPassword(e.target.value); setResetError('') }}
+                  placeholder="6文字以上"
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">パスワード（確認）</label>
+                <input
+                  type="password"
+                  value={resetConfirm}
+                  onChange={(e) => { setResetConfirm(e.target.value); setResetError('') }}
+                  placeholder="もう一度入力"
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+              </div>
+            </div>
+            {resetError && (
+              <div className="bg-red-50 text-red-700 rounded-xl px-4 py-3 text-sm">{resetError}</div>
+            )}
+            <div className="flex gap-3 pt-1">
+              <button onClick={handleReset} disabled={resetting || !resetPassword || !resetConfirm}
+                className="flex-1 bg-orange-500 text-white py-2.5 rounded-xl font-semibold hover:bg-orange-600 transition disabled:opacity-50">
+                {resetting ? 'リセット中...' : 'リセットする'}
+              </button>
+              <button onClick={() => setResetTarget(null)}
+                className="flex-1 bg-gray-100 text-gray-700 py-2.5 rounded-xl font-semibold hover:bg-gray-200 transition">
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-gray-800">生徒管理</h1>
         <div className="flex gap-2 flex-wrap">
@@ -368,10 +458,16 @@ export default function StudentsPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <button onClick={() => openEdit(s)}
-                        className="text-blue-600 hover:text-blue-800 text-xs font-medium hover:underline">
-                        修正
-                      </button>
+                      <div className="flex items-center justify-center gap-3">
+                        <button onClick={() => openEdit(s)}
+                          className="text-blue-600 hover:text-blue-800 text-xs font-medium hover:underline">
+                          修正
+                        </button>
+                        <button onClick={() => openReset(s)}
+                          className="text-orange-500 hover:text-orange-700 text-xs font-medium hover:underline">
+                          PW リセット
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
