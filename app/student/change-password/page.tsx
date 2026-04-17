@@ -57,6 +57,10 @@ export default function ChangePasswordPage() {
         return
       }
 
+      // パスワード変更前にメールアドレスを取得しておく
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user?.email) throw new Error('ユーザー情報が取得できません')
+
       // パスワード変更
       const { error: pwError } = await supabase.auth.updateUser({ password: newPassword })
       if (pwError) throw pwError
@@ -67,7 +71,9 @@ export default function ChangePasswordPage() {
       })
       if (rpcError) throw rpcError
 
-      // パスワード変更後はセッションを確実に維持するためフルリロード
+      // パスワード変更後は新しいパスワードで再ログインしてCookieを確実に更新
+      await supabase.auth.signInWithPassword({ email: user.email, password: newPassword })
+
       window.location.href = '/student'
     } catch (e) {
       console.error(e)
