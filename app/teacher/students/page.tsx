@@ -184,7 +184,8 @@ export default function StudentsPage() {
       const result = await res.json()
 
       if (result.errors?.length > 0) {
-        setError(`${result.errors.length}件のエラーがありました: ${result.errors.map((e: { student_id: string }) => e.student_id).join(', ')}`)
+        const errDetails = result.errors.map((e: { student_id: string; error?: string }) => `${e.student_id}${e.error ? `: ${e.error}` : ''}`).join(' / ')
+        setError(`${result.errors.length}件のエラーがありました: ${errDetails}`)
       }
       setSuccess(`${result.successCount}名の生徒を登録しました`)
       await fetchStudents()
