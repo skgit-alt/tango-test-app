@@ -24,26 +24,26 @@ export default function StudentLoginPage() {
     setError('')
 
     const email = `${id}@school.local`
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password })
 
-    if (signInError) {
+    if (signInError || !signInData.user) {
       setError('IDまたはパスワードが正しくありません')
       setLoading(false)
       return
     }
 
-    // must_change_password を確認
+    // must_change_password を確認（ログインしたユーザーのIDで絞り込む）
     const { data: student } = await supabase
       .from('students')
       .select('must_change_password')
+      .eq('id', signInData.user.id)
       .single()
 
     if (student?.must_change_password) {
-      router.push('/student/change-password')
+      window.location.href = '/student/change-password'
     } else {
-      router.push('/student')
+      window.location.href = '/student'
     }
-    router.refresh()
   }
 
   return (
