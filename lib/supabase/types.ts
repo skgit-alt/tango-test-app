@@ -10,11 +10,12 @@ export interface Admin {
 
 export interface Student {
   id: string
-  email: string
+  student_id: string
   name: string
   class_name: string
   seat_number: number
   test_name: string | null
+  must_change_password: boolean
   created_at: string
 }
 

@@ -15,8 +15,8 @@ export default async function StudentLayout({
 
   const { data: student } = await supabase
     .from('students')
-    .select('id, test_name')
-    .eq('email', user.email)
+    .select('id, test_name, must_change_password')
+    .eq('id', user.id)
     .single()
 
   if (!student) {
@@ -26,7 +26,6 @@ export default async function StudentLayout({
           <div className="text-5xl">🚫</div>
           <h1 className="text-xl font-bold text-gray-800">登録されていません</h1>
           <p className="text-sm text-gray-500">
-            あなたのメールアドレス（{user.email}）は生徒として登録されていません。
             担当の先生に連絡してください。
           </p>
         </div>
@@ -34,5 +33,7 @@ export default async function StudentLayout({
     )
   }
 
+  // 初回ログイン時はパスワード変更ページへ強制誘導
+  // （change-passwordページ自体は除外）
   return <>{children}</>
 }
