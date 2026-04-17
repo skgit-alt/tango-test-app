@@ -80,30 +80,22 @@ export default function WaitingClient({
       // 130人同時接続対策: ランダム遅延 0~2000ms
       await new Promise((resolve) => setTimeout(resolve, Math.random() * 2000))
 
-      const now = new Date().toISOString()
+      // APIルート経由でセッション作成（admin権限でRLSを回避）
+      const res = await fetch('/api/student/start-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          testId: test.id,
+          existingSessionId: existingSession?.id ?? null,
+        }),
+      })
 
-      if (existingSession) {
-        if (!existingSession.started_at) {
-          await supabase
-            .from('sessions')
-            .update({ started_at: now })
-            .eq('id', existingSession.id)
-        }
-      } else {
-        const { error: sessionError } = await supabase
-          .from('sessions')
-          .insert({
-            test_id: test.id,
-            student_id: student.id,
-            started_at: now,
-            is_submitted: false,
-            current_page: 1,
-          })
-
-        if (sessionError) throw sessionError
+      if (!res.ok) {
+        const result = await res.json()
+        throw new Error(result.error ?? 'セッション作成に失敗しました')
       }
 
-      router.push('/student/test')
+      window.location.href = '/student/test'
     } catch (err) {
       console.error(err)
       setError('エラーが発生しました。もう一度お試しください。')
