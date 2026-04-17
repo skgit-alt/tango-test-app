@@ -15,7 +15,7 @@ export default async function StudentLayout({
 
   const { data: student } = await supabase
     .from('students')
-    .select('id, test_name, must_change_password')
+    .select('id, test_name')
     .eq('id', user.id)
     .single()
 

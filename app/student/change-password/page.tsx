@@ -67,8 +67,8 @@ export default function ChangePasswordPage() {
       })
       if (rpcError) throw rpcError
 
-      router.push('/student')
-      router.refresh()
+      // パスワード変更後はセッションを確実に維持するためフルリロード
+      window.location.href = '/student'
     } catch (e) {
       console.error(e)
       setError('保存に失敗しました。もう一度お試しください。')
