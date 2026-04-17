@@ -22,10 +22,9 @@ export async function POST(req: NextRequest) {
   const results: { student_id: string; success: boolean; error?: string }[] = []
 
   for (const row of students) {
+    const email = `${row.student_id}@school.local`
     try {
-      const email = `${row.student_id}@school.local`
-
-      // すでに存在するか確認（student_idで検索）
+      // すでにDBに存在するか確認
       const { data: existing } = await admin
         .from('students')
         .select('id')
@@ -33,55 +32,61 @@ export async function POST(req: NextRequest) {
         .maybeSingle()
 
       if (existing) {
-        // 既存の場合はパスワードと情報を更新
-        const { data: authList } = await admin.auth.admin.listUsers()
-        const existingAuthUser = authList.users.find(u => u.email === email)
-        if (existingAuthUser) {
-          await admin.auth.admin.updateUserById(existingAuthUser.id, { password: row.password })
+        // 既存ユーザーのパスワードを更新
+        const { error: pwError } = await admin.auth.admin.updateUserById(existing.id, {
+          password: row.password,
+        })
+        if (pwError) {
+          results.push({ student_id: row.student_id, success: false, error: `pw: ${pwError.message}` })
+          continue
         }
-        await admin.from('students').update({
-          name: row.name,
-          class_name: row.class_name,
-          seat_number: row.seat_number,
-          must_change_password: true,
-        }).eq('student_id', row.student_id)
-
+        // RPC経由で情報更新（スキーマキャッシュ回避）
+        await admin.rpc('create_student', {
+          p_id: existing.id,
+          p_student_id: row.student_id,
+          p_name: row.name,
+          p_class_name: row.class_name,
+          p_seat_number: row.seat_number,
+        })
         results.push({ student_id: row.student_id, success: true })
         continue
       }
 
-      // 新規作成
-      const { data: authUser, error: authError } = await admin.auth.admin.createUser({
+      // 新規Authユーザー作成
+      const { data: authData, error: authError } = await admin.auth.admin.createUser({
         email,
         password: row.password,
         email_confirm: true,
       })
 
-      if (authError || !authUser.user) {
-        results.push({ student_id: row.student_id, success: false, error: authError?.message })
+      if (authError) {
+        results.push({ student_id: row.student_id, success: false, error: `auth: ${authError.message}` })
+        continue
+      }
+      if (!authData?.user) {
+        results.push({ student_id: row.student_id, success: false, error: 'auth: user not returned' })
         continue
       }
 
-      const { error: insertError } = await admin.from('students').insert({
-        id: authUser.user.id,
-        student_id: row.student_id,
-        name: row.name,
-        class_name: row.class_name,
-        seat_number: row.seat_number,
-        test_name: null,
-        must_change_password: true,
+      // RPC経由でstudentsテーブルに挿入（スキーマキャッシュ回避）
+      const { error: rpcError } = await admin.rpc('create_student', {
+        p_id: authData.user.id,
+        p_student_id: row.student_id,
+        p_name: row.name,
+        p_class_name: row.class_name,
+        p_seat_number: row.seat_number,
       })
 
-      if (insertError) {
-        // auth userを削除してロールバック
-        await admin.auth.admin.deleteUser(authUser.user.id)
-        results.push({ student_id: row.student_id, success: false, error: insertError.message })
+      if (rpcError) {
+        await admin.auth.admin.deleteUser(authData.user.id)
+        results.push({ student_id: row.student_id, success: false, error: `rpc: ${rpcError.message}` })
         continue
       }
 
       results.push({ student_id: row.student_id, success: true })
     } catch (e) {
-      results.push({ student_id: row.student_id, success: false, error: String(e) })
+      const msg = e instanceof Error ? e.message : String(e)
+      results.push({ student_id: row.student_id, success: false, error: `exception: ${msg}` })
     }
   }
 

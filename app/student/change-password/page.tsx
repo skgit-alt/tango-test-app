@@ -61,13 +61,11 @@ export default function ChangePasswordPage() {
       const { error: pwError } = await supabase.auth.updateUser({ password: newPassword })
       if (pwError) throw pwError
 
-      // テストネーム保存 & must_change_password を false に
-      const { error: updateError } = await supabase
-        .from('students')
-        .update({ test_name: testName.trim(), must_change_password: false })
-        .eq('id', (await supabase.auth.getUser()).data.user?.id)
-
-      if (updateError) throw updateError
+      // RPC経由でテストネーム保存 & must_change_password を false に（スキーマキャッシュ回避）
+      const { error: rpcError } = await supabase.rpc('complete_student_setup', {
+        p_test_name: testName.trim(),
+      })
+      if (rpcError) throw rpcError
 
       router.push('/student')
       router.refresh()
