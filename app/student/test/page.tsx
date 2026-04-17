@@ -18,8 +18,10 @@ export default async function TestPage() {
   if (!student) redirect('/auth/login')
   if (!student.test_name) redirect('/student/change-password')
 
-  // 未提出のセッションを探す（セッションが存在 = 開始許可済み）
-  const { data: session } = await supabase
+  // admin経由でセッションを取得（RLSバイパス）
+  const admin = createAdminClient()
+
+  const { data: session } = await admin
     .from('sessions')
     .select('*')
     .eq('student_id', student.id)
@@ -29,9 +31,6 @@ export default async function TestPage() {
     .maybeSingle()
 
   if (!session) redirect('/student/waiting')
-
-  // セッションのtest_idからテストを取得（RLSバイパス）
-  const admin = createAdminClient()
   const { data: test } = await admin
     .from('tests')
     .select('*')
@@ -49,8 +48,8 @@ export default async function TestPage() {
 
   if (!questions || questions.length === 0) redirect('/student/waiting')
 
-  // 既存の回答を取得（中断再開用）
-  const { data: existingAnswers } = await supabase
+  // 既存の回答を取得（中断再開用、RLSバイパス）
+  const { data: existingAnswers } = await admin
     .from('answers')
     .select('question_id, selected_answer')
     .eq('session_id', session.id)
