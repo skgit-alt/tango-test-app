@@ -88,8 +88,12 @@ export default function StudentsPage() {
     setError('')
     try {
       const ids = Array.from(selectedIds)
-      const { error } = await supabase.from('students').delete().in('id', ids)
-      if (error) throw error
+      const res = await fetch('/api/teacher/delete-students', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      })
+      if (!res.ok) throw new Error('削除に失敗しました')
       setSuccess(`${ids.length}名を削除しました`)
       setSelectedIds(new Set())
       await fetchStudents()

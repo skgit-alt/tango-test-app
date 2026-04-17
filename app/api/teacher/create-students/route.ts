@@ -11,7 +11,6 @@ type StudentRow = {
 }
 
 export async function POST(req: NextRequest) {
-  // 先生のみ許可
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -24,7 +23,7 @@ export async function POST(req: NextRequest) {
   for (const row of students) {
     const email = `${row.student_id}@school.local`
     try {
-      // すでにDBに存在するか確認
+      // DBに既存レコードがあるか確認
       const { data: existing } = await admin
         .from('students')
         .select('id')
@@ -32,15 +31,8 @@ export async function POST(req: NextRequest) {
         .maybeSingle()
 
       if (existing) {
-        // 既存ユーザーのパスワードを更新
-        const { error: pwError } = await admin.auth.admin.updateUserById(existing.id, {
-          password: row.password,
-        })
-        if (pwError) {
-          results.push({ student_id: row.student_id, success: false, error: `pw: ${pwError.message}` })
-          continue
-        }
-        // RPC経由で情報更新（スキーマキャッシュ回避）
+        // 既存ユーザーのパスワードを更新してRPCで情報更新
+        await admin.auth.admin.updateUserById(existing.id, { password: row.password })
         await admin.rpc('create_student', {
           p_id: existing.id,
           p_student_id: row.student_id,
@@ -52,25 +44,36 @@ export async function POST(req: NextRequest) {
         continue
       }
 
-      // 新規Authユーザー作成
-      const { data: authData, error: authError } = await admin.auth.admin.createUser({
-        email,
-        password: row.password,
-        email_confirm: true,
-      })
+      // Authユーザーが既に存在するか確認（DBレコード削除後の再登録対応）
+      let authUserId: string | null = null
+      const { data: authList } = await admin.auth.admin.listUsers({ perPage: 1000 })
+      const existingAuthUser = authList?.users?.find(u => u.email === email)
 
-      if (authError) {
-        results.push({ student_id: row.student_id, success: false, error: `auth: ${authError.message}` })
-        continue
-      }
-      if (!authData?.user) {
-        results.push({ student_id: row.student_id, success: false, error: 'auth: user not returned' })
-        continue
+      if (existingAuthUser) {
+        // 既存のAuthユーザーのパスワードを更新して再利用
+        await admin.auth.admin.updateUserById(existingAuthUser.id, { password: row.password })
+        authUserId = existingAuthUser.id
+      } else {
+        // 新規Authユーザー作成
+        const { data: authData, error: authError } = await admin.auth.admin.createUser({
+          email,
+          password: row.password,
+          email_confirm: true,
+        })
+        if (authError) {
+          results.push({ student_id: row.student_id, success: false, error: `auth: ${authError.message}` })
+          continue
+        }
+        if (!authData?.user) {
+          results.push({ student_id: row.student_id, success: false, error: 'auth: user not returned' })
+          continue
+        }
+        authUserId = authData.user.id
       }
 
-      // RPC経由でstudentsテーブルに挿入（スキーマキャッシュ回避）
+      // RPCでstudentsテーブルに挿入
       const { error: rpcError } = await admin.rpc('create_student', {
-        p_id: authData.user.id,
+        p_id: authUserId,
         p_student_id: row.student_id,
         p_name: row.name,
         p_class_name: row.class_name,
@@ -78,7 +81,6 @@ export async function POST(req: NextRequest) {
       })
 
       if (rpcError) {
-        await admin.auth.admin.deleteUser(authData.user.id)
         results.push({ student_id: row.student_id, success: false, error: `rpc: ${rpcError.message}` })
         continue
       }
@@ -92,6 +94,5 @@ export async function POST(req: NextRequest) {
 
   const successCount = results.filter(r => r.success).length
   const errors = results.filter(r => !r.success)
-
   return NextResponse.json({ successCount, errors })
 }
