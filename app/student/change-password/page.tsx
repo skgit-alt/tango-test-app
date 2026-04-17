@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 
 function validateTestName(value: string): string {
   const trimmed = value.trim()
@@ -15,7 +15,7 @@ function validateTestName(value: string): string {
 }
 
 export default function ChangePasswordPage() {
-  const router = useRouter()
+  const supabase = createClient()
 
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -42,20 +42,30 @@ export default function ChangePasswordPage() {
 
     setLoading(true)
     try {
-      // サーバー側API経由でパスワード変更（Cookieは変化しない）
+      // API呼び出し前にメールアドレスを取得しておく（後で再ログインに使う）
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user?.email) throw new Error('ユーザー情報が取得できません')
+      const email = user.email
+
+      // サーバー側API経由でパスワード変更 & DB更新（管理者権限で実行）
       const res = await fetch('/api/student/complete-setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: newPassword, testName: testName.trim() }),
       })
-
       const result = await res.json()
       if (!res.ok) {
         setError(result.error ?? '保存に失敗しました。もう一度お試しください。')
         return
       }
 
-      // セッションはそのまま維持されているのでそのまま移動
+      // 管理者APIのパスワード変更でセッションが無効になるため、新しいパスワードで再ログイン
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password: newPassword,
+      })
+      if (signInError) throw signInError
+
       window.location.href = '/student'
     } catch (e) {
       console.error(e)
