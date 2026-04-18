@@ -131,21 +131,21 @@ export default async function ResultPage({
           {/* ポイントメッセージ */}
           {pointsEarned !== null && (
             <div className={`rounded-xl p-4 text-center ${
-              pointsEarned >= 8 ? 'bg-yellow-50 border border-yellow-200' :
+              pointsEarned >= 7 ? 'bg-yellow-50 border border-yellow-200' :
               pointsEarned >= 4 ? 'bg-blue-50 border border-blue-200' :
               pointsEarned > 0 ? 'bg-green-50 border border-green-200' :
               'bg-gray-50 border border-gray-200'
             }`}>
-              {pointsEarned === 12 ? (
-                <p className="text-yellow-700 font-bold">パーフェクト！ +12pt</p>
-              ) : pointsEarned >= 8 ? (
+              {pointsEarned === 10 ? (
+                <p className="text-yellow-700 font-bold">パーフェクト！ +10pt</p>
+              ) : pointsEarned >= 7 ? (
                 <p className="text-yellow-700 font-medium">素晴らしい！ +{pointsEarned}pt</p>
               ) : pointsEarned >= 4 ? (
                 <p className="text-blue-700 font-medium">よくできました +{pointsEarned}pt</p>
               ) : pointsEarned > 0 ? (
                 <p className="text-green-700 font-medium">ポイント獲得 +{pointsEarned}pt</p>
               ) : (
-                <p className="text-gray-500 text-sm">84点以上でポイントが獲得できます</p>
+                <p className="text-gray-500 text-sm">72点以上でポイントが獲得できます</p>
               )}
             </div>
           )}
@@ -154,45 +154,53 @@ export default async function ResultPage({
           {pointsEarned !== null && (() => {
             // 50問×2点のため偶数点のみ存在する
             const table = [
-              { label: '100点',   min: 100, max: 100, pts: 12 },
-              { label: '98点',    min: 98,  max: 98,  pts: 8  },
-              { label: '96点',    min: 96,  max: 96,  pts: 7  },
-              { label: '94点',    min: 94,  max: 94,  pts: 6  },
-              { label: '92点',    min: 92,  max: 92,  pts: 5  },
-              { label: '90点',    min: 90,  max: 90,  pts: 4  },
-              { label: '88点',    min: 88,  max: 88,  pts: 3  },
-              { label: '86点',    min: 86,  max: 86,  pts: 2  },
-              { label: '84点',    min: 84,  max: 84,  pts: 1  },
-              { label: '82点以下', min: 0,  max: 82,  pts: 0  },
+              { label: '100点',    min: 100, max: 100, pts: 10 },
+              { label: '96〜98点', min: 96,  max: 98,  pts: 7  },
+              { label: '92〜94点', min: 92,  max: 94,  pts: 6  },
+              { label: '88〜90点', min: 88,  max: 90,  pts: 5  },
+              { label: '84〜86点', min: 84,  max: 86,  pts: 4  },
+              { label: '80〜82点', min: 80,  max: 82,  pts: 3  },
+              { label: '76〜78点', min: 76,  max: 78,  pts: 2  },
+              { label: '72〜74点', min: 72,  max: 74,  pts: 1  },
+              { label: '70点以下', min: 0,   max: 70,  pts: 0  },
             ]
             return (
-              <div className="rounded-xl border border-gray-200 overflow-hidden">
-                <p className="text-xs font-bold text-gray-500 px-3 py-2 bg-gray-50 border-b border-gray-200">
-                  ⭐ ポイント早見表
-                </p>
-                <table className="w-full text-sm">
-                  <tbody>
-                    {table.map((row) => {
-                      const isMyRow = score >= row.min && score <= row.max
-                      return (
-                        <tr
-                          key={row.label}
-                          className={isMyRow
-                            ? 'bg-blue-600 text-white font-bold'
-                            : 'border-b border-gray-100 text-gray-700'}
-                        >
-                          <td className="px-3 py-2">{row.label}</td>
-                          <td className="px-3 py-2 text-center text-gray-400 text-xs">
-                            {isMyRow ? '← あなた' : ''}
-                          </td>
-                          <td className="px-3 py-2 text-right font-semibold">
-                            {row.pts > 0 ? `+${row.pts}pt` : '0pt'}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+              <div className="space-y-3">
+                <div className="rounded-xl border border-gray-200 overflow-hidden">
+                  <p className="text-xs font-bold text-gray-500 px-3 py-2 bg-gray-50 border-b border-gray-200">
+                    ⭐ ポイント早見表
+                  </p>
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {table.map((row) => {
+                        const isMyRow = score >= row.min && score <= row.max
+                        return (
+                          <tr
+                            key={row.label}
+                            className={isMyRow
+                              ? 'bg-blue-600 text-white font-bold'
+                              : 'border-b border-gray-100 text-gray-700'}
+                          >
+                            <td className="px-3 py-2">{row.label}</td>
+                            <td className="px-3 py-2 text-center text-xs" style={isMyRow ? {} : { color: 'transparent' }}>
+                              ← あなた
+                            </td>
+                            <td className="px-3 py-2 text-right font-semibold">
+                              {row.pts > 0 ? `+${row.pts}pt` : '0pt'}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* 先生からのメッセージ */}
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    「単語・熟語の勉強は前日にちょっと頑張って７割取った！」みたいな勉強では短期記憶で身に付きません。スパイラルで繰り返して繰り返して勉強するしか知識として身に付きません。満点が取れるくらい繰り返して勉強してください。
+                  </p>
+                </div>
               </div>
             )
           })()}

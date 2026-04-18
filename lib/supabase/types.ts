@@ -111,14 +111,13 @@ export interface Point {
 
 // ポイント換算
 export function calcPoints(score: number): number {
-  if (score === 100) return 12
-  if (score >= 98) return 8
+  if (score === 100) return 10
   if (score >= 96) return 7
-  if (score >= 94) return 6
-  if (score >= 92) return 5
-  if (score >= 90) return 4
-  if (score >= 88) return 3
-  if (score >= 86) return 2
-  if (score >= 84) return 1
+  if (score >= 92) return 6
+  if (score >= 88) return 5
+  if (score >= 84) return 4
+  if (score >= 80) return 3
+  if (score >= 76) return 2
+  if (score >= 72) return 1
   return 0
 }
