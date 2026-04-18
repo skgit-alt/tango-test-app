@@ -524,28 +524,35 @@ export default function TestManagerClient({
         </div>
       )}
 
-      {/* 結果を返す */}
-      {((test.open_classes ?? []).length > 0 || test.status === 'open' || test.status === 'finished') && test.status !== 'published' && (
+      {/* 結果を返す — テストが開始された後は常に表示 */}
+      {((test.open_classes ?? []).length > 0 || test.status === 'open' || test.status === 'finished' || test.status === 'published') && (
         <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-5">
           <h2 className="font-semibold text-gray-800">結果を返す</h2>
 
           {/* 一括公開 */}
           <div className="space-y-2">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">① 全員に一括公開</p>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handlePublishResult}
-                disabled={loading}
-                className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-blue-700 active:scale-95 transition disabled:opacity-50 shadow-sm"
-              >
-                {loading ? '処理中...' : '全員に一括公開'}
-              </button>
-              <p className="text-xs text-gray-400">全生徒に一斉に結果を公開します</p>
-            </div>
+            {test.status === 'published' ? (
+              <div className="flex items-center gap-2">
+                <span className="bg-blue-100 text-blue-700 px-4 py-2 rounded-xl text-sm font-semibold">✅ 全員に公開済み</span>
+                <p className="text-xs text-gray-400">再受験者の結果も自動で閲覧可能です</p>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handlePublishResult}
+                  disabled={loading}
+                  className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-blue-700 active:scale-95 transition disabled:opacity-50 shadow-sm"
+                >
+                  {loading ? '処理中...' : '全員に一括公開'}
+                </button>
+                <p className="text-xs text-gray-400">全生徒に一斉に結果を公開します</p>
+              </div>
+            )}
           </div>
 
-          {/* クラスごと公開 — 開始済みクラスのみ表示 */}
-          {((test.status === 'open' ? classes : (test.open_classes ?? [])).length > 0) && (
+          {/* クラスごと公開 — 開始済みクラスのみ・全員公開済みでなければ表示 */}
+          {test.status !== 'published' && ((test.status === 'open' ? classes : (test.open_classes ?? [])).length > 0) && (
             <div className="space-y-2 pt-3 border-t border-gray-100">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">② クラスごとに公開</p>
               <p className="text-xs text-gray-400">開始済みのクラスに結果を返します</p>
@@ -572,10 +579,13 @@ export default function TestManagerClient({
             </div>
           )}
 
-          {/* 個人ごと公開 */}
+          {/* 個人ごと公開 — 提出済み生徒がいれば常に表示（再受験対応） */}
           {sessions.filter((s) => s.is_submitted).length > 0 && (
             <div className="space-y-2 pt-3 border-t border-gray-100">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">③ 個人ごとに公開（提出済みの生徒）</p>
+              {test.status === 'published' && (
+                <p className="text-xs text-blue-500">全員公開済みのため「閲覧可」が自動適用されています。再受験者も同様です。</p>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {sessions
                   .filter((s) => s.is_submitted)
@@ -605,7 +615,7 @@ export default function TestManagerClient({
                           )}
                         </div>
                         {alreadyPublished ? (
-                          <span className="text-xs text-green-600 font-medium shrink-0">✓ 公開済</span>
+                          <span className="text-xs text-green-600 font-medium shrink-0">✓ 閲覧可</span>
                         ) : (
                           <button
                             onClick={() => handlePublishToStudent(s.student_id)}
@@ -621,13 +631,6 @@ export default function TestManagerClient({
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* 全員公開済みバナー */}
-      {test.status === 'published' && (
-        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-center">
-          <p className="text-blue-700 font-semibold">✅ 全員に結果を公開済みです</p>
         </div>
       )}
 
