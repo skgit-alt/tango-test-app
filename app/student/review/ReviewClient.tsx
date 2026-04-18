@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { renderUnderline } from '@/lib/renderUnderline'
 
 type AnswerItem = {
   question_id: string
@@ -118,7 +119,34 @@ export default function ReviewClient({
               </div>
 
               <div className="px-5 py-4">
-                <p className="text-gray-800 font-medium mb-4 leading-relaxed">{a.question_text}</p>
+                <div className="text-gray-800 font-medium mb-4 leading-relaxed">
+                  {a.question_text.includes('\n') ? (
+                    a.question_text.split('\n').map((line, li) => {
+                      if (line.includes('(     )')) {
+                        const parts = line.split('(     )')
+                        return (
+                          <p key={li} className="mt-1">
+                            {parts.map((part, pi) => (
+                              <span key={pi}>
+                                {part}
+                                {pi < parts.length - 1 && (
+                                  <span className="inline-block border-b-2 border-gray-800 min-w-[4rem] mx-1" />
+                                )}
+                              </span>
+                            ))}
+                          </p>
+                        )
+                      }
+                      return (
+                        <p key={li} className="text-gray-500 text-sm">
+                          {renderUnderline(line)}
+                        </p>
+                      )
+                    })
+                  ) : (
+                    <p>{a.question_text}</p>
+                  )}
+                </div>
 
                 <div className="space-y-2">
                   {allChoices.map((choice) => {

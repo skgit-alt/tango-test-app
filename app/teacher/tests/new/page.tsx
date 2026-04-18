@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import * as XLSX from 'xlsx'
+import { renderUnderline } from '@/lib/renderUnderline'
 
 interface QuestionRow {
   order_num: number
@@ -28,10 +29,16 @@ function rtfToPlainText(buffer: ArrayBuffer): string {
   const hexBuf: number[] = []
   let i = 0
 
+  // グループごとのアンダーライン状態スタック
+  const ulStack: boolean[] = [false]
+  const isUl = () => ulStack[ulStack.length - 1]
+
   const flushHex = () => {
     if (!hexBuf.length) return
     try {
-      result.push(new TextDecoder('shift-jis').decode(new Uint8Array(hexBuf)))
+      const decoded = new TextDecoder('shift-jis').decode(new Uint8Array(hexBuf))
+      // アンダーライン中なら [U]...[/U] で囲む
+      result.push(isUl() ? `[U]${decoded}[/U]` : decoded)
     } catch {
       result.push('?')
     }
@@ -40,7 +47,16 @@ function rtfToPlainText(buffer: ArrayBuffer): string {
 
   while (i < rtf.length) {
     const c = rtf[i]
-    if (c === '{' || c === '}') { flushHex(); i++; continue }
+    if (c === '{') {
+      flushHex()
+      ulStack.push(isUl()) // 親のアンダーライン状態を継承
+      i++; continue
+    }
+    if (c === '}') {
+      flushHex()
+      ulStack.pop() // グループ終了でアンダーライン状態を戻す
+      i++; continue
+    }
     if (c === '\\') {
       i++
       if (i >= rtf.length) break
@@ -59,9 +75,13 @@ function rtfToPlainText(buffer: ArrayBuffer): string {
         } else {
           let word = ''
           while (i < rtf.length && /[a-z]/.test(rtf[i])) { word += rtf[i]; i++ }
-          if (word === 'par' || word === 'line') result.push('\n')
-          while (i < rtf.length && /[-\d]/.test(rtf[i])) i++
+          let param = ''
+          while (i < rtf.length && /[-\d]/.test(rtf[i])) { param += rtf[i]; i++ }
           if (i < rtf.length && rtf[i] === ' ') i++
+          if (word === 'par' || word === 'line') result.push('\n')
+          else if (word === 'ul' && param !== '0') ulStack[ulStack.length - 1] = true
+          else if (word === 'ul' && param === '0') ulStack[ulStack.length - 1] = false
+          else if (word === 'ulnone') ulStack[ulStack.length - 1] = false
         }
       }
       continue
@@ -73,6 +93,7 @@ function rtfToPlainText(buffer: ArrayBuffer): string {
   flushHex()
   return result.join('')
 }
+
 
 function parseChoices(line: string): string[] {
   // "① 読者   ② 証拠(者)   ③ 目撃者   ④ 出来事"
@@ -506,7 +527,11 @@ export default function NewTestPage() {
             <div className="bg-gray-50 rounded-xl p-4 space-y-3 text-sm">
               {questions.slice(0, 3).map((q, i) => (
                 <div key={i} className="border-b border-gray-200 pb-3 last:border-0 last:pb-0">
-                  <p className="font-medium text-gray-800 whitespace-pre-line">Q{q.order_num}: {q.question_text}</p>
+                  <p className="font-medium text-gray-800">
+                    Q{q.order_num}: {q.question_text.split('\n').map((line, li) => (
+                      <span key={li} className={li > 0 ? 'block' : ''}>{renderUnderline(line)}</span>
+                    ))}
+                  </p>
                   <div className="mt-1 text-gray-600 space-y-0.5">
                     <p>① {q.choice1}</p>
                     <p>② {q.choice2}</p>
