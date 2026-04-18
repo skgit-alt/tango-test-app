@@ -171,15 +171,17 @@ function parseRtfToQuestions(buffer: ArrayBuffer): { title: string; questions: Q
     }
 
     if (section === 'B') {
-      // 日本語問題行: "(21) 音楽（　　）は..."
-      const qM = line.match(/^\((\d+)\)\s+([\u3000-\u9fff].+)$/)
-      if (qM) {
+      // 日本語問題行: "(21) 音楽（　　）は..." or "(21) 1990年代には..."
+      // 選択肢行（①で始まる）や英文穴埋め行でなければ問題行とみなす
+      const qM = line.match(/^\((\d+)\)\s+(.+)$/)
+      if (qM && !qM[2].startsWith('①') && !line.includes('(     )')) {
         rawQs.push({ num: parseInt(qM[1]), section: 'B', questionText: qM[2].trim(), englishLine: '', choices: [] })
         continue
       }
-      // 英文穴埋め行: "Music (     ) has been..."
-      if (line.includes('(     )') && last?.section === 'B' && !last.englishLine) {
-        last.englishLine = line.trim()
+      // 英文穴埋め行: "Music (     ) has been..." ※スペース数は問わない
+      if (/\(\s{2,}\)/.test(line) && last?.section === 'B' && !last.englishLine) {
+        // 表示統一のため空欄を "(     )" に正規化
+        last.englishLine = line.trim().replace(/\(\s{2,}\)/g, '(     )')
         continue
       }
       // 選択肢行
