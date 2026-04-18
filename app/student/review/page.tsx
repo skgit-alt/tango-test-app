@@ -31,7 +31,7 @@ export default async function ReviewPage({
   // is_submitted=true に限定しない（古いRLSブロック済みデータも対象にする）
   let query = admin
     .from('sessions')
-    .select('id, test_id, score, submitted_at, tests(title, status, mode)')
+    .select('id, test_id, score, submitted_at, tests(title, status, mode, published_classes, published_student_ids)')
     .eq('student_id', student.id)
 
   if (sessionId) {
