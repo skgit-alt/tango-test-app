@@ -152,17 +152,18 @@ export default async function ResultPage({
 
           {/* ポイント早見表（50問モードのみ） */}
           {pointsEarned !== null && (() => {
+            // 50問×2点のため偶数点のみ存在する
             const table = [
-              { label: '100点',    min: 100, max: 100, pts: 12 },
-              { label: '98〜99点', min: 98,  max: 99,  pts: 8  },
-              { label: '96〜97点', min: 96,  max: 97,  pts: 7  },
-              { label: '94〜95点', min: 94,  max: 95,  pts: 6  },
-              { label: '92〜93点', min: 92,  max: 93,  pts: 5  },
-              { label: '90〜91点', min: 90,  max: 91,  pts: 4  },
-              { label: '88〜89点', min: 88,  max: 89,  pts: 3  },
-              { label: '86〜87点', min: 86,  max: 87,  pts: 2  },
-              { label: '84〜85点', min: 84,  max: 85,  pts: 1  },
-              { label: '83点以下', min: 0,   max: 83,  pts: 0  },
+              { label: '100点',   min: 100, max: 100, pts: 12 },
+              { label: '98点',    min: 98,  max: 98,  pts: 8  },
+              { label: '96点',    min: 96,  max: 96,  pts: 7  },
+              { label: '94点',    min: 94,  max: 94,  pts: 6  },
+              { label: '92点',    min: 92,  max: 92,  pts: 5  },
+              { label: '90点',    min: 90,  max: 90,  pts: 4  },
+              { label: '88点',    min: 88,  max: 88,  pts: 3  },
+              { label: '86点',    min: 86,  max: 86,  pts: 2  },
+              { label: '84点',    min: 84,  max: 84,  pts: 1  },
+              { label: '82点以下', min: 0,  max: 82,  pts: 0  },
             ]
             return (
               <div className="rounded-xl border border-gray-200 overflow-hidden">
