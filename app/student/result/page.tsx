@@ -150,6 +150,52 @@ export default async function ResultPage({
             </div>
           )}
 
+          {/* ポイント早見表（50問モードのみ） */}
+          {pointsEarned !== null && (() => {
+            const table = [
+              { label: '100点',    min: 100, max: 100, pts: 12 },
+              { label: '98〜99点', min: 98,  max: 99,  pts: 8  },
+              { label: '96〜97点', min: 96,  max: 97,  pts: 7  },
+              { label: '94〜95点', min: 94,  max: 95,  pts: 6  },
+              { label: '92〜93点', min: 92,  max: 93,  pts: 5  },
+              { label: '90〜91点', min: 90,  max: 91,  pts: 4  },
+              { label: '88〜89点', min: 88,  max: 89,  pts: 3  },
+              { label: '86〜87点', min: 86,  max: 87,  pts: 2  },
+              { label: '84〜85点', min: 84,  max: 85,  pts: 1  },
+              { label: '83点以下', min: 0,   max: 83,  pts: 0  },
+            ]
+            return (
+              <div className="rounded-xl border border-gray-200 overflow-hidden">
+                <p className="text-xs font-bold text-gray-500 px-3 py-2 bg-gray-50 border-b border-gray-200">
+                  ⭐ ポイント早見表
+                </p>
+                <table className="w-full text-sm">
+                  <tbody>
+                    {table.map((row) => {
+                      const isMyRow = score >= row.min && score <= row.max
+                      return (
+                        <tr
+                          key={row.label}
+                          className={isMyRow
+                            ? 'bg-blue-600 text-white font-bold'
+                            : 'border-b border-gray-100 text-gray-700'}
+                        >
+                          <td className="px-3 py-2">{row.label}</td>
+                          <td className="px-3 py-2 text-center text-gray-400 text-xs">
+                            {isMyRow ? '← あなた' : ''}
+                          </td>
+                          <td className="px-3 py-2 text-right font-semibold">
+                            {row.pts > 0 ? `+${row.pts}pt` : '0pt'}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
+          })()}
+
           {/* アクションボタン */}
           <div className="space-y-2 pt-2">
             <Link
