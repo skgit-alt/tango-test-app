@@ -39,13 +39,24 @@ export default async function StudentHomePage() {
     .limit(1)
     .maybeSingle()
 
-  // 過去の全提出済みセッションを取得（RLSバイパス）
+  // 過去の全提出済みセッションを取得（グラフ・履歴用）
   const { data: pastSessions } = await admin
     .from('sessions')
     .select('id, score, submitted_at, tests(id, title, mode, status, pass_score)')
     .eq('student_id', student.id)
     .eq('is_submitted', true)
     .order('submitted_at', { ascending: false })
+
+  // 最新テスト専用：このテストに参加した（セッションがある）かどうかの確認
+  // is_submitted に関わらず存在するだけで「受けた」と判断する
+  const { data: latestTestSession } = latestTest?.status === 'published'
+    ? await admin
+        .from('sessions')
+        .select('id, is_submitted')
+        .eq('student_id', student.id)
+        .eq('test_id', latestTest.id)
+        .maybeSingle()
+    : { data: null }
 
   const publishedSessions = (pastSessions ?? []).filter(
     (s) => (s.tests as any)?.status === 'published'
@@ -164,7 +175,7 @@ export default async function StudentHomePage() {
             ランキングを見る
           </Link>
 
-          {latestTest && latestTest.status === 'published' && (
+          {latestTest && latestTest.status === 'published' && latestTestSession && (
             <Link
               href="/student/result"
               className="block w-full bg-green-600 text-white py-3 rounded-2xl font-semibold text-center hover:bg-green-700 transition"

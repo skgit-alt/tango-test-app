@@ -77,9 +77,9 @@ export default function TestManagerClient({
     fetchData()
 
     // クラス一覧を取得
-    supabase.from('students').select('class_name').order('class_name').then(({ data }) => {
-      if (data) setClasses([...new Set(data.map(s => s.class_name))].filter(Boolean).sort())
-    })
+    fetch('/api/teacher/classes').then(r => r.ok ? r.json() : null).then((data) => {
+      if (data?.classes) setClasses(data.classes)
+    }).catch(() => {})
 
     const channel = supabase
       .channel(`test-${test.id}`)
@@ -106,27 +106,30 @@ export default function TestManagerClient({
     return () => { supabase.removeChannel(channel) }
   }, [fetchData, supabase, test.id])
 
+  const updateTest = async (patch: Record<string, unknown>): Promise<boolean> => {
+    const res = await fetch('/api/teacher/update-test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ testId: test.id, patch }),
+    })
+    return res.ok
+  }
+
   const handleOpenClass = async (className: string) => {
     const current = test.open_classes ?? []
     if (current.includes(className)) return
     setLoadingClass(className)
     const newClasses = [...current, className]
-    const { error } = await supabase
-      .from('tests')
-      .update({ open_classes: newClasses })
-      .eq('id', test.id)
-    if (error) setActionError(`${className}の開始に失敗しました`)
+    const ok = await updateTest({ open_classes: newClasses })
+    if (!ok) setActionError(`${className}の開始に失敗しました`)
     setLoadingClass(null)
   }
 
   const handleOpenTest = async () => {
     setLoading(true)
     setActionError('')
-    const { error } = await supabase
-      .from('tests')
-      .update({ status: 'open', opened_at: new Date().toISOString() })
-      .eq('id', test.id)
-    if (error) setActionError('テスト開始に失敗しました')
+    const ok = await updateTest({ status: 'open', opened_at: new Date().toISOString() })
+    if (!ok) setActionError('テスト開始に失敗しました')
     setLoading(false)
   }
 
@@ -135,11 +138,8 @@ export default function TestManagerClient({
     setSavingSchedule(true)
     setActionError('')
     const value = scheduledAt ? new Date(scheduledAt).toISOString() : null
-    const { error } = await supabase
-      .from('tests')
-      .update({ scheduled_at: value })
-      .eq('id', test.id)
-    if (error) setActionError('予約の保存に失敗しました')
+    const ok = await updateTest({ scheduled_at: value })
+    if (!ok) setActionError('予約の保存に失敗しました')
     else setTest((prev) => ({ ...prev, scheduled_at: value }))
     setSavingSchedule(false)
   }
@@ -147,7 +147,7 @@ export default function TestManagerClient({
   const handleCancelSchedule = async () => {
     if (!confirm('予約を解除しますか？')) return
     setSavingSchedule(true)
-    await supabase.from('tests').update({ scheduled_at: null }).eq('id', test.id)
+    await updateTest({ scheduled_at: null })
     setTest((prev) => ({ ...prev, scheduled_at: null }))
     setScheduledAt('')
     setSavingSchedule(false)
@@ -158,11 +158,12 @@ export default function TestManagerClient({
     if (!confirm(`${studentName} の提出をリセットしますか？\n回答データが削除され、もう一度受け直せるようになります。`)) return
     setResettingId(sessionId)
     try {
-      await supabase.from('answers').delete().eq('session_id', sessionId)
-      await supabase
-        .from('sessions')
-        .update({ is_submitted: false, score: null, submitted_at: null, current_page: 1 })
-        .eq('id', sessionId)
+      const res = await fetch('/api/teacher/reset-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      })
+      if (!res.ok) throw new Error('failed')
       await fetchData()
     } catch (err) {
       console.error(err)
@@ -176,11 +177,8 @@ export default function TestManagerClient({
   const handleSaveRound = async () => {
     const val = roundInput.trim() === '' ? null : parseInt(roundInput)
     if (roundInput.trim() !== '' && (isNaN(val!) || val! < 1)) return
-    const { error } = await supabase
-      .from('tests')
-      .update({ round_number: val })
-      .eq('id', test.id)
-    if (error) {
+    const ok = await updateTest({ round_number: val })
+    if (!ok) {
       setActionError('回数の保存に失敗しました')
     } else {
       setTest((prev) => ({ ...prev, round_number: val }))
@@ -193,11 +191,8 @@ export default function TestManagerClient({
     if (!confirm('テストを待機状態に戻しますか？\n開始済みのクラスもリセットされます。\n※すでに開始した生徒のセッションはそのまま残ります。')) return
     setLoading(true)
     setActionError('')
-    const { error } = await supabase
-      .from('tests')
-      .update({ status: 'waiting', open_classes: null, opened_at: null })
-      .eq('id', test.id)
-    if (error) setActionError('待機状態への変更に失敗しました')
+    const ok = await updateTest({ status: 'waiting', open_classes: null, opened_at: null })
+    if (!ok) setActionError('待機状態への変更に失敗しました')
     setLoading(false)
   }
 
@@ -205,11 +200,8 @@ export default function TestManagerClient({
   const handleSaveTitle = async () => {
     const trimmed = titleInput.trim()
     if (!trimmed) return
-    const { error } = await supabase
-      .from('tests')
-      .update({ title: trimmed })
-      .eq('id', test.id)
-    if (error) {
+    const ok = await updateTest({ title: trimmed })
+    if (!ok) {
       setActionError('テスト名の保存に失敗しました')
     } else {
       setTest((prev) => ({ ...prev, title: trimmed }))
@@ -220,19 +212,14 @@ export default function TestManagerClient({
   const handlePublishResult = async () => {
     setLoading(true)
     setActionError('')
-    const { error } = await supabase
-      .from('tests')
-      .update({ status: 'published', published_at: new Date().toISOString() })
-      .eq('id', test.id)
-    if (error) setActionError('結果公開に失敗しました')
+    const ok = await updateTest({ status: 'published', published_at: new Date().toISOString() })
+    if (!ok) setActionError('結果公開に失敗しました')
     setLoading(false)
   }
 
   const handleDownloadExcel = async () => {
-    const { data: answers } = await supabase
-      .from('answers')
-      .select('*, questions(order_num, question_text, correct_answer, points)')
-      .in('session_id', sessions.map((s) => s.id))
+    const res = await fetch(`/api/teacher/test-answers?testId=${test.id}`)
+    const { answers } = res.ok ? await res.json() : { answers: [] }
 
     const rows = sessions.map((s) => {
       const studentAnswers = (answers ?? []).filter((a) => a.session_id === s.id)

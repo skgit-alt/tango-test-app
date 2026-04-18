@@ -13,7 +13,10 @@ export default async function WaitingPage({
 
   if (!user) redirect('/auth/login')
 
-  const { data: student } = await supabase
+  const { testId } = await searchParams
+  const admin = createAdminClient()
+
+  const { data: student } = await admin
     .from('students')
     .select('*')
     .eq('id', user.id)
@@ -21,9 +24,6 @@ export default async function WaitingPage({
 
   if (!student) redirect('/auth/login')
   if (!student.test_name) redirect('/student/change-password')
-
-  const { testId } = await searchParams
-  const admin = createAdminClient()
 
   // testIdが指定されていればそのテストを、なければ最新のものを取得
   let test = null
@@ -62,7 +62,7 @@ export default async function WaitingPage({
   }
 
   // 既存セッションを確認（既に開始済みかどうか）
-  const { data: existingSession } = await supabase
+  const { data: existingSession } = await admin
     .from('sessions')
     .select('*')
     .eq('test_id', test.id)

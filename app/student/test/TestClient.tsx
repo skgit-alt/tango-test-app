@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Test, Session, Question } from '@/lib/supabase/types'
 
@@ -24,7 +23,6 @@ export default function TestClient({
   questions: Question[]
   initialAnswers: Record<string, number | null>
 }) {
-  const supabase = createClient()
   const router = useRouter()
 
   const [answers, setAnswers] = useState<Record<string, number | null>>(initialAnswers)
@@ -61,27 +59,18 @@ export default function TestClient({
         question_id: q.id,
         selected_answer: answers[q.id] ?? null,
       }))
-      const { error } = await supabase.rpc('submit_test', {
-        p_session_id: session.id,
-        p_answers: answersArray,
+      await fetch('/api/student/submit-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session.id, answers: answersArray }),
       })
-      if (error) {
-        const upsertData = answersArray.map((a) => ({
-          session_id: session.id,
-          question_id: a.question_id,
-          selected_answer: a.selected_answer,
-          is_correct: null,
-        }))
-        await supabase.from('answers').upsert(upsertData, { onConflict: 'session_id,question_id' })
-        await supabase.from('sessions').update({ is_submitted: true, submitted_at: new Date().toISOString() }).eq('id', session.id)
-      }
       router.push('/student/waiting-result')
     } catch (err) {
       console.error(err)
       setSubmitting(false)
       submittingRef.current = false
     }
-  }, [answers, questions, session.id, supabase, router])
+  }, [answers, questions, session.id, router])
 
   useEffect(() => {
     if (timeLeft <= 0) { submitTest(); return }
@@ -99,8 +88,16 @@ export default function TestClient({
     cheatCountRef.current += 1
     setCheatWarning({ visible: true, count: cheatCountRef.current, eventType })
     setContentHidden(true)
-    await supabase.from('cheat_logs').insert({ session_id: session.id, event_type: eventType, occurred_at: new Date().toISOString() })
-  }, [supabase, session.id])
+    try {
+      await fetch('/api/student/log-cheat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session.id, eventType }),
+      })
+    } catch (e) {
+      console.error('[logCheat] failed:', e)
+    }
+  }, [session.id])
 
   useEffect(() => {
     const fn = () => { if (document.visibilityState === 'hidden') logCheat('tab_leave') }
@@ -122,8 +119,16 @@ export default function TestClient({
   }, [logCheat])
 
   const saveCurrentPage = useCallback(async (page: number) => {
-    await supabase.from('sessions').update({ current_page: page }).eq('id', session.id)
-  }, [supabase, session.id])
+    try {
+      await fetch('/api/student/save-page', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session.id, page }),
+      })
+    } catch (e) {
+      console.error('[saveCurrentPage] failed:', e)
+    }
+  }, [session.id])
 
   const handlePageChange = (newPage: number) => {
     setCurrentPage(newPage)

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { calcPoints } from '@/lib/supabase/types'
@@ -15,7 +16,9 @@ export default async function ResultPage({
 
   if (!user) redirect('/auth/login')
 
-  const { data: student } = await supabase
+  const admin = createAdminClient()
+
+  const { data: student } = await admin
     .from('students')
     .select('*')
     .eq('id', user.id)
@@ -24,16 +27,17 @@ export default async function ResultPage({
   if (!student) redirect('/auth/login')
 
   // sessionIdが指定されていればそのセッションを、なければ最新を取得
-  let query = supabase
+  // is_submitted=true に限定しない（RPCやRLSの問題で未設定のまま終了した古いデータも拾う）
+  let query = admin
     .from('sessions')
     .select('*, tests(*)')
     .eq('student_id', student.id)
-    .eq('is_submitted', true)
 
   if (sessionId) {
     query = query.eq('id', sessionId)
   } else {
-    query = query.order('submitted_at', { ascending: false }).limit(1)
+    // 提出済みを優先しつつ、なければ最後に開始したセッションを取得
+    query = query.order('is_submitted', { ascending: false }).order('started_at', { ascending: false }).limit(1)
   }
 
   const { data: session } = await query.maybeSingle()

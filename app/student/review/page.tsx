@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import ReviewClient from './ReviewClient'
@@ -15,7 +16,9 @@ export default async function ReviewPage({
 
   if (!user) redirect('/auth/login')
 
-  const { data: student } = await supabase
+  const admin = createAdminClient()
+
+  const { data: student } = await admin
     .from('students')
     .select('id, name, class_name, seat_number')
     .eq('id', user.id)
@@ -24,16 +27,16 @@ export default async function ReviewPage({
   if (!student) redirect('/auth/login')
 
   // sessionIdが指定されていればそのセッションを、なければ最新を取得
-  let query = supabase
+  // is_submitted=true に限定しない（古いRLSブロック済みデータも対象にする）
+  let query = admin
     .from('sessions')
     .select('id, test_id, score, submitted_at, tests(title, status, mode)')
     .eq('student_id', student.id)
-    .eq('is_submitted', true)
 
   if (sessionId) {
     query = query.eq('id', sessionId)
   } else {
-    query = query.order('submitted_at', { ascending: false }).limit(1)
+    query = query.order('is_submitted', { ascending: false }).order('started_at', { ascending: false }).limit(1)
   }
 
   const { data: session } = await query.maybeSingle()
@@ -65,7 +68,7 @@ export default async function ReviewPage({
     )
   }
 
-  const { data: rawAnswers } = await supabase
+  const { data: rawAnswers } = await admin
     .from('answers')
     .select('question_id, selected_answer, is_correct, questions(*)')
     .eq('session_id', session.id)

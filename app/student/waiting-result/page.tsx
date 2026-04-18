@@ -20,6 +20,7 @@ export default function WaitingResultPage() {
       const { data: session } = await supabase
         .from('sessions')
         .select('test_id, tests(title, status)')
+        .eq('student_id', user.id)
         .eq('is_submitted', true)
         .order('submitted_at', { ascending: false })
         .limit(1)

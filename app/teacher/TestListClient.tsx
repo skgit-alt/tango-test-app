@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
 import { Test } from '@/lib/supabase/types'
 
 const statusLabel: Record<string, string> = {
@@ -21,7 +20,6 @@ const statusColor: Record<string, string> = {
 }
 
 export default function TestListClient({ tests: initialTests }: { tests: Test[] }) {
-  const supabase = createClient()
   const router = useRouter()
 
   const [tests, setTests] = useState<Test[]>(initialTests)
@@ -57,22 +55,15 @@ export default function TestListClient({ tests: initialTests }: { tests: Test[] 
     setDeleting(true)
     try {
       const ids = Array.from(selectedIds)
-
-      // セッションIDを取得してから回答を削除（カスケード対応）
-      const { data: sessions } = await supabase
-        .from('sessions')
-        .select('id')
-        .in('test_id', ids)
-
-      if (sessions && sessions.length > 0) {
-        const sessionIds = sessions.map((s) => s.id)
-        await supabase.from('answers').delete().in('session_id', sessionIds)
-        await supabase.from('cheat_logs').delete().in('session_id', sessionIds)
-        await supabase.from('sessions').delete().in('id', sessionIds)
+      const res = await fetch('/api/teacher/delete-tests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ testIds: ids }),
+      })
+      if (!res.ok) {
+        const r = await res.json()
+        throw new Error(r.error ?? '削除に失敗しました')
       }
-
-      await supabase.from('questions').delete().in('test_id', ids)
-      await supabase.from('tests').delete().in('id', ids)
 
       setTests((prev) => prev.filter((t) => !selectedIds.has(t.id)))
       setSelectedIds(new Set())

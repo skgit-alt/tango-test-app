@@ -13,7 +13,7 @@ export default async function HomePage() {
     .from('admins')
     .select('id, role')
     .eq('email', user.email)
-    .single()
+    .maybeSingle()
 
   if (admin) {
     if (admin.role === 'admin') {
