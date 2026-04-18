@@ -525,7 +525,7 @@ export default function TestManagerClient({
       )}
 
       {/* 結果を返す */}
-      {(test.status === 'open' || test.status === 'finished') && (
+      {((test.open_classes ?? []).length > 0 || test.status === 'open' || test.status === 'finished') && test.status !== 'published' && (
         <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-5">
           <h2 className="font-semibold text-gray-800">結果を返す</h2>
 
@@ -544,13 +544,14 @@ export default function TestManagerClient({
             </div>
           </div>
 
-          {/* クラスごと公開 */}
-          {classes.length > 0 && (
+          {/* クラスごと公開 — 開始済みクラスのみ表示 */}
+          {((test.status === 'open' ? classes : (test.open_classes ?? [])).length > 0) && (
             <div className="space-y-2 pt-3 border-t border-gray-100">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">② クラスごとに公開</p>
+              <p className="text-xs text-gray-400">開始済みのクラスに結果を返します</p>
               <div className="flex flex-wrap gap-2">
-                {classes.map((cls) => {
-                  const published = test.status === 'published' || (test.published_classes ?? []).includes(cls)
+                {(test.status === 'open' ? classes : (test.open_classes ?? [])).map((cls) => {
+                  const published = (test.published_classes ?? []).includes(cls)
                   const isLoading = publishingClass === cls
                   return (
                     <button

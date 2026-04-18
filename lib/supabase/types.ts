@@ -42,8 +42,9 @@ export function canSeeResult(
   studentClass: string,
   studentId: string
 ): boolean {
+  // 全員一括公開
   if (test.status === 'published') return true
-  if (test.status !== 'finished' && test.status !== 'open') return false
+  // クラス別・個人別公開（テストステータスに関わらず、明示的に公開されていれば閲覧可）
   if ((test.published_classes ?? []).includes(studentClass)) return true
   if ((test.published_student_ids ?? []).includes(studentId)) return true
   return false
