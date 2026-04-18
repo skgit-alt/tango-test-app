@@ -250,7 +250,7 @@ export default function TestClient({
                         )
                       })
                     ) : (
-                      <p className="text-gray-800 font-medium">{q.question_text}</p>
+                      <p className="text-gray-800 font-medium">{renderUnderline(q.question_text)}</p>
                     )}
                   </div>
                   <button onClick={() => toggleFlag(q.id)} className={`shrink-0 text-xl transition-colors ${isFlagged ? 'text-yellow-500' : 'text-gray-300 hover:text-yellow-400'}`} title="自信がない">★</button>

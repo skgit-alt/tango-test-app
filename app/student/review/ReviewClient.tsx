@@ -144,7 +144,7 @@ export default function ReviewClient({
                       )
                     })
                   ) : (
-                    <p>{a.question_text}</p>
+                    <p>{renderUnderline(a.question_text)}</p>
                   )}
                 </div>
 
