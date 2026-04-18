@@ -17,11 +17,222 @@ interface QuestionRow {
   points: number
 }
 
+// ─── RTFパーサー ────────────────────────────────────────────────────────────
+
+function rtfToPlainText(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let rtf = ''
+  for (const b of bytes) rtf += String.fromCharCode(b)
+
+  const result: string[] = []
+  const hexBuf: number[] = []
+  let i = 0
+
+  const flushHex = () => {
+    if (!hexBuf.length) return
+    try {
+      result.push(new TextDecoder('shift-jis').decode(new Uint8Array(hexBuf)))
+    } catch {
+      result.push('?')
+    }
+    hexBuf.length = 0
+  }
+
+  while (i < rtf.length) {
+    const c = rtf[i]
+    if (c === '{' || c === '}') { flushHex(); i++; continue }
+    if (c === '\\') {
+      flushHex(); i++
+      if (i >= rtf.length) break
+      const nc = rtf[i]
+      if (nc === "'") {
+        hexBuf.push(parseInt(rtf.slice(i + 1, i + 3), 16))
+        i += 3
+      } else if (nc === '\\' || nc === '{' || nc === '}') {
+        result.push(nc); i++
+      } else if (nc === '~') {
+        result.push(' '); i++
+      } else {
+        let word = ''
+        while (i < rtf.length && /[a-z]/.test(rtf[i])) { word += rtf[i]; i++ }
+        if (word === 'par' || word === 'line') result.push('\n')
+        while (i < rtf.length && /[-\d]/.test(rtf[i])) i++
+        if (i < rtf.length && rtf[i] === ' ') i++
+      }
+      continue
+    }
+    if (c === '\r' || c === '\n') { i++; continue }
+    flushHex(); result.push(c); i++
+  }
+  flushHex()
+  return result.join('')
+}
+
+function parseChoices(line: string): string[] {
+  // "① 読者   ② 証拠(者)   ③ 目撃者   ④ 出来事"
+  return line
+    .split(/[①②③④]/)
+    .map(s => s.trim())
+    .filter(s => s.length > 0)
+}
+
+function parseRtfToQuestions(buffer: ArrayBuffer): { title: string; questions: QuestionRow[] } {
+  const text = rtfToPlainText(buffer)
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+
+  let title = ''
+  let inAnswerKey = false
+  let section: 'A' | 'B' | 'C' | null = null
+  const answers: Record<number, number> = {}
+
+  type RawQ = {
+    num: number
+    section: 'A' | 'B' | 'C'
+    questionText: string
+    englishLine: string
+    choices: string[]
+  }
+  const rawQs: RawQ[] = []
+
+  const isTitle = (l: string) => l.includes('英単語') && l.includes('テスト')
+
+  for (const line of lines) {
+    // タイトル検出（1回目）
+    if (!title && isTitle(line)) {
+      title = line.replace(/\s+/g, ' ').trim()
+      continue
+    }
+    // 2回目のタイトル → 答え合わせセクション開始
+    if (title && isTitle(line)) { inAnswerKey = true; continue }
+
+    // 答えセクション解析
+    if (inAnswerKey) {
+      if (line.includes('【A】') || line.includes('【B】') || line.includes('【C】')) continue
+      // "(1) ③ [p.186,645]" or "(41) 2 [p.194,684]"
+      const m = line.match(/^\((\d+)\)\s+([\u2460-\u2463①②③④\d])/)
+      if (m) {
+        const num = parseInt(m[1])
+        const ch = m[2]
+        const idx = '①②③④'.indexOf(ch)
+        answers[num] = idx >= 0 ? idx + 1 : parseInt(ch)
+      }
+      continue
+    }
+
+    // セクション判定
+    if (line.includes('【A】')) { section = 'A'; continue }
+    if (line.includes('【B】')) { section = 'B'; continue }
+    if (line.includes('【C】')) { section = 'C'; continue }
+    if (!section) continue
+
+    // 生徒情報行スキップ
+    if (line.includes('年') && line.includes('番') && line.includes('名前')) continue
+
+    const last = rawQs[rawQs.length - 1]
+
+    if (section === 'A') {
+      // 質問行: "(1) witness"
+      const qM = line.match(/^\((\d+)\)\s+([A-Za-z].+)$/)
+      if (qM) {
+        rawQs.push({ num: parseInt(qM[1]), section: 'A', questionText: qM[2].trim(), englishLine: '', choices: [] })
+        continue
+      }
+      // 選択肢行
+      if (line.includes('①') && last?.section === 'A') {
+        last.choices = parseChoices(line)
+      }
+    }
+
+    if (section === 'B') {
+      // 日本語問題行: "(21) 音楽（　　）は..."
+      const qM = line.match(/^\((\d+)\)\s+([\u3000-\u9fff].+)$/)
+      if (qM) {
+        rawQs.push({ num: parseInt(qM[1]), section: 'B', questionText: qM[2].trim(), englishLine: '', choices: [] })
+        continue
+      }
+      // 英文穴埋め行: "Music (     ) has been..."
+      if (line.includes('(     )') && last?.section === 'B' && !last.englishLine) {
+        last.englishLine = line.trim()
+        continue
+      }
+      // 選択肢行
+      if (line.includes('①') && last?.section === 'B') {
+        last.choices = parseChoices(line)
+      }
+    }
+
+    if (section === 'C') {
+      // アクセント問題行: "(41) so・phis・ti・cat・ed"
+      const qM = line.match(/^\((\d+)\)\s+([A-Za-z].+)$/)
+      if (qM) {
+        rawQs.push({ num: parseInt(qM[1]), section: 'C', questionText: qM[2].trim(), englishLine: '', choices: [] })
+      }
+    }
+  }
+
+  // QuestionRow[]に変換
+  const questions: QuestionRow[] = rawQs.map(rq => {
+    const ans = answers[rq.num] ?? 1
+
+    if (rq.section === 'A') {
+      return {
+        order_num: rq.num,
+        question_text: rq.questionText,
+        choice1: rq.choices[0] ?? '',
+        choice2: rq.choices[1] ?? '',
+        choice3: rq.choices[2] ?? '',
+        choice4: rq.choices[3] ?? '',
+        choice5: null,
+        correct_answer: ans,
+        points: 2,
+      }
+    }
+
+    if (rq.section === 'B') {
+      const qText = rq.englishLine
+        ? `${rq.questionText}\n${rq.englishLine}`
+        : rq.questionText
+      return {
+        order_num: rq.num,
+        question_text: qText,
+        choice1: rq.choices[0] ?? '',
+        choice2: rq.choices[1] ?? '',
+        choice3: rq.choices[2] ?? '',
+        choice4: rq.choices[3] ?? '',
+        choice5: null,
+        correct_answer: ans,
+        points: 2,
+      }
+    }
+
+    // Section C: アクセント
+    const syllables = rq.questionText.split('・')
+    const n = syllables.length
+    return {
+      order_num: rq.num,
+      question_text: rq.questionText,
+      choice1: '第1音節',
+      choice2: '第2音節',
+      choice3: n >= 3 ? '第3音節' : '',
+      choice4: n >= 4 ? '第4音節' : '',
+      choice5: n >= 5 ? '第5音節' : null,
+      correct_answer: ans,
+      points: 2,
+    }
+  })
+
+  return { title, questions }
+}
+
+// ─── メインコンポーネント ────────────────────────────────────────────────────
+
 export default function NewTestPage() {
   const router = useRouter()
   const supabase = createClient()
-  const fileRef = useRef<HTMLInputElement>(null)
+  const xlsxRef = useRef<HTMLInputElement>(null)
+  const rtfRef = useRef<HTMLInputElement>(null)
 
+  const [tab, setTab] = useState<'xlsx' | 'rtf'>('xlsx')
   const [title, setTitle] = useState('')
   const [roundNumber, setRoundNumber] = useState<string>('')
   const [questions, setQuestions] = useState<QuestionRow[]>([])
@@ -31,18 +242,17 @@ export default function NewTestPage() {
   const [preview, setPreview] = useState(false)
   const [dragging, setDragging] = useState(false)
 
-  const processFile = async (file: File) => {
+  // ─── Excel処理 ───────────────────────────────────────────────────────────
+
+  const processXlsx = async (file: File) => {
     setFileName(file.name)
     setError('')
-
     try {
       const arrayBuffer = await file.arrayBuffer()
       const workbook = XLSX.read(arrayBuffer, { type: 'array' })
       const sheet = workbook.Sheets[workbook.SheetNames[0]]
-      // header:1 で配列形式で取得（列位置で読み込む）
       const allRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null })
 
-      // 1行目がヘッダーか数字かで判定してスキップ
       const firstRow = allRows[0] as unknown[]
       const hasHeader = firstRow && isNaN(Number(firstRow[0]))
       const dataRows = hasHeader ? allRows.slice(1) : allRows
@@ -50,7 +260,6 @@ export default function NewTestPage() {
       const parsed: QuestionRow[] = dataRows
         .filter((row): row is unknown[] => Array.isArray(row) && row.length >= 8)
         .map((row, i) => {
-          // A=0, B=1, C=2, D=3, E=4, F=5, G=6, H=7, I=8
           const c5 = row[6] as string | null
           return {
             order_num: i + 1,
@@ -70,7 +279,6 @@ export default function NewTestPage() {
         setQuestions([])
         return
       }
-
       setQuestions(parsed)
       setPreview(true)
     } catch (err) {
@@ -79,43 +287,65 @@ export default function NewTestPage() {
     }
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ─── RTF処理 ─────────────────────────────────────────────────────────────
+
+  const processRtf = async (file: File) => {
+    setFileName(file.name)
+    setError('')
+    try {
+      const buffer = await file.arrayBuffer()
+      const { title: parsedTitle, questions: parsed } = parseRtfToQuestions(buffer)
+
+      if (parsed.length !== 50) {
+        setError(`問題数が${parsed.length}問です。50問のRTFファイルをアップロードしてください。`)
+        setQuestions([])
+        return
+      }
+
+      // タイトルを自動セット
+      if (parsedTitle) setTitle(parsedTitle)
+      setQuestions(parsed)
+      setPreview(true)
+    } catch (err) {
+      console.error(err)
+      setError('RTFファイルの読み込みに失敗しました。')
+    }
+  }
+
+  // ─── ファイル入力ハンドラ ─────────────────────────────────────────────────
+
+  const handleXlsxChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file) return
-    await processFile(file)
+    if (file) await processXlsx(file)
   }
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setDragging(true)
+  const handleRtfChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) await processRtf(file)
   }
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault()
-    setDragging(false)
-  }
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setDragging(true) }
+  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); setDragging(false) }
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault()
     setDragging(false)
     const file = e.dataTransfer.files?.[0]
     if (!file) return
-    if (!file.name.endsWith('.xlsx')) {
-      setError('.xlsx ファイルをドロップしてください')
-      return
+    if (tab === 'xlsx') {
+      if (!file.name.endsWith('.xlsx')) { setError('.xlsx ファイルをドロップしてください'); return }
+      await processXlsx(file)
+    } else {
+      if (!file.name.toLowerCase().endsWith('.rtf')) { setError('.rtf ファイルをドロップしてください'); return }
+      await processRtf(file)
     }
-    await processFile(file)
   }
 
+  // ─── テスト作成 ───────────────────────────────────────────────────────────
+
   const handleSubmit = async () => {
-    if (!title.trim()) {
-      setError('タイトルを入力してください')
-      return
-    }
-    if (questions.length === 0) {
-      setError('Excelファイルをアップロードしてください')
-      return
-    }
+    if (!title.trim()) { setError('タイトルを入力してください'); return }
+    if (questions.length === 0) { setError('ファイルをアップロードしてください'); return }
 
     setLoading(true)
     setError('')
@@ -124,19 +354,11 @@ export default function NewTestPage() {
       const mode = questions.length === 300 ? 300 : 50
       const time_limit = mode === 300 ? 1200 : 180
       const pass_score = mode === 300 ? 285 : null
-
       const roundNum = mode === 50 && roundNumber.trim() !== '' ? parseInt(roundNumber) : null
 
       const { data: test, error: testError } = await supabase
         .from('tests')
-        .insert({
-          title: title.trim(),
-          mode,
-          status: 'waiting',
-          time_limit,
-          pass_score,
-          round_number: roundNum,
-        })
+        .insert({ title: title.trim(), mode, status: 'waiting', time_limit, pass_score, round_number: roundNum })
         .select()
         .single()
 
@@ -144,10 +366,7 @@ export default function NewTestPage() {
 
       const CHUNK_SIZE = 50
       for (let i = 0; i < questions.length; i += CHUNK_SIZE) {
-        const chunk = questions.slice(i, i + CHUNK_SIZE).map((q) => ({
-          ...q,
-          test_id: test.id,
-        }))
+        const chunk = questions.slice(i, i + CHUNK_SIZE).map(q => ({ ...q, test_id: test.id }))
         const { error: qError } = await supabase.from('questions').insert(chunk)
         if (qError) throw qError
       }
@@ -189,16 +408,36 @@ export default function NewTestPage() {
           />
         </div>
 
-        {/* Excelアップロード */}
+        {/* ファイル種別タブ */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            問題ファイル (.xlsx) <span className="text-red-500">*</span>
-          </label>
-          <div className="text-xs text-gray-400 mb-3">
-            必要な列: question_text, choice1, choice2, choice3, choice4, choice5 (任意), correct_answer, points
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => { setTab('xlsx'); setQuestions([]); setFileName(''); setError(''); setPreview(false) }}
+              className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${tab === 'xlsx' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              📊 Excel（300問 / 50問）
+            </button>
+            <button
+              onClick={() => { setTab('rtf'); setQuestions([]); setFileName(''); setError(''); setPreview(false) }}
+              className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${tab === 'rtf' ? 'bg-violet-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              📄 RTF（50問テスト）
+            </button>
           </div>
+
+          {tab === 'xlsx' && (
+            <p className="text-xs text-gray-400 mb-3">
+              必要な列: question_text, choice1〜4, choice5(任意), correct_answer, points
+            </p>
+          )}
+          {tab === 'rtf' && (
+            <p className="text-xs text-gray-400 mb-3">
+              【A】英語→日本語 / 【B】英文穴埋め / 【C】アクセント の形式のRTFファイル。タイトルと答えを自動取得します。
+            </p>
+          )}
+
           <div
-            onClick={() => fileRef.current?.click()}
+            onClick={() => tab === 'xlsx' ? xlsxRef.current?.click() : rtfRef.current?.click()}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
@@ -208,22 +447,19 @@ export default function NewTestPage() {
                 : 'border-gray-300 hover:border-blue-400'
             }`}
           >
-            <div className="text-3xl mb-2">{dragging ? '📂' : '📊'}</div>
+            <div className="text-3xl mb-2">{dragging ? '📂' : tab === 'rtf' ? '📄' : '📊'}</div>
             {fileName ? (
               <p className="text-gray-700 font-medium">{fileName}</p>
             ) : dragging ? (
               <p className="text-blue-500 font-medium">ここで離してください</p>
             ) : (
-              <p className="text-gray-400">クリックまたはExcelファイルをドラッグ&ドロップ</p>
+              <p className="text-gray-400">
+                クリックまたは{tab === 'xlsx' ? 'Excelファイル' : 'RTFファイル'}をドラッグ&ドロップ
+              </p>
             )}
           </div>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".xlsx"
-            onChange={handleFileChange}
-            className="hidden"
-          />
+          <input ref={xlsxRef} type="file" accept=".xlsx" onChange={handleXlsxChange} className="hidden" />
+          <input ref={rtfRef} type="file" accept=".rtf" onChange={handleRtfChange} className="hidden" />
         </div>
 
         {/* 50問モード: 第何回 */}
@@ -260,18 +496,16 @@ export default function NewTestPage() {
         {/* プレビュー */}
         {preview && questions.length > 0 && (
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-2">
-              先頭3問プレビュー
-            </p>
+            <p className="text-sm font-medium text-gray-700 mb-2">先頭3問プレビュー</p>
             <div className="bg-gray-50 rounded-xl p-4 space-y-3 text-sm">
               {questions.slice(0, 3).map((q, i) => (
                 <div key={i} className="border-b border-gray-200 pb-3 last:border-0 last:pb-0">
-                  <p className="font-medium text-gray-800">Q{q.order_num}: {q.question_text}</p>
+                  <p className="font-medium text-gray-800 whitespace-pre-line">Q{q.order_num}: {q.question_text}</p>
                   <div className="mt-1 text-gray-600 space-y-0.5">
                     <p>① {q.choice1}</p>
                     <p>② {q.choice2}</p>
                     <p>③ {q.choice3}</p>
-                    <p>④ {q.choice4}</p>
+                    {q.choice4 && <p>④ {q.choice4}</p>}
                     {q.choice5 && <p>⑤ {q.choice5}</p>}
                     <p className="text-green-700 font-medium">正解: {q.correct_answer}番</p>
                   </div>
@@ -282,9 +516,7 @@ export default function NewTestPage() {
         )}
 
         {error && (
-          <div className="bg-red-50 text-red-700 rounded-xl p-4 text-sm">
-            {error}
-          </div>
+          <div className="bg-red-50 text-red-700 rounded-xl p-4 text-sm">{error}</div>
         )}
 
         <button

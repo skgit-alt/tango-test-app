@@ -221,7 +221,33 @@ export default function TestClient({
               <div key={q.id} className={`rounded-2xl border-2 p-5 transition-colors ${isFlagged ? 'bg-yellow-50 border-yellow-400' : 'bg-white border-gray-200'}`}>
                 <div className="flex items-start gap-3 mb-4">
                   <span className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-lg shrink-0 mt-0.5">{globalIndex + 1}</span>
-                  <p className="text-gray-800 font-medium leading-relaxed flex-1">{q.question_text}</p>
+                  <div className="flex-1 leading-relaxed">
+                    {q.question_text.includes('\n') ? (
+                      // 複数行：Section B（日本語文＋英文穴埋め）
+                      q.question_text.split('\n').map((line, li) => {
+                        if (line.includes('(     )')) {
+                          // 英文の空欄を下線付きで表示
+                          const parts = line.split('(     )')
+                          return (
+                            <p key={li} className="text-gray-800 font-medium mt-1">
+                              {parts.map((part, pi) => (
+                                <span key={pi}>
+                                  {part}
+                                  {pi < parts.length - 1 && (
+                                    <span className="inline-block border-b-2 border-gray-800 min-w-[4rem] mx-1" />
+                                  )}
+                                </span>
+                              ))}
+                            </p>
+                          )
+                        }
+                        // 日本語ヒント行（薄いグレーで小さく）
+                        return <p key={li} className="text-gray-500 text-sm">{line}</p>
+                      })
+                    ) : (
+                      <p className="text-gray-800 font-medium">{q.question_text}</p>
+                    )}
+                  </div>
                   <button onClick={() => toggleFlag(q.id)} className={`shrink-0 text-xl transition-colors ${isFlagged ? 'text-yellow-500' : 'text-gray-300 hover:text-yellow-400'}`} title="自信がない">★</button>
                 </div>
                 <div className="space-y-2">
