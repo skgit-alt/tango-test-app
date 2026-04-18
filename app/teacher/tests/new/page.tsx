@@ -37,7 +37,9 @@ function rtfToPlainText(buffer: ArrayBuffer): string {
   // {\fonttbl}, {\colortbl}, {\stylesheet}, {\info} 等は \* なしでも無視すべき
   const IGNORE_KEYWORDS = new Set([
     'fonttbl', 'colortbl', 'stylesheet', 'info',
-    'listtable', 'listoverridetable', 'mmathPr',
+    'listtable', 'listoverridetable',
+    // \mmathPr は小文字のみ読むパーサーが "mmath" で止まるため小文字版で登録
+    'mmath', 'mmathpr',
     'themedata', 'colorschememapping', 'datastore',
     'pnseclvl', 'rsidtbl', 'generator', 'xmlnstbl',
     'ftnsep', 'ftnsepc', 'aftnsep', 'aftnsepc',
