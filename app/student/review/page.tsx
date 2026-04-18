@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { canSeeResult } from '@/lib/supabase/types'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import ReviewClient from './ReviewClient'
@@ -52,9 +53,12 @@ export default async function ReviewPage({
     )
   }
 
-  const test = session.tests as { title: string; status: string; mode: number } | null
+  const test = session.tests as {
+    title: string; status: string; mode: number
+    published_classes: string[] | null; published_student_ids: string[] | null
+  } | null
 
-  if (test?.status !== 'published') {
+  if (!test || !canSeeResult(test, student.class_name, student.id)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-blue-50 p-4">
         <div className="bg-white rounded-2xl shadow p-8 text-center max-w-sm w-full space-y-3">

@@ -12,6 +12,8 @@ const ALLOWED_FIELDS = new Set([
   'round_number',
   'pass_score',
   'time_limit',
+  'published_classes',
+  'published_student_ids',
 ])
 
 export async function POST(req: NextRequest) {

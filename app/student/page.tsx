@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { calcPoints } from '@/lib/supabase/types'
+import { calcPoints, canSeeResult } from '@/lib/supabase/types'
 import { Chart300, Chart50 } from './ScoreChart'
 import ActiveTestBanner from './ActiveTestBanner'
 
@@ -33,7 +33,7 @@ export default async function StudentHomePage() {
   // 最新テスト（結果表示用・ポイント表示用）
   const { data: latestTest } = await admin
     .from('tests')
-    .select('id, title, mode, status, open_classes')
+    .select('id, title, mode, status, open_classes, published_classes, published_student_ids')
     .in('status', ['waiting', 'open', 'finished', 'published'])
     .order('created_at', { ascending: false })
     .limit(1)
@@ -47,9 +47,12 @@ export default async function StudentHomePage() {
     .eq('is_submitted', true)
     .order('submitted_at', { ascending: false })
 
-  // 最新テスト専用：このテストに参加した（セッションがある）かどうかの確認
-  // is_submitted に関わらず存在するだけで「受けた」と判断する
-  const { data: latestTestSession } = latestTest?.status === 'published'
+  // 最新テスト専用：この生徒がテストを開始したかつ結果が公開されているか確認
+  const studentCanSeeLatest = latestTest
+    ? canSeeResult(latestTest as any, student.class_name, student.id)
+    : false
+
+  const { data: latestTestSession } = studentCanSeeLatest && latestTest
     ? await admin
         .from('sessions')
         .select('id, is_submitted')

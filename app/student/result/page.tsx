@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { calcPoints } from '@/lib/supabase/types'
+import { calcPoints, canSeeResult } from '@/lib/supabase/types'
 
 export default async function ResultPage({
   searchParams,
@@ -58,7 +58,7 @@ export default async function ResultPage({
     id: string; title: string; mode: number; status: string; pass_score: number | null
   }
 
-  if (test.status !== 'published') {
+  if (!canSeeResult(test, student.class_name, student.id)) {
     redirect('/student/waiting-result')
   }
 

@@ -55,6 +55,9 @@ export default function TestManagerClient({
   const [roundInput, setRoundInput] = useState(String(test.round_number ?? ''))
   // 提出リセット
   const [resettingId, setResettingId] = useState<string | null>(null)
+  // 結果公開
+  const [publishingClass, setPublishingClass] = useState<string | null>(null)
+  const [publishingStudent, setPublishingStudent] = useState<string | null>(null)
   // 予約開始
   const [scheduledAt, setScheduledAt] = useState<string>(
     test.scheduled_at
@@ -209,12 +212,38 @@ export default function TestManagerClient({
     }
   }
 
+  // 全員一括公開
   const handlePublishResult = async () => {
+    if (!confirm('全員の結果を一括公開します。この操作は元に戻せません。よろしいですか？')) return
     setLoading(true)
     setActionError('')
     const ok = await updateTest({ status: 'published', published_at: new Date().toISOString() })
     if (!ok) setActionError('結果公開に失敗しました')
     setLoading(false)
+  }
+
+  // クラスごとに公開
+  const handlePublishToClass = async (className: string) => {
+    const current = test.published_classes ?? []
+    if (current.includes(className)) return
+    setPublishingClass(className)
+    const newList = [...current, className]
+    const ok = await updateTest({ published_classes: newList })
+    if (!ok) setActionError(`${className}への公開に失敗しました`)
+    else setTest((prev) => ({ ...prev, published_classes: newList }))
+    setPublishingClass(null)
+  }
+
+  // 個人ごとに公開
+  const handlePublishToStudent = async (studentId: string) => {
+    const current = test.published_student_ids ?? []
+    if (current.includes(studentId)) return
+    setPublishingStudent(studentId)
+    const newList = [...current, studentId]
+    const ok = await updateTest({ published_student_ids: newList })
+    if (!ok) setActionError('個人公開に失敗しました')
+    else setTest((prev) => ({ ...prev, published_student_ids: newList }))
+    setPublishingStudent(null)
   }
 
   const handleDownloadExcel = async () => {
@@ -349,14 +378,10 @@ export default function TestManagerClient({
           >
             問題プレビュー
           </button>
-          {(test.status === 'open' || test.status === 'finished') && (
-            <button
-              onClick={handlePublishResult}
-              disabled={loading}
-              className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-blue-700 transition disabled:opacity-50"
-            >
-              結果を公開する
-            </button>
+          {test.status === 'published' && (
+            <span className="bg-blue-100 text-blue-700 px-4 py-2.5 rounded-xl text-sm font-semibold">
+              ✅ 全員に公開済み
+            </span>
           )}
           {sessions.length > 0 && (
             <button
@@ -496,6 +521,112 @@ export default function TestManagerClient({
               ✅ 全クラス実施中
             </div>
           )}
+        </div>
+      )}
+
+      {/* 結果を返す */}
+      {(test.status === 'open' || test.status === 'finished') && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-5">
+          <h2 className="font-semibold text-gray-800">結果を返す</h2>
+
+          {/* 一括公開 */}
+          <div className="space-y-2">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">① 全員に一括公開</p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handlePublishResult}
+                disabled={loading}
+                className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-blue-700 active:scale-95 transition disabled:opacity-50 shadow-sm"
+              >
+                {loading ? '処理中...' : '全員に一括公開'}
+              </button>
+              <p className="text-xs text-gray-400">全生徒に一斉に結果を公開します</p>
+            </div>
+          </div>
+
+          {/* クラスごと公開 */}
+          {classes.length > 0 && (
+            <div className="space-y-2 pt-3 border-t border-gray-100">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">② クラスごとに公開</p>
+              <div className="flex flex-wrap gap-2">
+                {classes.map((cls) => {
+                  const published = test.status === 'published' || (test.published_classes ?? []).includes(cls)
+                  const isLoading = publishingClass === cls
+                  return (
+                    <button
+                      key={cls}
+                      onClick={() => handlePublishToClass(cls)}
+                      disabled={published || isLoading}
+                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition active:scale-95 ${
+                        published
+                          ? 'bg-green-100 text-green-700 cursor-default'
+                          : 'bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50'
+                      }`}
+                    >
+                      {isLoading ? '...' : published ? `${cls} ✓ 公開済` : `${cls} に公開`}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 個人ごと公開 */}
+          {sessions.filter((s) => s.is_submitted).length > 0 && (
+            <div className="space-y-2 pt-3 border-t border-gray-100">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">③ 個人ごとに公開（提出済みの生徒）</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {sessions
+                  .filter((s) => s.is_submitted)
+                  .sort((a, b) => {
+                    const aKey = `${a.students?.class_name}${String(a.students?.seat_number).padStart(3, '0')}`
+                    const bKey = `${b.students?.class_name}${String(b.students?.seat_number).padStart(3, '0')}`
+                    return aKey.localeCompare(bKey)
+                  })
+                  .map((s) => {
+                    const alreadyPublished =
+                      test.status === 'published' ||
+                      (test.published_classes ?? []).includes(s.students?.class_name ?? '') ||
+                      (test.published_student_ids ?? []).includes(s.student_id)
+                    const isLoading = publishingStudent === s.student_id
+                    return (
+                      <div
+                        key={s.id}
+                        className={`flex items-center justify-between px-3 py-2 rounded-xl border ${
+                          alreadyPublished ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'
+                        }`}
+                      >
+                        <div className="text-sm">
+                          <span className="text-gray-400 text-xs mr-1">{s.students?.class_name} {s.students?.seat_number}番</span>
+                          <span className="font-medium text-gray-800">{s.students?.name ?? '-'}</span>
+                          {s.score !== null && (
+                            <span className="ml-2 text-gray-500 text-xs">{s.score}点</span>
+                          )}
+                        </div>
+                        {alreadyPublished ? (
+                          <span className="text-xs text-green-600 font-medium shrink-0">✓ 公開済</span>
+                        ) : (
+                          <button
+                            onClick={() => handlePublishToStudent(s.student_id)}
+                            disabled={isLoading}
+                            className="text-xs bg-orange-500 text-white px-3 py-1 rounded-lg font-medium hover:bg-orange-600 transition disabled:opacity-50 shrink-0 ml-2"
+                          >
+                            {isLoading ? '...' : '公開'}
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 全員公開済みバナー */}
+      {test.status === 'published' && (
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-center">
+          <p className="text-blue-700 font-semibold">✅ 全員に結果を公開済みです</p>
         </div>
       )}
 

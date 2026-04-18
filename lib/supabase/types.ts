@@ -32,6 +32,21 @@ export interface Test {
   open_classes: string[] | null
   round_number: number | null
   scheduled_at: string | null
+  published_classes: string[] | null
+  published_student_ids: string[] | null
+}
+
+/** 生徒がテスト結果を閲覧できるか判定 */
+export function canSeeResult(
+  test: Pick<Test, 'status' | 'published_classes' | 'published_student_ids'>,
+  studentClass: string,
+  studentId: string
+): boolean {
+  if (test.status === 'published') return true
+  if (test.status !== 'finished' && test.status !== 'open') return false
+  if ((test.published_classes ?? []).includes(studentClass)) return true
+  if ((test.published_student_ids ?? []).includes(studentId)) return true
+  return false
 }
 
 export interface RankingSettings {

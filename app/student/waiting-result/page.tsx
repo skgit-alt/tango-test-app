@@ -17,56 +17,57 @@ export default function WaitingResultPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/auth/login'); return }
 
-      const { data: session } = await supabase
+      // admin API 経由でセッションを取得（RLSバイパス）
+      const sessionRes = await fetch(
+        `/api/student/test-status?_session_lookup=1`,
+        { cache: 'no-store' }
+      )
+      // 最新の自分のセッションのtestIdを取得
+      const { data: recentSession } = await supabase
         .from('sessions')
-        .select('test_id, tests(title, status)')
+        .select('test_id, tests(title)')
         .eq('student_id', user.id)
-        .eq('is_submitted', true)
-        .order('submitted_at', { ascending: false })
+        .order('started_at', { ascending: false })
         .limit(1)
         .maybeSingle()
 
-      if (!session) { router.push('/student'); return }
+      if (!recentSession) { router.push('/student'); return }
 
-      const testRaw = session.tests as { title: string; status: string } | { title: string; status: string }[] | null
+      const testRaw = recentSession.tests as { title: string } | { title: string }[] | null
       const testData = Array.isArray(testRaw) ? testRaw[0] : testRaw
       if (!testData) { router.push('/student'); return }
 
       setTestTitle(testData.title)
-      testIdRef.current = session.test_id
+      testIdRef.current = recentSession.test_id
 
-      // 既に公開済みならすぐに遷移
-      if (testData.status === 'published') {
-        router.push('/student/result')
-        return
-      }
-
-      // ポーリング：2秒ごとに公開状態を確認
+      // ポーリング：2秒ごとに公開状態を確認（_canSeeResult を使用）
       const poll = async () => {
         if (cancelled || !testIdRef.current) return
-        const { data } = await supabase
-          .from('tests')
-          .select('status')
-          .eq('id', testIdRef.current)
-          .single()
-        if (data?.status === 'published' && !cancelled) {
-          router.push('/student/result')
+        try {
+          const res = await fetch(`/api/student/test-status?testId=${testIdRef.current}`, { cache: 'no-store' })
+          if (!res.ok) return
+          const data = await res.json()
+          if (data?._canSeeResult && !cancelled) {
+            router.push('/student/result')
+          }
+        } catch (e) {
+          console.error('[waiting-result] poll error:', e)
         }
       }
 
+      // 既に公開済みならすぐに遷移
+      await poll()
+      if (cancelled) return
+
       const interval = setInterval(poll, 2000)
 
-      // Realtimeも併用
+      // Realtimeも併用（変更があればポーリングを即時実行）
       const channel = supabase
         .channel('waiting-result')
         .on(
           'postgres_changes',
-          { event: 'UPDATE', schema: 'public', table: 'tests', filter: `id=eq.${session.test_id}` },
-          (payload) => {
-            if (payload.new?.status === 'published' && !cancelled) {
-              router.push('/student/result')
-            }
-          }
+          { event: 'UPDATE', schema: 'public', table: 'tests', filter: `id=eq.${recentSession.test_id}` },
+          () => { if (!cancelled) poll() }
         )
         .subscribe()
 
