@@ -755,7 +755,30 @@ export default function TestManagerClient({
                       <span className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-lg shrink-0 mt-0.5">
                         {q.order_num}
                       </span>
-                      <p className="text-gray-800 font-medium leading-relaxed flex-1">{q.question_text}</p>
+                      <div className="text-gray-800 font-medium leading-relaxed flex-1">
+                        {q.question_text.includes('\n') ? (
+                          q.question_text.split('\n').map((line, li) => {
+                            if (line.includes('(     )')) {
+                              const parts = line.split('(     )')
+                              return (
+                                <p key={li} className="mt-3">
+                                  {parts.map((part, pi) => (
+                                    <span key={pi}>
+                                      {part}
+                                      {pi < parts.length - 1 && <span>（　　　）</span>}
+                                    </span>
+                                  ))}
+                                </p>
+                              )
+                            }
+                            return (
+                              <p key={li} className="text-gray-500 text-sm mb-1">{line}</p>
+                            )
+                          })
+                        ) : (
+                          <p>{q.question_text}</p>
+                        )}
+                      </div>
                       <span className="text-xs text-gray-400 shrink-0">{q.points}点</span>
                     </div>
                     <div className="space-y-2">
