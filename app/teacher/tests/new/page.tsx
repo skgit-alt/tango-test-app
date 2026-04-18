@@ -42,26 +42,32 @@ function rtfToPlainText(buffer: ArrayBuffer): string {
     const c = rtf[i]
     if (c === '{' || c === '}') { flushHex(); i++; continue }
     if (c === '\\') {
-      flushHex(); i++
+      i++
       if (i >= rtf.length) break
       const nc = rtf[i]
       if (nc === "'") {
+        // \'XX → Shift-JIS バイトを蓄積（flushしない！2バイト文字を結合するため）
         hexBuf.push(parseInt(rtf.slice(i + 1, i + 3), 16))
         i += 3
-      } else if (nc === '\\' || nc === '{' || nc === '}') {
-        result.push(nc); i++
-      } else if (nc === '~') {
-        result.push(' '); i++
       } else {
-        let word = ''
-        while (i < rtf.length && /[a-z]/.test(rtf[i])) { word += rtf[i]; i++ }
-        if (word === 'par' || word === 'line') result.push('\n')
-        while (i < rtf.length && /[-\d]/.test(rtf[i])) i++
-        if (i < rtf.length && rtf[i] === ' ') i++
+        // hex以外の制御語が来たらここでflush
+        flushHex()
+        if (nc === '\\' || nc === '{' || nc === '}') {
+          result.push(nc); i++
+        } else if (nc === '~') {
+          result.push(' '); i++
+        } else {
+          let word = ''
+          while (i < rtf.length && /[a-z]/.test(rtf[i])) { word += rtf[i]; i++ }
+          if (word === 'par' || word === 'line') result.push('\n')
+          while (i < rtf.length && /[-\d]/.test(rtf[i])) i++
+          if (i < rtf.length && rtf[i] === ' ') i++
+        }
       }
       continue
     }
     if (c === '\r' || c === '\n') { i++; continue }
+    // ASCII文字が来たらflush（Shift-JISバイト列の終端）
     flushHex(); result.push(c); i++
   }
   flushHex()
