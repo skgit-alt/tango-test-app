@@ -33,14 +33,20 @@ function rtfToPlainText(buffer: ArrayBuffer): string {
   const ulStack: boolean[] = [false]
   const isUl = () => ulStack[ulStack.length - 1]
 
+  // \* で始まるグループ（fonttbl / stylesheet 等のメタデータ）を無視するスタック
+  // RTF仕様: {\* \keyword ...} は未知の宛先なので無視してよい
+  const ignoreStack: boolean[] = [false]
+  const isIgnored = () => ignoreStack[ignoreStack.length - 1]
+
   const flushHex = () => {
     if (!hexBuf.length) return
-    try {
-      const decoded = new TextDecoder('shift-jis').decode(new Uint8Array(hexBuf))
-      // アンダーライン中なら [U]...[/U] で囲む
-      result.push(isUl() ? `[U]${decoded}[/U]` : decoded)
-    } catch {
-      result.push('?')
+    if (!isIgnored()) {
+      try {
+        const decoded = new TextDecoder('shift-jis').decode(new Uint8Array(hexBuf))
+        result.push(isUl() ? `[U]${decoded}[/U]` : decoded)
+      } catch {
+        result.push('?')
+      }
     }
     hexBuf.length = 0
   }
@@ -49,12 +55,14 @@ function rtfToPlainText(buffer: ArrayBuffer): string {
     const c = rtf[i]
     if (c === '{') {
       flushHex()
-      ulStack.push(isUl()) // 親のアンダーライン状態を継承
+      ulStack.push(isUl())
+      ignoreStack.push(isIgnored()) // 親のignore状態を継承
       i++; continue
     }
     if (c === '}') {
       flushHex()
-      ulStack.pop() // グループ終了でアンダーライン状態を戻す
+      ulStack.pop()
+      ignoreStack.pop()
       i++; continue
     }
     if (c === '\\') {
@@ -66,29 +74,35 @@ function rtfToPlainText(buffer: ArrayBuffer): string {
         hexBuf.push(parseInt(rtf.slice(i + 1, i + 3), 16))
         i += 3
       } else {
-        // hex以外の制御語が来たらここでflush
         flushHex()
         if (nc === '\\' || nc === '{' || nc === '}') {
-          result.push(nc); i++
+          if (!isIgnored()) result.push(nc); i++
         } else if (nc === '~') {
-          result.push(' '); i++
+          if (!isIgnored()) result.push(' '); i++
+        } else if (nc === '*') {
+          // \* → このグループをメタデータとして無視マーク
+          ignoreStack[ignoreStack.length - 1] = true
+          i++
         } else {
           let word = ''
           while (i < rtf.length && /[a-z]/.test(rtf[i])) { word += rtf[i]; i++ }
           let param = ''
           while (i < rtf.length && /[-\d]/.test(rtf[i])) { param += rtf[i]; i++ }
           if (i < rtf.length && rtf[i] === ' ') i++
-          if (word === 'par' || word === 'line') result.push('\n')
-          else if (word === 'ul' && param !== '0') ulStack[ulStack.length - 1] = true
-          else if (word === 'ul' && param === '0') ulStack[ulStack.length - 1] = false
-          else if (word === 'ulnone') ulStack[ulStack.length - 1] = false
+          if (!isIgnored()) {
+            if (word === 'par' || word === 'line') result.push('\n')
+            else if (word === 'ul' && param !== '0') ulStack[ulStack.length - 1] = true
+            else if (word === 'ul' && param === '0') ulStack[ulStack.length - 1] = false
+            else if (word === 'ulnone') ulStack[ulStack.length - 1] = false
+          }
         }
       }
       continue
     }
     if (c === '\r' || c === '\n') { i++; continue }
-    // ASCII文字が来たらflush（Shift-JISバイト列の終端）
-    flushHex(); result.push(c); i++
+    flushHex()
+    if (!isIgnored()) result.push(c)
+    i++
   }
   flushHex()
   return result.join('')
@@ -172,9 +186,10 @@ function parseRtfToQuestions(buffer: ArrayBuffer): { title: string; questions: Q
 
     if (section === 'B') {
       // 日本語問題行: "(21) 音楽（　　）は..." or "(21) 1990年代には..."
-      // 選択肢行（①で始まる）や英文穴埋め行でなければ問題行とみなす
+      // 条件: 日本語文字(ひらがな/カタカナ/漢字/全角)を1つ以上含む行のみ
+      //   → 答え合わせ行 "(21) ② [p.186]" はCJK文字を含まないので除外される
       const qM = line.match(/^\((\d+)\)\s+(.+)$/)
-      if (qM && !qM[2].startsWith('①') && !line.includes('(     )')) {
+      if (qM && /[\u3040-\u9fff\uff00-\uffef]/.test(qM[2]) && !/\(\s{2,}\)/.test(line)) {
         rawQs.push({ num: parseInt(qM[1]), section: 'B', questionText: qM[2].trim(), englishLine: '', choices: [] })
         continue
       }
