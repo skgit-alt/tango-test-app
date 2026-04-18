@@ -113,9 +113,29 @@ export default function TestClient({
 
   useEffect(() => {
     let w = window.innerWidth
-    const fn = () => { const cw = window.innerWidth; if (Math.abs(cw - w) > 200) { logCheat('split_view'); w = cw } }
+    let h = window.innerHeight
+
+    const fn = () => {
+      const cw = window.innerWidth
+      const ch = window.innerHeight
+      const widthDec = w - cw    // 幅の減少量（正 = 縮んだ）
+      const heightInc = ch - h   // 高さの増加量（正 = 伸びた）
+      // Split View: 幅が200px以上減り、かつ高さが100px以上増えていない（デバイス回転は除外）
+      if (widthDec > 200 && heightInc < 100) logCheat('split_view')
+      w = cw
+      h = ch
+    }
     window.addEventListener('resize', fn)
-    return () => window.removeEventListener('resize', fn)
+
+    // テスト開始前からSplit Viewだった場合の検知（比率チェック）
+    const isSplitView = () => screen.width > 0 && (window.innerWidth / screen.width) < 0.7
+    if (isSplitView()) logCheat('split_view')
+    const interval = setInterval(() => { if (isSplitView()) logCheat('split_view') }, 5000)
+
+    return () => {
+      window.removeEventListener('resize', fn)
+      clearInterval(interval)
+    }
   }, [logCheat])
 
   const saveCurrentPage = useCallback(async (page: number) => {
