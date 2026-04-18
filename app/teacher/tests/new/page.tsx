@@ -33,8 +33,17 @@ function rtfToPlainText(buffer: ArrayBuffer): string {
   const ulStack: boolean[] = [false]
   const isUl = () => ulStack[ulStack.length - 1]
 
-  // \* で始まるグループ（fonttbl / stylesheet 等のメタデータ）を無視するスタック
-  // RTF仕様: {\* \keyword ...} は未知の宛先なので無視してよい
+  // グループを無視すべきRTFメタデータキーワード
+  // {\fonttbl}, {\colortbl}, {\stylesheet}, {\info} 等は \* なしでも無視すべき
+  const IGNORE_KEYWORDS = new Set([
+    'fonttbl', 'colortbl', 'stylesheet', 'info',
+    'listtable', 'listoverridetable', 'mmathPr',
+    'themedata', 'colorschememapping', 'datastore',
+    'pnseclvl', 'rsidtbl', 'generator', 'xmlnstbl',
+    'ftnsep', 'ftnsepc', 'aftnsep', 'aftnsepc',
+    'wgrffmtfilter',
+  ])
+  // \* で始まるグループ、またはIGNORE_KEYWORDSを含むグループを無視するスタック
   const ignoreStack: boolean[] = [false]
   const isIgnored = () => ignoreStack[ignoreStack.length - 1]
 
@@ -89,7 +98,10 @@ function rtfToPlainText(buffer: ArrayBuffer): string {
           let param = ''
           while (i < rtf.length && /[-\d]/.test(rtf[i])) { param += rtf[i]; i++ }
           if (i < rtf.length && rtf[i] === ' ') i++
-          if (!isIgnored()) {
+          // メタデータグループの開始キーワードならこのグループを無視マーク
+          if (IGNORE_KEYWORDS.has(word)) {
+            ignoreStack[ignoreStack.length - 1] = true
+          } else if (!isIgnored()) {
             if (word === 'par' || word === 'line') result.push('\n')
             else if (word === 'ul' && param !== '0') ulStack[ulStack.length - 1] = true
             else if (word === 'ul' && param === '0') ulStack[ulStack.length - 1] = false
@@ -137,8 +149,6 @@ function parseRtfToQuestions(buffer: ArrayBuffer): { title: string; questions: Q
   }
   const rawQs: RawQ[] = []
 
-  const isTitle = (l: string) => l.includes('英単語') && l.includes('テスト')
-
   // 1行に "(1) ③ [p.186,645]　(2) ② [p.186,652]" のように複数ある場合も全部抽出
   const extractAnswers = (line: string) => {
     const re = /\((\d+)\)\s*([①②③④⑤\d])/g
@@ -152,8 +162,8 @@ function parseRtfToQuestions(buffer: ArrayBuffer): { title: string; questions: Q
   }
 
   for (const line of lines) {
-    // タイトル検出（1回目）
-    if (!title && isTitle(line)) {
+    // タイトル = 最初の行をそのまま使う（フォントテーブル除去後の最初の段落）
+    if (!title) {
       title = line.replace(/\s+/g, ' ').trim()
       continue
     }
