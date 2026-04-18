@@ -125,6 +125,8 @@ function parseRtfToQuestions(buffer: ArrayBuffer): { title: string; questions: Q
   let inAnswerKey = false
   let section: 'A' | 'B' | 'C' | null = null
   const answers: Record<number, number> = {}
+  // 【A】の登場回数で答えセクション開始を判定（タイトル2回目検出より確実）
+  let sectionACount = 0
 
   type RawQ = {
     num: number
@@ -137,31 +139,38 @@ function parseRtfToQuestions(buffer: ArrayBuffer): { title: string; questions: Q
 
   const isTitle = (l: string) => l.includes('英単語') && l.includes('テスト')
 
+  // 1行に "(1) ③ [p.186,645]　(2) ② [p.186,652]" のように複数ある場合も全部抽出
+  const extractAnswers = (line: string) => {
+    const re = /\((\d+)\)\s*([①②③④⑤\d])/g
+    let m: RegExpExecArray | null
+    while ((m = re.exec(line)) !== null) {
+      const num = parseInt(m[1])
+      const ch = m[2]
+      const idx = '①②③④⑤'.indexOf(ch)
+      answers[num] = idx >= 0 ? idx + 1 : parseInt(ch)
+    }
+  }
+
   for (const line of lines) {
     // タイトル検出（1回目）
     if (!title && isTitle(line)) {
       title = line.replace(/\s+/g, ' ').trim()
       continue
     }
-    // 2回目のタイトル → 答え合わせセクション開始
-    if (title && isTitle(line)) { inAnswerKey = true; continue }
 
     // 答えセクション解析
     if (inAnswerKey) {
-      if (line.includes('【A】') || line.includes('【B】') || line.includes('【C】')) continue
-      // "(1) ③ [p.186,645]" or "(41) 2 [p.194,684]"
-      const m = line.match(/^\((\d+)\)\s+([\u2460-\u2463①②③④\d])/)
-      if (m) {
-        const num = parseInt(m[1])
-        const ch = m[2]
-        const idx = '①②③④'.indexOf(ch)
-        answers[num] = idx >= 0 ? idx + 1 : parseInt(ch)
-      }
+      extractAnswers(line)
       continue
     }
 
     // セクション判定
-    if (line.includes('【A】')) { section = 'A'; continue }
+    // 【A】が2回目に現れたら答えセクション開始（最も確実な判定）
+    if (line.includes('【A】')) {
+      sectionACount++
+      if (sectionACount >= 2) { inAnswerKey = true; continue }
+      section = 'A'; continue
+    }
     if (line.includes('【B】')) { section = 'B'; continue }
     if (line.includes('【C】')) { section = 'C'; continue }
     if (!section) continue
@@ -172,30 +181,45 @@ function parseRtfToQuestions(buffer: ArrayBuffer): { title: string; questions: Q
     const last = rawQs[rawQs.length - 1]
 
     if (section === 'A') {
-      // 質問行: "(1) witness"
-      const qM = line.match(/^\((\d+)\)\s+([A-Za-z].+)$/)
+      // Section A: 問題と選択肢が1行にある場合と別行の場合の両方に対応
+      // 例1（1行）: "(1) witness　① 読者　② 証拠(者)　③ 目撃者　④ 出来事"
+      // 例2（別行）: "(1) witness" + 次行 "① 読者　② 証拠(者)..."
+      const qM = line.match(/^\((\d+)\)\s+([A-Za-z].*)$/)
       if (qM) {
-        rawQs.push({ num: parseInt(qM[1]), section: 'A', questionText: qM[2].trim(), englishLine: '', choices: [] })
+        const rest = qM[2]
+        const idx1 = rest.indexOf('①')
+        if (idx1 >= 0) {
+          // 問題と選択肢が同じ行
+          const questionText = rest.slice(0, idx1).trim()
+          const choices = parseChoices(rest.slice(idx1))
+          rawQs.push({ num: parseInt(qM[1]), section: 'A', questionText, englishLine: '', choices })
+        } else {
+          // 問題のみの行（選択肢は次行）
+          rawQs.push({ num: parseInt(qM[1]), section: 'A', questionText: rest.trim(), englishLine: '', choices: [] })
+        }
         continue
       }
-      // 選択肢行
-      if (line.includes('①') && last?.section === 'A') {
+      // 別行の選択肢
+      if (line.includes('①') && last?.section === 'A' && last.choices.length === 0) {
         last.choices = parseChoices(line)
       }
     }
 
     if (section === 'B') {
-      // 日本語問題行: "(21) 音楽（　　）は..." or "(21) 1990年代には..."
-      // 条件: 日本語文字(ひらがな/カタカナ/漢字/全角)を1つ以上含む行のみ
-      //   → 答え合わせ行 "(21) ② [p.186]" はCJK文字を含まないので除外される
+      // 日本語問題行: "(21) 音楽療法は..." or "(21) 1990年代には..."
+      // 日本語文字(ひらがな/カタカナ/漢字)を含む行を問題行とみなす
+      // 答え合わせ行 "(21) ② [p.186]" はASCIIのみなので除外される
       const qM = line.match(/^\((\d+)\)\s+(.+)$/)
-      if (qM && /[\u3040-\u9fff\uff00-\uffef]/.test(qM[2]) && !/\(\s{2,}\)/.test(line)) {
+      if (qM
+        && /[\u3040-\u9fff]/.test(qM[2])   // ひらがな/カタカナ/漢字を含む
+        && !line.includes('①')             // 選択肢行でない
+        && !/\(\s{2,}\)/.test(line)         // 英文穴埋め行でない
+      ) {
         rawQs.push({ num: parseInt(qM[1]), section: 'B', questionText: qM[2].trim(), englishLine: '', choices: [] })
         continue
       }
-      // 英文穴埋め行: "Music (     ) has been..." ※スペース数は問わない
+      // 英文穴埋め行（スペース2つ以上の括弧）
       if (/\(\s{2,}\)/.test(line) && last?.section === 'B' && !last.englishLine) {
-        // 表示統一のため空欄を "(     )" に正規化
         last.englishLine = line.trim().replace(/\(\s{2,}\)/g, '(     )')
         continue
       }
