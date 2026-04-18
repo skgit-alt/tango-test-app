@@ -22,7 +22,11 @@ export async function middleware(request: NextRequest) {
             request,
           })
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            // maxAge を 30日 に固定してブラウザを閉じても Cookie が残るようにする
+            supabaseResponse.cookies.set(name, value, {
+              ...options,
+              maxAge: 60 * 60 * 24 * 30,
+            })
           )
         },
       },

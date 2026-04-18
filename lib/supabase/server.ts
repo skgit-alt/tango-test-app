@@ -15,7 +15,11 @@ export async function createClient() {
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
+              // maxAge を 30日 に固定してブラウザを閉じても Cookie が残るようにする
+              cookieStore.set(name, value, {
+                ...options,
+                maxAge: 60 * 60 * 24 * 30,
+              })
             )
           } catch {
             // Server Componentからの呼び出し時は無視
