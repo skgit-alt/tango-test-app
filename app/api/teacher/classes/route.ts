@@ -11,7 +11,7 @@ export async function GET() {
   const { data: adminRec } = await admin
     .from('admins')
     .select('role')
-    .eq('id', user.id)
+    .eq('email', user.email!)
     .maybeSingle()
 
   if (!adminRec) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   const { data: adminRec } = await admin
     .from('admins')
     .select('role')
-    .eq('id', user.id)
+    .eq('email', user.email!)
     .maybeSingle()
 
   if (!adminRec || adminRec.role !== 'admin') {
