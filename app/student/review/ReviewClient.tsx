@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { renderUnderline } from '@/lib/renderUnderline'
 
 type AnswerItem = {
   question_id: string
@@ -139,12 +138,12 @@ export default function ReviewClient({
                       }
                       return (
                         <p key={li} className="text-gray-500 text-sm">
-                          {renderUnderline(line)}
+                          {line}
                         </p>
                       )
                     })
                   ) : (
-                    <p>{renderUnderline(a.question_text)}</p>
+                    <p>{a.question_text}</p>
                   )}
                 </div>
 

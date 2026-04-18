@@ -54,7 +54,7 @@ function rtfToPlainText(buffer: ArrayBuffer): string {
     if (!isIgnored()) {
       try {
         const decoded = new TextDecoder('shift-jis').decode(new Uint8Array(hexBuf))
-        result.push(isUl() ? `[U]${decoded}[/U]` : decoded)
+        result.push(isUl() ? `【${decoded}】` : decoded)
       } catch {
         result.push('?')
       }
