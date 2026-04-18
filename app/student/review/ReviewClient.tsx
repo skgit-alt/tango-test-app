@@ -124,12 +124,12 @@ export default function ReviewClient({
                       if (line.includes('(     )')) {
                         const parts = line.split('(     )')
                         return (
-                          <p key={li} className="mt-1">
+                          <p key={li} className="mt-3">
                             {parts.map((part, pi) => (
                               <span key={pi}>
                                 {part}
                                 {pi < parts.length - 1 && (
-                                  <span className="inline-block border-b-2 border-gray-800 min-w-[4rem] mx-1" />
+                                  <span>（　　　）</span>
                                 )}
                               </span>
                             ))}
@@ -137,7 +137,7 @@ export default function ReviewClient({
                         )
                       }
                       return (
-                        <p key={li} className="text-gray-500 text-sm">
+                        <p key={li} className="text-gray-500 text-sm mb-1">
                           {line}
                         </p>
                       )

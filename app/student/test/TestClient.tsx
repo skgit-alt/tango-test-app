@@ -226,15 +226,15 @@ export default function TestClient({
                       // 複数行：Section B（日本語文＋英文穴埋め）
                       q.question_text.split('\n').map((line, li) => {
                         if (line.includes('(     )')) {
-                          // 英文の空欄を下線付きで表示
+                          // 英文の空欄を（　　　）で表示
                           const parts = line.split('(     )')
                           return (
-                            <p key={li} className="text-gray-800 font-medium mt-1">
+                            <p key={li} className="text-gray-800 font-medium mt-3">
                               {parts.map((part, pi) => (
                                 <span key={pi}>
                                   {part}
                                   {pi < parts.length - 1 && (
-                                    <span className="inline-block border-b-2 border-gray-800 min-w-[4rem] mx-1" />
+                                    <span>（　　　）</span>
                                   )}
                                 </span>
                               ))}
@@ -243,7 +243,7 @@ export default function TestClient({
                         }
                         // 日本語ヒント行
                         return (
-                          <p key={li} className="text-gray-500 text-sm">
+                          <p key={li} className="text-gray-500 text-sm mb-1">
                             {line}
                           </p>
                         )
