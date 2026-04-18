@@ -20,6 +20,17 @@ export async function GET(req: NextRequest) {
 
   if (error || !test) return NextResponse.json(null, { status: 500 })
 
+  // 予約開始チェック：waiting状態でscheduled_atを過ぎていたら自動開始
+  if (test.status === 'waiting' && test.scheduled_at) {
+    const now = new Date()
+    const scheduled = new Date(test.scheduled_at)
+    if (scheduled <= now) {
+      const openedAt = now.toISOString()
+      await admin.from('tests').update({ status: 'open', opened_at: openedAt }).eq('id', testId)
+      test = { ...test, status: 'open', opened_at: openedAt }
+    }
+  }
+
   // この生徒が結果を閲覧できるかどうか
   const studentCanSee = student
     ? canSeeResult(test, student.class_name, student.id)
