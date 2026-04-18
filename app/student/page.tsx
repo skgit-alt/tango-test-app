@@ -26,9 +26,27 @@ export default async function StudentHomePage() {
   // 配信中テストを全件取得（RLSバイパス）
   const { data: activeTests } = await admin
     .from('tests')
-    .select('id, title, mode, status, open_classes')
+    .select('id, title, mode, status, open_classes, published_classes, published_student_ids')
     .in('status', ['waiting', 'open'])
     .order('created_at', { ascending: false })
+
+  // 配信中テストのセッション情報（初期表示用）
+  const activeTestIds = (activeTests ?? []).map((t) => t.id)
+  const { data: activeSessions } = activeTestIds.length > 0
+    ? await admin
+        .from('sessions')
+        .select('id, test_id, is_submitted, score')
+        .eq('student_id', student.id)
+        .in('test_id', activeTestIds)
+    : { data: [] }
+  const activeSessionMap = Object.fromEntries(
+    (activeSessions ?? []).map((s) => [s.test_id, s])
+  )
+  const initialTestsWithSessions = (activeTests ?? []).map((t) => ({
+    ...t,
+    mySession: activeSessionMap[t.id] ?? null,
+    _canSeeResult: canSeeResult(t, student.class_name, student.id),
+  }))
 
   // 最新テスト（結果表示用・ポイント表示用）
   const { data: latestTest } = await admin
@@ -166,7 +184,7 @@ export default async function StudentHomePage() {
         {/* テスト一覧バナー（3秒ごとにポーリングして自動更新） */}
         <ActiveTestBanner
           studentClass={student.class_name}
-          initialTests={(activeTests ?? []) as any}
+          initialTests={initialTestsWithSessions as any}
         />
 
         {/* アクションボタン */}
