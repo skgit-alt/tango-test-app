@@ -58,12 +58,14 @@ export default function TestManagerClient({
   // 結果公開
   const [publishingClass, setPublishingClass] = useState<string | null>(null)
   const [publishingStudent, setPublishingStudent] = useState<string | null>(null)
-  // 予約開始
-  const [scheduledAt, setScheduledAt] = useState<string>(
-    test.scheduled_at
-      ? new Date(test.scheduled_at).toISOString().slice(0, 16)  // datetime-local 形式
-      : ''
-  )
+  // 予約開始（datetime-local はローカル時刻＝JST で表示する必要がある）
+  const [scheduledAt, setScheduledAt] = useState<string>(() => {
+    if (!test.scheduled_at) return ''
+    const d = new Date(test.scheduled_at)
+    // getTimezoneOffset() は UTC との差を分単位で返す（JST は -540）
+    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+    return local.toISOString().slice(0, 16)  // YYYY-MM-DDTHH:MM（ローカル時刻）
+  })
   const [savingSchedule, setSavingSchedule] = useState(false)
 
   const fetchData = useCallback(async () => {
