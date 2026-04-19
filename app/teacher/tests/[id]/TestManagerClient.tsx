@@ -55,7 +55,8 @@ export default function TestManagerClient({
   const [roundInput, setRoundInput] = useState(String(test.round_number ?? ''))
   // 制限時間編集
   const [editingTimeLimit, setEditingTimeLimit] = useState(false)
-  const [timeLimitInput, setTimeLimitInput] = useState(String(Math.floor(test.time_limit / 60)))
+  const [timeLimitMin, setTimeLimitMin] = useState(String(Math.floor(test.time_limit / 60)))
+  const [timeLimitSec, setTimeLimitSec] = useState(String(test.time_limit % 60))
   // 提出リセット
   const [resettingId, setResettingId] = useState<string | null>(null)
   // 結果公開
@@ -195,14 +196,15 @@ export default function TestManagerClient({
   }
 
   const handleSaveTimeLimit = async () => {
-    const minutes = parseInt(timeLimitInput)
-    if (isNaN(minutes) || minutes < 1 || minutes > 180) return
-    const seconds = minutes * 60
-    const ok = await updateTest({ time_limit: seconds })
+    const minutes = parseInt(timeLimitMin) || 0
+    const secs = parseInt(timeLimitSec) || 0
+    const total = minutes * 60 + secs
+    if (total < 1 || total > 10800) return
+    const ok = await updateTest({ time_limit: total })
     if (!ok) {
       setActionError('制限時間の保存に失敗しました')
     } else {
-      setTest((prev) => ({ ...prev, time_limit: seconds }))
+      setTest((prev) => ({ ...prev, time_limit: total }))
       setEditingTimeLimit(false)
     }
   }
@@ -352,23 +354,33 @@ export default function TestManagerClient({
                   <span className="ml-1">制限時間</span>
                   <input
                     type="number"
-                    min={1}
+                    min={0}
                     max={180}
-                    value={timeLimitInput}
-                    onChange={(e) => setTimeLimitInput(e.target.value)}
+                    value={timeLimitMin}
+                    onChange={(e) => setTimeLimitMin(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') handleSaveTimeLimit(); if (e.key === 'Escape') setEditingTimeLimit(false) }}
-                    className="w-16 border border-blue-400 rounded px-2 py-0.5 text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    className="w-14 border border-blue-400 rounded px-2 py-0.5 text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-400"
                     autoFocus
                   />
                   <span>分</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={59}
+                    value={timeLimitSec}
+                    onChange={(e) => setTimeLimitSec(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveTimeLimit(); if (e.key === 'Escape') setEditingTimeLimit(false) }}
+                    className="w-14 border border-blue-400 rounded px-2 py-0.5 text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  />
+                  <span>秒</span>
                   <button onClick={handleSaveTimeLimit} className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700">保存</button>
                   <button onClick={() => setEditingTimeLimit(false)} className="text-xs text-gray-500 hover:text-gray-700">✕</button>
                 </>
               ) : (
                 <>
-                  <span className="ml-1">制限時間 {Math.floor(test.time_limit / 60)}分</span>
+                  <span className="ml-1">制限時間 {Math.floor(test.time_limit / 60)}分{test.time_limit % 60 > 0 ? `${test.time_limit % 60}秒` : ''}</span>
                   <button
-                    onClick={() => { setTimeLimitInput(String(Math.floor(test.time_limit / 60))); setEditingTimeLimit(true) }}
+                    onClick={() => { setTimeLimitMin(String(Math.floor(test.time_limit / 60))); setTimeLimitSec(String(test.time_limit % 60)); setEditingTimeLimit(true) }}
                     className="text-gray-400 hover:text-blue-500 transition"
                     title="制限時間を編集"
                   >
