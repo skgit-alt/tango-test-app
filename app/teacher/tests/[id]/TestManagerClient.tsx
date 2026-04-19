@@ -62,6 +62,7 @@ export default function TestManagerClient({
   const [showMessageEditor, setShowMessageEditor] = useState(false)
   const [messageInput, setMessageInput] = useState(test.teacher_message ?? DEFAULT_TEACHER_MESSAGE)
   const [savingMessage, setSavingMessage] = useState(false)
+  const [messageSaved, setMessageSaved] = useState(false)
   // 提出リセット
   const [resettingId, setResettingId] = useState<string | null>(null)
   // 結果公開
@@ -228,6 +229,8 @@ export default function TestManagerClient({
     }
     setSavingMessage(false)
     setShowMessageEditor(false)
+    setMessageSaved(true)
+    setTimeout(() => setMessageSaved(false), 3000)
   }
 
   // 待機状態に戻す（open_classes・opened_atもリセット）
@@ -558,14 +561,19 @@ export default function TestManagerClient({
         <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-gray-800">結果画面のメッセージ</h2>
-            {!showMessageEditor && (
-              <button
-                onClick={() => { setMessageInput(test.teacher_message ?? DEFAULT_TEACHER_MESSAGE); setShowMessageEditor(true) }}
-                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-              >
-                編集
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {messageSaved && (
+                <span className="text-green-600 text-sm font-medium">✓ 保存しました</span>
+              )}
+              {!showMessageEditor && (
+                <button
+                  onClick={() => { setMessageInput(test.teacher_message ?? DEFAULT_TEACHER_MESSAGE); setShowMessageEditor(true) }}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  編集
+                </button>
+              )}
+            </div>
           </div>
           {showMessageEditor ? (
             <div className="space-y-3">
