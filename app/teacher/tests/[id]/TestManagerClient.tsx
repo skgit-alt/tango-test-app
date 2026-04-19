@@ -53,6 +53,9 @@ export default function TestManagerClient({
   // 第何回編集
   const [editingRound, setEditingRound] = useState(false)
   const [roundInput, setRoundInput] = useState(String(test.round_number ?? ''))
+  // 制限時間編集
+  const [editingTimeLimit, setEditingTimeLimit] = useState(false)
+  const [timeLimitInput, setTimeLimitInput] = useState(String(Math.floor(test.time_limit / 60)))
   // 提出リセット
   const [resettingId, setResettingId] = useState<string | null>(null)
   // 結果公開
@@ -188,6 +191,19 @@ export default function TestManagerClient({
     } else {
       setTest((prev) => ({ ...prev, round_number: val }))
       setEditingRound(false)
+    }
+  }
+
+  const handleSaveTimeLimit = async () => {
+    const minutes = parseInt(timeLimitInput)
+    if (isNaN(minutes) || minutes < 1 || minutes > 180) return
+    const seconds = minutes * 60
+    const ok = await updateTest({ time_limit: seconds })
+    if (!ok) {
+      setActionError('制限時間の保存に失敗しました')
+    } else {
+      setTest((prev) => ({ ...prev, time_limit: seconds }))
+      setEditingTimeLimit(false)
     }
   }
 
@@ -329,8 +345,39 @@ export default function TestManagerClient({
             </span>
           </div>
           <div className="text-sm text-gray-500 ml-8 flex items-center gap-3 flex-wrap">
-            <span>
-              {test.mode}問モード / 制限時間 {test.time_limit}秒
+            <span className="flex items-center gap-1">
+              {test.mode}問モード /
+              {editingTimeLimit ? (
+                <>
+                  <span className="ml-1">制限時間</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={180}
+                    value={timeLimitInput}
+                    onChange={(e) => setTimeLimitInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveTimeLimit(); if (e.key === 'Escape') setEditingTimeLimit(false) }}
+                    className="w-16 border border-blue-400 rounded px-2 py-0.5 text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    autoFocus
+                  />
+                  <span>分</span>
+                  <button onClick={handleSaveTimeLimit} className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700">保存</button>
+                  <button onClick={() => setEditingTimeLimit(false)} className="text-xs text-gray-500 hover:text-gray-700">✕</button>
+                </>
+              ) : (
+                <>
+                  <span className="ml-1">制限時間 {Math.floor(test.time_limit / 60)}分</span>
+                  <button
+                    onClick={() => { setTimeLimitInput(String(Math.floor(test.time_limit / 60))); setEditingTimeLimit(true) }}
+                    className="text-gray-400 hover:text-blue-500 transition"
+                    title="制限時間を編集"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                </>
+              )}
               {test.pass_score ? ` / 合格点 ${test.pass_score}点` : ''}
             </span>
             {/* 50問モードのみ「第何回」を表示・編集 */}
