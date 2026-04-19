@@ -13,14 +13,15 @@ export async function GET(req: NextRequest) {
 
   const admin = createAdminClient()
 
-  const [{ data: test, error }, { data: student }] = await Promise.all([
+  const [{ data: rawTest, error }, { data: student }] = await Promise.all([
     admin.from('tests').select('*').eq('id', testId).maybeSingle(),
     admin.from('students').select('id, class_name').eq('id', user.id).maybeSingle(),
   ])
 
-  if (error || !test) return NextResponse.json(null, { status: 500 })
+  if (error || !rawTest) return NextResponse.json(null, { status: 500 })
 
   // 予約開始チェック：waiting状態でscheduled_atを過ぎていたら自動開始
+  let test = rawTest
   if (test.status === 'waiting' && test.scheduled_at) {
     const now = new Date()
     const scheduled = new Date(test.scheduled_at)
