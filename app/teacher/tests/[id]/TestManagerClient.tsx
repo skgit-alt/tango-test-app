@@ -498,70 +498,11 @@ export default function TestManagerClient({
         ))}
       </div>
 
-      {/* 予約開始 */}
-      {test.status === 'waiting' && (
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-3">
+      {/* テスト開始（予約開始 + クラス別開始） */}
+      {(test.status === 'waiting' || test.status === 'open') && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-5">
           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold text-gray-800">予約開始</h2>
-              <p className="text-xs text-gray-400 mt-0.5">指定日時に全クラスを自動で開始します</p>
-            </div>
-            {test.scheduled_at && (
-              <span className="text-xs bg-yellow-100 text-yellow-700 font-medium px-3 py-1 rounded-full">
-                🕐 予約済み
-              </span>
-            )}
-          </div>
-
-          {test.scheduled_at && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-yellow-800">
-                  {new Date(test.scheduled_at).toLocaleString('ja-JP', {
-                    year: 'numeric', month: 'long', day: 'numeric',
-                    hour: '2-digit', minute: '2-digit',
-                  })} に自動開始
-                </p>
-                <p className="text-xs text-yellow-600 mt-0.5">その時刻になると全クラスが一斉に開始されます</p>
-              </div>
-              <button
-                onClick={handleCancelSchedule}
-                disabled={savingSchedule}
-                className="text-xs text-red-500 border border-red-200 bg-white hover:bg-red-50 px-3 py-1.5 rounded-lg font-medium transition ml-3 shrink-0"
-              >
-                予約を解除
-              </button>
-            </div>
-          )}
-
-          <div className="flex items-end gap-3 flex-wrap">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">日時を選択</label>
-              <input
-                type="datetime-local"
-                value={scheduledAt}
-                onChange={(e) => setScheduledAt(e.target.value)}
-                min={new Date().toISOString().slice(0, 16)}
-                className="border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <button
-              onClick={handleSaveSchedule}
-              disabled={savingSchedule || !scheduledAt}
-              className="bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-50"
-            >
-              {savingSchedule ? '保存中...' : test.scheduled_at ? '予約を更新' : '予約を設定'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* クラス別開始 */}
-      {(test.status === 'waiting' || test.status === 'open') && classes.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-gray-800">クラス別開始</h2>
-            {/* 待機状態に戻すボタン：open_classesに1つ以上開始済み、またはstatus=open の場合に表示 */}
+            <h2 className="font-semibold text-gray-800">テスト開始</h2>
             {(test.status === 'open' || (test.open_classes ?? []).length > 0) && (
               <button
                 onClick={handleResetToWaiting}
@@ -572,38 +513,101 @@ export default function TestManagerClient({
               </button>
             )}
           </div>
-          <div className="flex flex-wrap gap-2">
-            {classes.map((cls) => {
-              const opened = (test.open_classes ?? []).includes(cls) || test.status === 'open'
-              const isLoading = loadingClass === cls
-              return (
-                <button
-                  key={cls}
-                  onClick={() => handleOpenClass(cls)}
-                  disabled={opened || isLoading || test.status === 'open'}
-                  className={`px-4 py-2 rounded-xl text-sm font-semibold transition active:scale-95 ${
-                    opened
-                      ? 'bg-green-100 text-green-700 cursor-default'
-                      : 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50'
-                  }`}
-                >
-                  {isLoading ? '...' : opened ? `${cls} ✓` : `${cls} 開始`}
-                </button>
-              )
-            })}
-          </div>
+
+          {/* 予約開始（waiting のみ） */}
           {test.status === 'waiting' && (
-            <button
-              onClick={handleOpenTest}
-              disabled={loading}
-              className="w-full bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 active:scale-95 transition disabled:opacity-50"
-            >
-              全クラス一括開始
-            </button>
+            <div className="space-y-3 pb-4 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">① 予約開始</p>
+                  <p className="text-xs text-gray-400 mt-0.5">指定日時に全クラスを自動で開始します</p>
+                </div>
+                {test.scheduled_at && (
+                  <span className="text-xs bg-yellow-100 text-yellow-700 font-medium px-3 py-1 rounded-full">
+                    🕐 予約済み
+                  </span>
+                )}
+              </div>
+              {test.scheduled_at && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-yellow-800">
+                      {new Date(test.scheduled_at).toLocaleString('ja-JP', {
+                        year: 'numeric', month: 'long', day: 'numeric',
+                        hour: '2-digit', minute: '2-digit',
+                      })} に自動開始
+                    </p>
+                    <p className="text-xs text-yellow-600 mt-0.5">その時刻になると全クラスが一斉に開始されます</p>
+                  </div>
+                  <button
+                    onClick={handleCancelSchedule}
+                    disabled={savingSchedule}
+                    className="text-xs text-red-500 border border-red-200 bg-white hover:bg-red-50 px-3 py-1.5 rounded-lg font-medium transition ml-3 shrink-0"
+                  >
+                    予約を解除
+                  </button>
+                </div>
+              )}
+              <div className="flex items-end gap-3 flex-wrap">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">日時を選択</label>
+                  <input
+                    type="datetime-local"
+                    value={scheduledAt}
+                    onChange={(e) => setScheduledAt(e.target.value)}
+                    min={new Date().toISOString().slice(0, 16)}
+                    className="border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <button
+                  onClick={handleSaveSchedule}
+                  disabled={savingSchedule || !scheduledAt}
+                  className="bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-50"
+                >
+                  {savingSchedule ? '保存中...' : test.scheduled_at ? '予約を更新' : '予約を設定'}
+                </button>
+              </div>
+            </div>
           )}
-          {test.status === 'open' && (
-            <div className="bg-green-50 text-green-700 rounded-xl px-4 py-3 text-sm font-semibold text-center">
-              ✅ 全クラス実施中
+
+          {/* クラス別開始 */}
+          {classes.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">② クラス別開始</p>
+              <div className="flex flex-wrap gap-2">
+                {classes.map((cls) => {
+                  const opened = (test.open_classes ?? []).includes(cls) || test.status === 'open'
+                  const isLoading = loadingClass === cls
+                  return (
+                    <button
+                      key={cls}
+                      onClick={() => handleOpenClass(cls)}
+                      disabled={opened || isLoading || test.status === 'open'}
+                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition active:scale-95 ${
+                        opened
+                          ? 'bg-green-100 text-green-700 cursor-default'
+                          : 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50'
+                      }`}
+                    >
+                      {isLoading ? '...' : opened ? `${cls} ✓` : `${cls} 開始`}
+                    </button>
+                  )
+                })}
+              </div>
+              {test.status === 'waiting' && (
+                <button
+                  onClick={handleOpenTest}
+                  disabled={loading}
+                  className="w-full bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 active:scale-95 transition disabled:opacity-50"
+                >
+                  全クラス一括開始
+                </button>
+              )}
+              {test.status === 'open' && (
+                <div className="bg-green-50 text-green-700 rounded-xl px-4 py-3 text-sm font-semibold text-center">
+                  ✅ 全クラス実施中
+                </div>
+              )}
             </div>
           )}
         </div>
