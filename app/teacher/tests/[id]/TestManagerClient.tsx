@@ -57,6 +57,11 @@ export default function TestManagerClient({
   const [editingTimeLimit, setEditingTimeLimit] = useState(false)
   const [timeLimitMin, setTimeLimitMin] = useState(String(Math.floor(test.time_limit / 60)))
   const [timeLimitSec, setTimeLimitSec] = useState(String(test.time_limit % 60))
+  // 先生メッセージ編集
+  const DEFAULT_TEACHER_MESSAGE = '「単語・熟語の勉強は前日にちょっと頑張って７割取った！」みたいな勉強では短期記憶で身に付きません。スパイラルで繰り返して繰り返して勉強するしか知識として身に付きません。満点が取れるくらい繰り返して勉強してください。'
+  const [showMessageEditor, setShowMessageEditor] = useState(false)
+  const [messageInput, setMessageInput] = useState(test.teacher_message ?? DEFAULT_TEACHER_MESSAGE)
+  const [savingMessage, setSavingMessage] = useState(false)
   // 提出リセット
   const [resettingId, setResettingId] = useState<string | null>(null)
   // 結果公開
@@ -207,6 +212,22 @@ export default function TestManagerClient({
       setTest((prev) => ({ ...prev, time_limit: total }))
       setEditingTimeLimit(false)
     }
+  }
+
+  const handleSaveMessage = async (asDefault: boolean) => {
+    setSavingMessage(true)
+    const ok = await updateTest({ teacher_message: messageInput })
+    if (!ok) { setActionError('メッセージの保存に失敗しました'); setSavingMessage(false); return }
+    setTest((prev) => ({ ...prev, teacher_message: messageInput }))
+    if (asDefault) {
+      await fetch('/api/teacher/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: messageInput }),
+      })
+    }
+    setSavingMessage(false)
+    setShowMessageEditor(false)
   }
 
   // 待機状態に戻す（open_classes・opened_atもリセット）
@@ -529,6 +550,59 @@ export default function TestManagerClient({
               {savingSchedule ? '保存中...' : test.scheduled_at ? '予約を更新' : '予約を設定'}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* 先生メッセージ（50問モードのみ） */}
+      {test.mode === 50 && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-gray-800">結果画面のメッセージ</h2>
+            {!showMessageEditor && (
+              <button
+                onClick={() => { setMessageInput(test.teacher_message ?? DEFAULT_TEACHER_MESSAGE); setShowMessageEditor(true) }}
+                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              >
+                編集
+              </button>
+            )}
+          </div>
+          {showMessageEditor ? (
+            <div className="space-y-3">
+              <textarea
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                rows={4}
+                className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+              />
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => handleSaveMessage(false)}
+                  disabled={savingMessage}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-50"
+                >
+                  {savingMessage ? '保存中...' : 'このテストだけ変更'}
+                </button>
+                <button
+                  onClick={() => handleSaveMessage(true)}
+                  disabled={savingMessage}
+                  className="bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-700 transition disabled:opacity-50"
+                >
+                  {savingMessage ? '保存中...' : '今後のデフォルトにする'}
+                </button>
+                <button
+                  onClick={() => setShowMessageEditor(false)}
+                  className="text-gray-500 px-4 py-2 rounded-xl text-sm hover:text-gray-700"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-600 bg-amber-50 border border-amber-200 rounded-xl p-3 leading-relaxed">
+              {test.teacher_message ?? DEFAULT_TEACHER_MESSAGE}
+            </p>
+          )}
         </div>
       )}
 

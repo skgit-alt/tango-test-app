@@ -34,6 +34,7 @@ export interface Test {
   scheduled_at: string | null
   published_classes: string[] | null
   published_student_ids: string[] | null
+  teacher_message: string | null
 }
 
 /** 生徒がテスト結果を閲覧できるか判定 */

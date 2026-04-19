@@ -54,8 +54,18 @@ export default async function ResultPage({
     )
   }
 
+  const DEFAULT_TEACHER_MESSAGE = '「単語・熟語の勉強は前日にちょっと頑張って７割取った！」みたいな勉強では短期記憶で身に付きません。スパイラルで繰り返して繰り返して勉強するしか知識として身に付きません。満点が取れるくらい繰り返して勉強してください。'
+
+  // デフォルトメッセージをsettingsテーブルから取得
+  const { data: settingsData } = await admin
+    .from('settings')
+    .select('value')
+    .eq('key', 'teacher_message')
+    .maybeSingle()
+  const defaultMessage = settingsData?.value ?? DEFAULT_TEACHER_MESSAGE
+
   const test = session.tests as {
-    id: string; title: string; mode: number; status: string; pass_score: number | null
+    id: string; title: string; mode: number; status: string; pass_score: number | null; teacher_message: string | null
   }
 
   if (!canSeeResult(test, student.class_name, student.id)) {
@@ -198,7 +208,7 @@ export default async function ResultPage({
                 {/* 先生からのメッセージ */}
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                   <p className="text-xs text-amber-800 leading-relaxed">
-                    「単語・熟語の勉強は前日にちょっと頑張って７割取った！」みたいな勉強では短期記憶で身に付きません。スパイラルで繰り返して繰り返して勉強するしか知識として身に付きません。満点が取れるくらい繰り返して勉強してください。
+                    {test.teacher_message ?? defaultMessage}
                   </p>
                 </div>
               </div>

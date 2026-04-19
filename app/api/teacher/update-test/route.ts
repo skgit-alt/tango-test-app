@@ -14,6 +14,7 @@ const ALLOWED_FIELDS = new Set([
   'time_limit',
   'published_classes',
   'published_student_ids',
+  'teacher_message',
 ])
 
 export async function POST(req: NextRequest) {
