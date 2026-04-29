@@ -43,11 +43,34 @@ export default async function StudentHomePage() {
   const activeSessionMap = Object.fromEntries(
     (activeSessions ?? []).map((s) => [s.test_id, s])
   )
-  const initialTestsWithSessions = (activeTests ?? []).map((t) => ({
-    ...t,
-    mySession: activeSessionMap[t.id] ?? null,
-    _canSeeResult: canSeeResult(t, student.class_name, student.id),
-  }))
+
+  // active-test APIと同じフィルタリングをサーバー側でも適用（初期表示のチラつき防止）
+  const studentClass = student.class_name ?? ''
+  const isNumericClass = /^\d/.test(studentClass)
+  const isAlphaClass = /^[A-Za-z]/.test(studentClass)
+  const isOtherClass = !isNumericClass && !isAlphaClass
+
+  const initialTestsWithSessions = (activeTests ?? [])
+    .filter((t) => {
+      // モード別クラスフィルター
+      if (!isOtherClass) {
+        if (t.mode === 50 && !isAlphaClass) return false
+        if (t.mode !== 50 && t.mode !== 300 && !isNumericClass) return false
+      }
+      // openなら常に表示
+      if (t.status === 'open') return true
+      // waitingはopen_classesに自クラスが含まれる場合のみ表示
+      if ((t.open_classes ?? []).includes(studentClass)) return true
+      // 提出済みセッションがある場合は結果表示のため継続
+      const mySession = activeSessionMap[t.id]
+      if (mySession?.is_submitted) return true
+      return false
+    })
+    .map((t) => ({
+      ...t,
+      mySession: activeSessionMap[t.id] ?? null,
+      _canSeeResult: canSeeResult(t, student.class_name, student.id),
+    }))
 
   // 過去の提出済みセッションを取得（グラフ用・練習除外）
   const { data: pastSessions } = await admin
