@@ -55,12 +55,13 @@ export async function GET() {
 
   if (testList.length === 0) return NextResponse.json([])
 
-  // この生徒のセッションを取得
+  // この生徒のセッションを取得（練習セッションは除外）
   const { data: sessions } = await admin
     .from('sessions')
     .select('id, test_id, is_submitted, score')
     .eq('student_id', user.id)
     .in('test_id', testList.map((t) => t.id))
+    .not('is_practice', 'eq', true)
 
   const sessionMap = Object.fromEntries(
     (sessions ?? []).map((s) => [s.test_id, s])

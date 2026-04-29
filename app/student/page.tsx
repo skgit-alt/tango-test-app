@@ -38,6 +38,7 @@ export default async function StudentHomePage() {
         .select('id, test_id, is_submitted, score')
         .eq('student_id', student.id)
         .in('test_id', activeTestIds)
+        .not('is_practice', 'eq', true)
     : { data: [] }
   const activeSessionMap = Object.fromEntries(
     (activeSessions ?? []).map((s) => [s.test_id, s])
