@@ -31,7 +31,7 @@ export default async function ReviewPage({
   // is_submitted=true に限定しない（古いRLSブロック済みデータも対象にする）
   let query = admin
     .from('sessions')
-    .select('id, test_id, score, submitted_at, tests(title, status, mode, published_classes, published_student_ids)')
+    .select('id, test_id, score, submitted_at, is_practice, tests(title, status, mode, published_classes, published_student_ids)')
     .eq('student_id', student.id)
 
   if (sessionId) {
@@ -58,7 +58,8 @@ export default async function ReviewPage({
     published_classes: string[] | null; published_student_ids: string[] | null
   } | null
 
-  if (!test || !canSeeResult(test, student.class_name, student.id)) {
+  const isPractice = (session as any).is_practice === true
+  if (!isPractice && (!test || !canSeeResult(test, student.class_name, student.id))) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-blue-50 p-4">
         <div className="bg-white rounded-2xl shadow p-8 text-center max-w-sm w-full space-y-3">
@@ -74,7 +75,7 @@ export default async function ReviewPage({
 
   const { data: rawAnswers } = await admin
     .from('answers')
-    .select('question_id, selected_answer, is_correct, questions(*)')
+    .select('question_id, selected_answer, is_correct, flagged, questions(*)')
     .eq('session_id', session.id)
 
   const answers = ((rawAnswers ?? []) as any[])
