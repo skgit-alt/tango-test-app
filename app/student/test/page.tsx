@@ -3,7 +3,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import TestClient from './TestClient'
 
-export default async function TestPage() {
+export default async function TestPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ practiceSessionId?: string }>
+}) {
+  const { practiceSessionId } = await searchParams
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -21,16 +27,32 @@ export default async function TestPage() {
   // admin経由でセッションを取得（RLSバイパス）
   const admin = createAdminClient()
 
-  const { data: session } = await admin
-    .from('sessions')
-    .select('*')
-    .eq('student_id', student.id)
-    .eq('is_submitted', false)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  let session
+  if (practiceSessionId) {
+    // 練習セッションIDが指定された場合はそれを直接取得
+    const { data } = await admin
+      .from('sessions')
+      .select('*')
+      .eq('id', practiceSessionId)
+      .eq('student_id', student.id)
+      .eq('is_submitted', false)
+      .maybeSingle()
+    session = data
+  } else {
+    // 通常フロー：最新の未提出セッションを取得
+    const { data } = await admin
+      .from('sessions')
+      .select('*')
+      .eq('student_id', student.id)
+      .eq('is_submitted', false)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    session = data
+  }
 
   if (!session) redirect('/student/waiting')
+
   const { data: test } = await admin
     .from('tests')
     .select('*')
