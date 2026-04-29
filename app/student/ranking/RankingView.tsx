@@ -36,6 +36,7 @@ export interface RankingViewProps {
   classAverages: ClassAvg[]
   myTestName: string
   label: string
+  medalsByStudentId?: Record<string, string>
 }
 
 const COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4']
@@ -50,6 +51,7 @@ export default function RankingView({
   classAverages,
   myTestName,
   label,
+  medalsByStudentId = {},
 }: RankingViewProps) {
   const unit = mode === 20 ? '点' : 'pt'
 
@@ -146,6 +148,9 @@ export default function RankingView({
                       </td>
                       <td className={`px-3 py-3 font-medium ${isMe ? 'text-blue-700' : 'text-gray-800'}`}>
                         {r.test_name}
+                        {medalsByStudentId[r.student_id] && (
+                          <span className="ml-1 text-base">{medalsByStudentId[r.student_id]}</span>
+                        )}
                         {isMe && (
                           <span className="text-xs text-blue-400 ml-1">（あなた）</span>
                         )}

@@ -223,6 +223,21 @@ export default async function RankingPage() {
 
   const myTestName = student.test_name ?? ''
 
+  // 50問ランキング対象生徒の勲章を取得
+  const rankedStudentIds50 = (data50?.ranking ?? []).map((r) => r.student_id)
+  const { data: medals50 } = rankedStudentIds50.length > 0
+    ? await admin.from('medals').select('student_id, rank').in('student_id', rankedStudentIds50)
+    : { data: [] }
+
+  const medalsByStudentId50: Record<string, string> = {}
+  for (const studentId of rankedStudentIds50) {
+    const ms = (medals50 ?? []).filter((m) => m.student_id === studentId)
+    const crowns = ms.filter((m) => m.rank === 1).length
+    const ribbons = ms.filter((m) => m.rank > 1).length
+    const display = '👑'.repeat(crowns) + '🎖️'.repeat(ribbons)
+    if (display) medalsByStudentId50[studentId] = display
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
@@ -253,6 +268,7 @@ export default async function RankingPage() {
               classAverages={data50.classAverages}
               myTestName={myTestName}
               label="ポイントランキング"
+              medalsByStudentId={medalsByStudentId50}
             />
           </section>
         )}

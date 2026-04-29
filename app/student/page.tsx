@@ -72,6 +72,16 @@ export default async function StudentHomePage() {
       _canSeeResult: canSeeResult(t, student.class_name, student.id),
     }))
 
+  // 勲章を取得
+  const { data: myMedals } = await admin
+    .from('medals')
+    .select('rank')
+    .eq('student_id', student.id)
+
+  const crownCount = (myMedals ?? []).filter((m) => m.rank === 1).length
+  const ribbonCount = (myMedals ?? []).filter((m) => m.rank > 1).length
+  const medalDisplay = '👑'.repeat(crownCount) + '🎖️'.repeat(ribbonCount)
+
   // 過去の提出済みセッションを取得（グラフ用・練習除外）
   const { data: pastSessions } = await admin
     .from('sessions')
@@ -162,7 +172,10 @@ export default async function StudentHomePage() {
                 {student.class_name} &nbsp; {student.seat_number}番
               </p>
               <h2 className="text-2xl font-bold text-gray-800">{student.name}</h2>
-              <p className="text-sm text-blue-600 mt-1">テストネーム: {student.test_name}</p>
+              <p className="text-sm text-blue-600 mt-1">
+                テストネーム: {student.test_name}
+                {medalDisplay && <span className="ml-1">{medalDisplay}</span>}
+              </p>
             </div>
             <div className="text-4xl">👤</div>
           </div>

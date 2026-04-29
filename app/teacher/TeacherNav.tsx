@@ -9,6 +9,7 @@ export default function TeacherNav({ isAdmin }: { isAdmin: boolean }) {
     { href: '/teacher', label: 'テスト一覧', exact: true },
     ...(isAdmin ? [
       { href: '/teacher/points', label: 'ポイント管理', exact: false },
+      { href: '/teacher/medals', label: '👑 勲章管理', exact: false },
       { href: '/teacher/admins', label: 'スタッフ管理', exact: false },
       { href: '/teacher/students', label: '生徒管理', exact: false },
     ] : []),
