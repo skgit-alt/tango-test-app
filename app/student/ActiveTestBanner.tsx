@@ -95,9 +95,6 @@ function TestCard({ test, studentClass }: { test: ActiveTest; studentClass: stri
         <p className="text-xs opacity-80 mb-0.5">{statusLabel}</p>
         <p className="font-bold text-sm leading-snug">{test.title}</p>
         <p className="text-xs mt-0.5 opacity-80">{test.mode}問モード</p>
-        {submitted && session?.score !== null && session?.score !== undefined && canSee && (
-          <p className="text-sm font-bold mt-1">{session.score}点</p>
-        )}
       </div>
       {button}
     </div>

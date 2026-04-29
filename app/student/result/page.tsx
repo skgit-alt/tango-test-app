@@ -258,6 +258,12 @@ export default async function ResultPage({
                 テスト結果一覧に戻る
               </Link>
             )}
+            <Link
+              href="/student"
+              className="block w-full text-center text-gray-400 py-2 text-sm hover:text-gray-600 transition"
+            >
+              ホームに戻る
+            </Link>
           </div>
         </div>
       </div>
