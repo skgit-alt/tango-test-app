@@ -243,12 +243,21 @@ export default async function ResultPage({
                 ランキングを見る
               </Link>
             )}
-            <Link
-              href="/student"
-              className="block w-full text-center text-gray-400 py-2 text-sm hover:text-gray-600 transition"
-            >
-              ホームに戻る
-            </Link>
+            {isPractice ? (
+              <Link
+                href="/student/practice"
+                className="block w-full text-center text-amber-600 py-2 text-sm hover:text-amber-800 transition"
+              >
+                練習の結果一覧に戻る
+              </Link>
+            ) : (
+              <Link
+                href="/student"
+                className="block w-full text-center text-gray-400 py-2 text-sm hover:text-gray-600 transition"
+              >
+                ホームに戻る
+              </Link>
+            )}
           </div>
         </div>
       </div>
