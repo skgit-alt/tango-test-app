@@ -48,16 +48,7 @@ export default async function StudentHomePage() {
     _canSeeResult: canSeeResult(t, student.class_name, student.id),
   }))
 
-  // 最新テスト（結果表示用・ポイント表示用）
-  const { data: latestTest } = await admin
-    .from('tests')
-    .select('id, title, mode, status, open_classes, published_classes, published_student_ids')
-    .in('status', ['waiting', 'open', 'finished', 'published'])
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  // 過去の全提出済みセッションを取得（グラフ・履歴用）。練習セッションは除外
+  // 過去の提出済みセッションを取得（グラフ用・練習除外）
   const { data: pastSessions } = await admin
     .from('sessions')
     .select('id, score, submitted_at, tests(id, title, mode, status, pass_score)')
@@ -65,20 +56,6 @@ export default async function StudentHomePage() {
     .eq('is_submitted', true)
     .neq('is_practice', true)
     .order('submitted_at', { ascending: false })
-
-  // 最新テスト専用：この生徒がテストを開始したかつ結果が公開されているか確認
-  const studentCanSeeLatest = latestTest
-    ? canSeeResult(latestTest as any, student.class_name, student.id)
-    : false
-
-  const { data: latestTestSession } = studentCanSeeLatest && latestTest
-    ? await admin
-        .from('sessions')
-        .select('id, is_submitted')
-        .eq('student_id', student.id)
-        .eq('test_id', latestTest.id)
-        .maybeSingle()
-    : { data: null }
 
   const publishedSessions = (pastSessions ?? []).filter(
     (s) => (s.tests as any)?.status === 'published'
@@ -88,13 +65,13 @@ export default async function StudentHomePage() {
     .filter((s) => (s.tests as any)?.mode === 50)
     .map((s) => ({ ...s, points: calcPoints(s.score ?? 0) }))
 
-  // 50問モードのアクティブテストがあればポイント情報を取得
+  // 50問モードのポイント・順位情報
   const has50modeActive = (activeTests ?? []).some((t) => t.mode === 50)
+  const has50modePublished = sessions50.length > 0
   let totalPoints = 0
   let rank = 0
 
-  if (has50modeActive || latestTest?.mode === 50) {
-    // ランキング設定を取得
+  if (has50modeActive || has50modePublished) {
     const { data: rankingSettings } = await admin
       .from('ranking_settings')
       .select('from_round, to_round')
@@ -102,7 +79,6 @@ export default async function StudentHomePage() {
       .maybeSingle()
 
     if (rankingSettings) {
-      // 期間内の対象テストIDを取得
       const { data: targetTests } = await admin
         .from('tests')
         .select('id')
@@ -123,7 +99,6 @@ export default async function StudentHomePage() {
           allPoints.forEach((p: { student_id: string; points_earned: number }) => {
             grouped[p.student_id] = (grouped[p.student_id] ?? 0) + p.points_earned
           })
-
           totalPoints = grouped[student.id] ?? 0
           const sorted = Object.values(grouped).sort((a, b) => b - a)
           const rankIndex = sorted.findIndex((pts) => pts <= totalPoints)
@@ -168,7 +143,7 @@ export default async function StudentHomePage() {
             <div className="text-4xl">👤</div>
           </div>
 
-          {(has50modeActive || latestTest?.mode === 50) && (
+          {(has50modeActive || has50modePublished) && (
             <div className="mt-4 pt-4 border-t border-gray-100 flex gap-6">
               <div className="text-center">
                 <p className="text-2xl font-bold text-blue-600">{totalPoints}pt</p>
@@ -191,103 +166,31 @@ export default async function StudentHomePage() {
         {/* アクションボタン */}
         <div className="space-y-3">
           <Link
-            href="/student/ranking"
-            className="block w-full bg-white border border-gray-200 text-gray-700 py-3 rounded-2xl font-semibold text-center hover:bg-gray-50 active:bg-gray-100 transition"
+            href="/student/results"
+            className="block w-full bg-green-600 text-white py-3 rounded-2xl font-semibold text-center hover:bg-green-700 active:bg-green-800 transition"
           >
-            ランキングを見る
+            📊 テストの結果を見る
           </Link>
-
           <Link
             href="/student/practice"
             className="block w-full bg-amber-50 border border-amber-200 text-amber-700 py-3 rounded-2xl font-semibold text-center hover:bg-amber-100 active:bg-amber-200 transition"
           >
             🔄 練習の結果を見る
           </Link>
-
-          {latestTest && latestTest.status === 'published' && latestTestSession && (
-            <Link
-              href="/student/result"
-              className="block w-full bg-green-600 text-white py-3 rounded-2xl font-semibold text-center hover:bg-green-700 transition"
-            >
-              今回の結果を見る
-            </Link>
-          )}
+          <Link
+            href="/student/ranking"
+            className="block w-full bg-white border border-gray-200 text-gray-700 py-3 rounded-2xl font-semibold text-center hover:bg-gray-50 active:bg-gray-100 transition"
+          >
+            ランキングを見る
+          </Link>
         </div>
 
-        {/* グラフ */}
+        {/* グラフ（2件以上あれば表示） */}
         {sessions300.length >= 2 && (
           <Chart300 sessions={sessions300 as any} />
         )}
         {sessions50.length >= 2 && (
           <Chart50 sessions={sessions50 as any} />
-        )}
-
-        {/* 過去の結果 - 300問テスト */}
-        {sessions300.length > 0 && (
-          <div>
-            <h3 className="text-sm font-bold text-gray-500 mb-3 px-1">📝 300問テストの結果</h3>
-            <div className="space-y-2">
-              {sessions300.map((s) => {
-                const test = s.tests as any
-                const passed = test.pass_score !== null ? s.score >= test.pass_score : null
-                return (
-                  <Link
-                    key={s.id}
-                    href={`/student/result?sessionId=${s.id}`}
-                    className="block bg-white rounded-xl border border-gray-200 px-4 py-3 hover:bg-gray-50 transition"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold text-gray-800 text-sm">{test.title}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {new Date(s.submitted_at).toLocaleDateString('ja-JP')}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-gray-800">{s.score}点</p>
-                        {passed !== null && (
-                          <p className={`text-xs font-medium ${passed ? 'text-green-600' : 'text-red-500'}`}>
-                            {passed ? '合格' : '不合格'}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </Link>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* 過去の結果 - 50問テスト */}
-        {sessions50.length > 0 && (
-          <div>
-            <h3 className="text-sm font-bold text-gray-500 mb-3 px-1">⚡ 50問テストの結果</h3>
-            <div className="space-y-2">
-              {sessions50.map((s) => {
-                const test = s.tests as any
-                return (
-                  <Link
-                    key={s.id}
-                    href={`/student/result?sessionId=${s.id}`}
-                    className="block bg-white rounded-xl border border-gray-200 px-4 py-3 hover:bg-gray-50 transition"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold text-gray-800 text-sm">{test.title}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {new Date(s.submitted_at).toLocaleDateString('ja-JP')}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-gray-800">{s.score}点</p>
-                      </div>
-                    </div>
-                  </Link>
-                )
-              })}
-            </div>
-          </div>
         )}
 
         <div className="h-4" />
