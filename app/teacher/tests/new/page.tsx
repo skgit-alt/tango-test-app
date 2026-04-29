@@ -6,6 +6,90 @@ import { useRouter } from 'next/navigation'
 import * as XLSX from 'xlsx'
 import { renderUnderline } from '@/lib/renderUnderline'
 
+// ─── Wordファイル（.docx）パーサー ──────────────────────────────────────────
+
+async function parseDocxToQuestions(buffer: ArrayBuffer): Promise<{ title: string; questions: QuestionRow[] }> {
+  const mammoth = (await import('mammoth')).default
+  const { value: rawText } = await mammoth.extractRawText({ arrayBuffer: buffer })
+
+  const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+
+  let title = ''
+  let section: 'A' | 'B' | null = null
+  let inAnswerKey = false
+  let sectionACount = 0
+  const answers: Record<number, number> = {}
+
+  type RawQ = { num: number; questionText: string; choices: string[] }
+  const rawQs: RawQ[] = []
+
+  for (const line of lines) {
+    // タイトル：最初の非空行（「/ 20 点」の行はスキップ）
+    if (!title) {
+      if (!line.match(/^\/\s*\d/)) title = line
+      continue
+    }
+    if (line.match(/^\/\s*\d+\s*点?$/)) continue  // スコア行スキップ
+
+    // セクション検出
+    if (line.includes('【A】')) {
+      sectionACount++
+      if (sectionACount >= 2) { inAnswerKey = true; continue }
+      section = 'A'; continue
+    }
+    if (line.includes('【B】')) {
+      if (!inAnswerKey) section = 'B'
+      continue
+    }
+
+    // 指示行スキップ
+    if (line.includes('合う適切な') || line.includes('選びなさい')) continue
+
+    // 答えセクション
+    if (inAnswerKey) {
+      const re = /（(\d+)）\s*([①②③④⑤])/g
+      let m: RegExpExecArray | null
+      while ((m = re.exec(line)) !== null) {
+        answers[parseInt(m[1])] = '①②③④⑤'.indexOf(m[2]) + 1
+      }
+      continue
+    }
+
+    if (!section) continue
+
+    // 問題行: (1) テキスト[p.xxx, yyy]
+    const qMatch = line.match(/^\((\d+)\)\s+(.+?)(?:\[p\.[^\]]+\])?\s*$/)
+    if (qMatch) {
+      rawQs.push({
+        num: parseInt(qMatch[1]),
+        questionText: qMatch[2].replace(/\[p\.[^\]]+\]/g, '').trim(),
+        choices: [],
+      })
+      continue
+    }
+
+    // 選択肢行: ① aaa  ② bbb  ③ ccc  ④ ddd
+    const last = rawQs[rawQs.length - 1]
+    if (last && last.choices.length === 0 && line.includes('①')) {
+      last.choices = line.split(/[①②③④⑤]/).map(s => s.trim()).filter(s => s.length > 0)
+    }
+  }
+
+  const questions: QuestionRow[] = rawQs.map(rq => ({
+    order_num: rq.num,
+    question_text: rq.questionText,
+    choice1: rq.choices[0] ?? '',
+    choice2: rq.choices[1] ?? '',
+    choice3: rq.choices[2] ?? '',
+    choice4: rq.choices[3] ?? '',
+    choice5: rq.choices[4] ?? null,
+    correct_answer: answers[rq.num] ?? 1,
+    points: 1,
+  }))
+
+  return { title, questions }
+}
+
 interface QuestionRow {
   order_num: number
   question_text: string
@@ -311,8 +395,11 @@ export default function NewTestPage() {
   const supabase = createClient()
   const xlsxRef = useRef<HTMLInputElement>(null)
   const rtfRef = useRef<HTMLInputElement>(null)
+  const docxRef = useRef<HTMLInputElement>(null)
 
-  const [tab, setTab] = useState<'xlsx' | 'rtf'>('xlsx')
+  const [tab, setTab] = useState<'xlsx' | 'rtf' | 'docx'>('xlsx')
+  const [customTimeLimitMin, setCustomTimeLimitMin] = useState('2')
+  const [customTimeLimitSec, setCustomTimeLimitSec] = useState('0')
   const [title, setTitle] = useState('')
   const [roundNumber, setRoundNumber] = useState<string>('')
   const [questions, setQuestions] = useState<QuestionRow[]>([])
@@ -367,6 +454,27 @@ export default function NewTestPage() {
     }
   }
 
+  // ─── Word（.docx）処理 ───────────────────────────────────────────────────
+
+  const processDocx = async (file: File) => {
+    setFileName(file.name)
+    setError('')
+    try {
+      const buffer = await file.arrayBuffer()
+      const { title: parsedTitle, questions: parsed } = await parseDocxToQuestions(buffer)
+      if (parsed.length === 0) {
+        setError('問題が読み取れませんでした。Wordファイルの形式を確認してください。')
+        return
+      }
+      if (parsedTitle) setTitle(parsedTitle)
+      setQuestions(parsed)
+      setPreview(true)
+    } catch (err) {
+      console.error(err)
+      setError('Wordファイルの読み込みに失敗しました。')
+    }
+  }
+
   // ─── RTF処理 ─────────────────────────────────────────────────────────────
 
   const processRtf = async (file: File) => {
@@ -415,9 +523,12 @@ export default function NewTestPage() {
     if (tab === 'xlsx') {
       if (!file.name.endsWith('.xlsx')) { setError('.xlsx ファイルをドロップしてください'); return }
       await processXlsx(file)
-    } else {
+    } else if (tab === 'rtf') {
       if (!file.name.toLowerCase().endsWith('.rtf')) { setError('.rtf ファイルをドロップしてください'); return }
       await processRtf(file)
+    } else {
+      if (!file.name.toLowerCase().endsWith('.docx')) { setError('.docx ファイルをドロップしてください'); return }
+      await processDocx(file)
     }
   }
 
@@ -431,10 +542,12 @@ export default function NewTestPage() {
     setError('')
 
     try {
-      const mode = questions.length === 300 ? 300 : 50
-      const time_limit = mode === 300 ? 1200 : 180
+      const mode = questions.length === 300 ? 300 : questions.length === 50 ? 50 : questions.length
+      const time_limit = mode === 300 ? 1200
+        : mode === 50 ? 180
+        : (parseInt(customTimeLimitMin) || 0) * 60 + (parseInt(customTimeLimitSec) || 0) || 120
       const pass_score = mode === 300 ? 285 : null
-      const roundNum = mode === 50 && roundNumber.trim() !== '' ? parseInt(roundNumber) : null
+      const roundNum = mode !== 300 && roundNumber.trim() !== '' ? parseInt(roundNumber) : null
 
       const { data: test, error: testError } = await supabase
         .from('tests')
@@ -490,7 +603,7 @@ export default function NewTestPage() {
 
         {/* ファイル種別タブ */}
         <div>
-          <div className="flex gap-2 mb-4">
+          <div className="flex gap-2 mb-4 flex-wrap">
             <button
               onClick={() => { setTab('xlsx'); setQuestions([]); setFileName(''); setError(''); setPreview(false) }}
               className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${tab === 'xlsx' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
@@ -502,6 +615,12 @@ export default function NewTestPage() {
               className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${tab === 'rtf' ? 'bg-violet-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
             >
               📄 RTF（50問テスト）
+            </button>
+            <button
+              onClick={() => { setTab('docx'); setQuestions([]); setFileName(''); setError(''); setPreview(false) }}
+              className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${tab === 'docx' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              📝 Word（.docx）
             </button>
           </div>
 
@@ -515,9 +634,14 @@ export default function NewTestPage() {
               【A】英語→日本語 / 【B】英文穴埋め / 【C】アクセント の形式のRTFファイル。タイトルと答えを自動取得します。
             </p>
           )}
+          {tab === 'docx' && (
+            <p className="text-xs text-gray-400 mb-3">
+              【A】日本語→英語 / 【B】英語→日本語 の形式のWordファイル。タイトルと答えを自動取得します。
+            </p>
+          )}
 
           <div
-            onClick={() => tab === 'xlsx' ? xlsxRef.current?.click() : rtfRef.current?.click()}
+            onClick={() => tab === 'xlsx' ? xlsxRef.current?.click() : tab === 'rtf' ? rtfRef.current?.click() : docxRef.current?.click()}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
@@ -527,26 +651,27 @@ export default function NewTestPage() {
                 : 'border-gray-300 hover:border-blue-400'
             }`}
           >
-            <div className="text-3xl mb-2">{dragging ? '📂' : tab === 'rtf' ? '📄' : '📊'}</div>
+            <div className="text-3xl mb-2">{dragging ? '📂' : tab === 'rtf' ? '📄' : tab === 'docx' ? '📝' : '📊'}</div>
             {fileName ? (
               <p className="text-gray-700 font-medium">{fileName}</p>
             ) : dragging ? (
               <p className="text-blue-500 font-medium">ここで離してください</p>
             ) : (
               <p className="text-gray-400">
-                クリックまたは{tab === 'xlsx' ? 'Excelファイル' : 'RTFファイル'}をドラッグ&ドロップ
+                クリックまたは{tab === 'xlsx' ? 'Excelファイル' : tab === 'docx' ? 'Wordファイル（.docx）' : 'RTFファイル'}をドラッグ&ドロップ
               </p>
             )}
           </div>
           <input ref={xlsxRef} type="file" accept=".xlsx" onChange={handleXlsxChange} className="hidden" />
           <input ref={rtfRef} type="file" accept=".rtf" onChange={handleRtfChange} className="hidden" />
+          <input ref={docxRef} type="file" accept=".docx" onChange={async (e) => { const f = e.target.files?.[0]; if (f) await processDocx(f) }} className="hidden" />
         </div>
 
-        {/* 50問モード: 第何回 */}
-        {mode === 50 && (
+        {/* 300問以外: 第何回 */}
+        {(mode === 50 || (mode === null && questions.length > 0)) && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              第何回目のテストか <span className="text-gray-400 text-xs font-normal">（通算ポイントランキング用）</span>
+              第何回目のテストか <span className="text-gray-400 text-xs font-normal">（ランキング用）</span>
             </label>
             <div className="flex items-center gap-2">
               <span className="text-gray-600 text-sm">第</span>
@@ -563,13 +688,37 @@ export default function NewTestPage() {
           </div>
         )}
 
+        {/* docxの場合：制限時間を手動入力 */}
+        {tab === 'docx' && questions.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">制限時間</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number" min={0} max={180} value={customTimeLimitMin}
+                onChange={(e) => setCustomTimeLimitMin(e.target.value)}
+                className="w-16 border border-gray-300 rounded-xl px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-gray-600 text-sm">分</span>
+              <input
+                type="number" min={0} max={59} value={customTimeLimitSec}
+                onChange={(e) => setCustomTimeLimitSec(e.target.value)}
+                className="w-16 border border-gray-300 rounded-xl px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-gray-600 text-sm">秒</span>
+            </div>
+          </div>
+        )}
+
         {/* 自動判定結果 */}
         {mode && (
           <div className="bg-blue-50 rounded-xl p-4 space-y-1 text-sm">
             <p className="font-medium text-blue-800">自動設定内容</p>
-            <p className="text-blue-700">問題数: {questions.length}問 → <strong>{mode}問モード</strong></p>
-            <p className="text-blue-700">制限時間: <strong>{mode === 300 ? '1200秒（20分）' : '180秒（3分）'}</strong></p>
-            {mode === 300 && <p className="text-blue-700">合格点: <strong>285点</strong></p>}
+            <p className="text-blue-700">問題数: <strong>{questions.length}問</strong></p>
+            {mode === 300 && <><p className="text-blue-700">制限時間: <strong>1200秒（20分）</strong></p><p className="text-blue-700">合格点: <strong>285点</strong></p></>}
+            {mode === 50 && <p className="text-blue-700">制限時間: <strong>180秒（3分）</strong></p>}
+            {mode !== 50 && mode !== 300 && (
+              <p className="text-blue-700">制限時間: <strong>{(parseInt(customTimeLimitMin)||0)}分{(parseInt(customTimeLimitSec)||0)}秒</strong>（上で変更可）</p>
+            )}
           </div>
         )}
 

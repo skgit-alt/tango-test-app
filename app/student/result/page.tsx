@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { calcPoints, canSeeResult } from '@/lib/supabase/types'
+import PracticeButton from './PracticeButton'
 
 export default async function ResultPage({
   searchParams,
@@ -28,6 +29,7 @@ export default async function ResultPage({
 
   // sessionIdが指定されていればそのセッションを、なければ最新を取得
   // is_submitted=true に限定しない（RPCやRLSの問題で未設定のまま終了した古いデータも拾う）
+  // 練習セッションは is_practice=true で識別
   let query = admin
     .from('sessions')
     .select('*, tests(*)')
@@ -67,8 +69,11 @@ export default async function ResultPage({
   const test = session.tests as {
     id: string; title: string; mode: number; status: string; pass_score: number | null; teacher_message: string | null
   }
+  const isPractice = (session as { is_practice?: boolean }).is_practice === true
 
-  if (!canSeeResult(test, student.class_name, student.id)) {
+  // 練習セッションは公開状態に関わらず閲覧可能
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (!isPractice && !canSeeResult(test as any, student.class_name, student.id)) {
     redirect('/student/waiting-result')
   }
 
@@ -86,6 +91,11 @@ export default async function ResultPage({
           passed === false ? 'bg-red-400' :
           'bg-blue-600'
         } text-white`}>
+          {isPractice && (
+            <div className="mb-2 inline-block bg-white/20 text-white text-xs font-bold px-3 py-1 rounded-full">
+              🔄 練習モード
+            </div>
+          )}
           <p className="text-sm font-medium opacity-90 mb-1">{test.title}</p>
           <h1 className="text-5xl font-bold">{score}</h1>
           <p className="text-lg opacity-90 mt-1">点</p>
@@ -223,12 +233,15 @@ export default async function ResultPage({
             >
               回答を確認する
             </Link>
-            <Link
-              href="/student/ranking"
-              className="block w-full bg-white border border-gray-200 text-gray-700 py-3 rounded-xl font-semibold text-center hover:bg-gray-50 transition"
-            >
-              ランキングを見る
-            </Link>
+            <PracticeButton testId={test.id} />
+            {!isPractice && (
+              <Link
+                href="/student/ranking"
+                className="block w-full bg-white border border-gray-200 text-gray-700 py-3 rounded-xl font-semibold text-center hover:bg-gray-50 transition"
+              >
+                ランキングを見る
+              </Link>
+            )}
             <Link
               href="/student"
               className="block w-full text-center text-gray-400 py-2 text-sm hover:text-gray-600 transition"

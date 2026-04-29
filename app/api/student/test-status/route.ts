@@ -22,13 +22,40 @@ export async function GET(req: NextRequest) {
 
   // 予約開始チェック：waiting状態でscheduled_atを過ぎていたら自動開始
   let test = rawTest
-  if (test.status === 'waiting' && test.scheduled_at) {
+  if (test.status === 'waiting') {
     const now = new Date()
-    const scheduled = new Date(test.scheduled_at)
-    if (scheduled <= now) {
-      const openedAt = now.toISOString()
-      await admin.from('tests').update({ status: 'open', opened_at: openedAt }).eq('id', testId)
-      test = { ...test, status: 'open', opened_at: openedAt }
+
+    // 全クラス一括予約
+    if (test.scheduled_at) {
+      const scheduled = new Date(test.scheduled_at)
+      if (scheduled <= now) {
+        const openedAt = now.toISOString()
+        await admin.from('tests').update({ status: 'open', opened_at: openedAt }).eq('id', testId)
+        test = { ...test, status: 'open', opened_at: openedAt }
+      }
+    }
+
+    // クラス別予約開始チェック
+    if (test.status === 'waiting' && test.scheduled_class_starts) {
+      const classStarts = test.scheduled_class_starts as Record<string, string>
+      const newClasses: string[] = []
+      for (const [cls, isoTime] of Object.entries(classStarts)) {
+        if (new Date(isoTime) <= now) {
+          newClasses.push(cls)
+        }
+      }
+      if (newClasses.length > 0) {
+        const currentOpen: string[] = test.open_classes ?? []
+        const merged = Array.from(new Set([...currentOpen, ...newClasses]))
+        // 到着済みのクラスをscheduled_class_startsから除去
+        const remaining = { ...classStarts }
+        for (const cls of newClasses) delete remaining[cls]
+        await admin
+          .from('tests')
+          .update({ open_classes: merged, scheduled_class_starts: remaining })
+          .eq('id', testId)
+        test = { ...test, open_classes: merged, scheduled_class_starts: remaining }
+      }
     }
   }
 

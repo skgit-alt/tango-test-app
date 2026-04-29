@@ -2,12 +2,37 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Test, Session, CheatLog, Student, Question } from '@/lib/supabase/types'
+import { Test, Session, CheatLog, Student, Question, calcPoints } from '@/lib/supabase/types'
 import * as XLSX from 'xlsx'
 
 interface SessionWithStudent extends Session {
   students: Pick<Student, 'name' | 'class_name' | 'seat_number' | 'test_name'> | null
 }
+
+interface StudentInfo {
+  id: string
+  name: string
+  class_name: string
+  seat_number: number
+  test_name: string
+}
+
+// テーブル表示用の統合行型（セッションあり・なし両対応）
+interface TableRow {
+  sessionId: string | null
+  studentId: string
+  class_name: string
+  seat_number: number
+  name: string
+  test_name: string
+  started_at: string | null
+  submitted_at: string | null
+  is_submitted: boolean
+  is_absent: boolean
+  score: number | null
+}
+
+type EditStatus = 'none' | 'submitted' | 'absent'
 
 interface CheatLogWithStudent extends CheatLog {
   sessions: {
@@ -41,12 +66,33 @@ export default function TestManagerClient({
   const supabase = createClient()
   const [test, setTest] = useState<Test>(initialTest)
   const [sessions, setSessions] = useState<SessionWithStudent[]>([])
+  const [allStudents, setAllStudents] = useState<StudentInfo[]>([])
   const [cheatLogs, setCheatLogs] = useState<CheatLogWithStudent[]>([])
   const [loading, setLoading] = useState(false)
   const [actionError, setActionError] = useState('')
   const [showPreview, setShowPreview] = useState(false)
   const [classes, setClasses] = useState<string[]>([])
   const [loadingClass, setLoadingClass] = useState<string | null>(null)
+  // 修正モーダル
+  const [editTarget, setEditTarget] = useState<TableRow | null>(null)
+  const [editScore, setEditScore] = useState('')
+  const [editStatus, setEditStatus] = useState<EditStatus>('none')
+  const [editSaving, setEditSaving] = useState(false)
+  // チェックボックス一括操作
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkLoading, setBulkLoading] = useState(false)
+
+  // モード別にクラスを絞り込む
+  // 20問テスト → 1～6組（数字始まり）のみ / 50問テスト → A～D組（英字始まり）のみ
+  // 数字でも英字でも始まらないクラス（実験用クラス等）は全テストで常に表示
+  const visibleClasses = classes.filter((cls) => {
+    const isNumeric = /^\d/.test(cls)
+    const isAlpha = /^[A-Za-z]/.test(cls)
+    if (!isNumeric && !isAlpha) return true   // 実験用クラス等 → 常に表示
+    if (test.mode === 50) return isAlpha       // 50問 → A～D組のみ
+    if (test.mode === 300) return true         // 300問 → 全クラス
+    return isNumeric                           // 20問 → 1～6組のみ
+  })
   // テスト名編集
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleInput, setTitleInput] = useState(test.title)
@@ -57,6 +103,10 @@ export default function TestManagerClient({
   const [editingTimeLimit, setEditingTimeLimit] = useState(false)
   const [timeLimitMin, setTimeLimitMin] = useState(String(Math.floor(test.time_limit / 60)))
   const [timeLimitSec, setTimeLimitSec] = useState(String(test.time_limit % 60))
+  // 開始モーダル
+  const [startModal, setStartModal] = useState<{ open: boolean; target: string | 'all' }>({ open: false, target: 'all' })
+  const [modalScheduleMode, setModalScheduleMode] = useState(false)
+  const [modalScheduledAt, setModalScheduledAt] = useState('')
   // 先生メッセージ編集
   const DEFAULT_TEACHER_MESSAGE = '「単語・熟語の勉強は前日にちょっと頑張って７割取った！」みたいな勉強では短期記憶で身に付きません。スパイラルで繰り返して繰り返して勉強するしか知識として身に付きません。満点が取れるくらい繰り返して勉強してください。'
   const [showMessageEditor, setShowMessageEditor] = useState(false)
@@ -79,12 +129,13 @@ export default function TestManagerClient({
   const [savingSchedule, setSavingSchedule] = useState(false)
 
   const fetchData = useCallback(async () => {
-    // admin権限APIでRLSをバイパスしてセッション取得
+    // admin権限APIでRLSをバイパスしてセッション・生徒一覧取得
     const res = await fetch(`/api/teacher/test-sessions?testId=${test.id}`)
     if (res.ok) {
       const data = await res.json()
       if (data.sessions) setSessions(data.sessions as SessionWithStudent[])
       if (data.cheatLogs) setCheatLogs(data.cheatLogs as CheatLogWithStudent[])
+      if (data.allStudents) setAllStudents(data.allStudents as StudentInfo[])
     }
   }, [test.id])
 
@@ -137,14 +188,17 @@ export default function TestManagerClient({
     const newClasses = [...current, className]
     const ok = await updateTest({ open_classes: newClasses })
     if (!ok) setActionError(`${className}の開始に失敗しました`)
+    else setTest((prev) => ({ ...prev, open_classes: newClasses }))
     setLoadingClass(null)
   }
 
   const handleOpenTest = async () => {
     setLoading(true)
     setActionError('')
-    const ok = await updateTest({ status: 'open', opened_at: new Date().toISOString() })
+    const openedAt = new Date().toISOString()
+    const ok = await updateTest({ status: 'open', opened_at: openedAt })
     if (!ok) setActionError('テスト開始に失敗しました')
+    else setTest((prev) => ({ ...prev, status: 'open', opened_at: openedAt }))
     setLoading(false)
   }
 
@@ -168,6 +222,49 @@ export default function TestManagerClient({
     setSavingSchedule(false)
   }
 
+  // クラス別予約を解除
+  const handleCancelClassSchedule = async (cls: string) => {
+    if (!confirm(`${cls} の予約を解除しますか？`)) return
+    setSavingSchedule(true)
+    const current = { ...(test.scheduled_class_starts ?? {}) }
+    delete current[cls]
+    const ok = await updateTest({ scheduled_class_starts: current })
+    if (ok) setTest((prev) => ({ ...prev, scheduled_class_starts: current }))
+    setSavingSchedule(false)
+  }
+
+  // モーダル：今すぐ開始
+  const handleModalImmediateStart = async () => {
+    const target = startModal.target
+    setStartModal({ open: false, target: 'all' })
+    if (target === 'all') {
+      await handleOpenTest()
+    } else {
+      await handleOpenClass(target)
+    }
+  }
+
+  // モーダル：予約開始を保存
+  const handleModalScheduledStart = async () => {
+    if (!modalScheduledAt) return
+    setSavingSchedule(true)
+    const target = startModal.target
+    const isoValue = new Date(modalScheduledAt).toISOString()
+    if (target === 'all') {
+      const ok = await updateTest({ scheduled_at: isoValue })
+      if (!ok) setActionError('予約の保存に失敗しました')
+      else { setTest((prev) => ({ ...prev, scheduled_at: isoValue })); setScheduledAt(modalScheduledAt) }
+    } else {
+      const current = test.scheduled_class_starts ?? {}
+      const updated = { ...current, [target]: isoValue }
+      const ok = await updateTest({ scheduled_class_starts: updated })
+      if (!ok) setActionError('予約の保存に失敗しました')
+      else setTest((prev) => ({ ...prev, scheduled_class_starts: updated }))
+    }
+    setSavingSchedule(false)
+    setStartModal({ open: false, target: 'all' })
+  }
+
   // 提出をリセット（回答削除 + セッション未提出に戻す）
   const handleResetSession = async (sessionId: string, studentName: string) => {
     if (!confirm(`${studentName} の提出をリセットしますか？\n回答データが削除され、もう一度受け直せるようになります。`)) return
@@ -185,6 +282,123 @@ export default function TestManagerClient({
       setActionError('リセットに失敗しました')
     } finally {
       setResettingId(null)
+    }
+  }
+
+  // 修正モーダルを開く
+  const handleOpenEdit = (row: TableRow) => {
+    setEditTarget(row)
+    setEditScore(row.score !== null ? String(row.score) : '')
+    if (row.is_absent) setEditStatus('absent')
+    else if (row.is_submitted) setEditStatus('submitted')
+    else setEditStatus('none')
+  }
+
+  // 修正を保存
+  const handleSaveEdit = async () => {
+    if (!editTarget) return
+    setEditSaving(true)
+    const scoreVal = editScore.trim() === '' ? null : Number(editScore)
+    try {
+      const res = await fetch('/api/teacher/update-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          testId: test.id,
+          studentId: editTarget.studentId,
+          sessionId: editTarget.sessionId,
+          score: editStatus === 'absent' ? null : scoreVal,
+          is_submitted: editStatus === 'submitted',
+          is_absent: editStatus === 'absent',
+        }),
+      })
+      if (!res.ok) throw new Error('failed')
+      await fetchData()
+      setEditTarget(null)
+    } catch {
+      setActionError('更新に失敗しました')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  // チェックボックス操作
+  const handleSelectToggle = (studentId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(studentId)) next.delete(studentId)
+      else next.add(studentId)
+      return next
+    })
+  }
+
+  const handleSelectAll = (rows: TableRow[]) => {
+    if (selectedIds.size === rows.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(rows.map((r) => r.studentId)))
+    }
+  }
+
+  // 一括：欠席にする
+  const handleBulkAbsent = async (rows: TableRow[]) => {
+    const targets = rows.filter((r) => selectedIds.has(r.studentId))
+    if (targets.length === 0) return
+    if (!confirm(`${targets.length}人を欠席にしますか？`)) return
+    setBulkLoading(true)
+    try {
+      await Promise.all(
+        targets.map((row) =>
+          fetch('/api/teacher/update-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              testId: test.id,
+              studentId: row.studentId,
+              sessionId: row.sessionId,
+              score: null,
+              is_submitted: false,
+              is_absent: true,
+            }),
+          })
+        )
+      )
+      await fetchData()
+      setSelectedIds(new Set())
+    } catch {
+      setActionError('一括欠席処理に失敗しました')
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
+  // 一括：リセット（提出済みのみ対象）
+  const handleBulkReset = async (rows: TableRow[]) => {
+    const targets = rows.filter(
+      (r) => selectedIds.has(r.studentId) && r.sessionId && r.is_submitted
+    )
+    if (targets.length === 0) {
+      alert('リセット対象（提出済み）の生徒が選択されていません')
+      return
+    }
+    if (!confirm(`${targets.length}人の提出をリセットしますか？\n回答データが削除されます。`)) return
+    setBulkLoading(true)
+    try {
+      await Promise.all(
+        targets.map((row) =>
+          fetch('/api/teacher/reset-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId: row.sessionId }),
+          })
+        )
+      )
+      await fetchData()
+      setSelectedIds(new Set())
+    } catch {
+      setActionError('一括リセットに失敗しました')
+    } finally {
+      setBulkLoading(false)
     }
   }
 
@@ -240,6 +454,7 @@ export default function TestManagerClient({
     setActionError('')
     const ok = await updateTest({ status: 'waiting', open_classes: null, opened_at: null })
     if (!ok) setActionError('待機状態への変更に失敗しました')
+    else setTest((prev) => ({ ...prev, status: 'waiting', open_classes: null, opened_at: null }))
     setLoading(false)
   }
 
@@ -261,8 +476,10 @@ export default function TestManagerClient({
     if (!confirm('全員の結果を一括公開します。この操作は元に戻せません。よろしいですか？')) return
     setLoading(true)
     setActionError('')
-    const ok = await updateTest({ status: 'published', published_at: new Date().toISOString() })
+    const publishedAt = new Date().toISOString()
+    const ok = await updateTest({ status: 'published', published_at: publishedAt })
     if (!ok) setActionError('結果公開に失敗しました')
+    else setTest((prev) => ({ ...prev, status: 'published', published_at: publishedAt }))
     setLoading(false)
   }
 
@@ -290,23 +507,27 @@ export default function TestManagerClient({
     setPublishingStudent(null)
   }
 
-  const handleDownloadExcel = async () => {
-    const res = await fetch(`/api/teacher/test-answers?testId=${test.id}`)
-    const { answers } = res.ok ? await res.json() : { answers: [] }
+  const handleDownloadExcel = () => {
+    // クラス・出席番号順でソート（毎回確実に）
+    const sorted = [...tableRows].sort((a, b) => {
+      const ak = `${a.class_name}${String(a.seat_number).padStart(3, '0')}`
+      const bk = `${b.class_name}${String(b.seat_number).padStart(3, '0')}`
+      return ak.localeCompare(bk)
+    })
 
-    const rows = sessions.map((s) => {
-      const studentAnswers = (answers ?? []).filter((a) => a.session_id === s.id)
-      const score = s.score ?? 0
+    const rows = sorted.map((row) => {
+      const absent = row.is_absent === true
+      const scoreVal = !absent && row.score !== null ? row.score : null
       return {
-        クラス: s.students?.class_name ?? '',
-        出席番号: s.students?.seat_number ?? '',
-        名前: s.students?.name ?? '',
-        テストネーム: s.students?.test_name ?? '',
-        点数: score,
-        提出済み: s.is_submitted ? '済' : '未',
-        開始時刻: s.started_at ? new Date(s.started_at).toLocaleString('ja-JP') : '',
-        提出時刻: s.submitted_at ? new Date(s.submitted_at).toLocaleString('ja-JP') : '',
-        回答数: studentAnswers.length,
+        クラス: row.class_name,
+        出席番号: row.seat_number,
+        名前: row.name,
+        テストネーム: row.test_name,
+        点数: scoreVal !== null ? scoreVal : '',
+        ポイント: test.mode === 50 && scoreVal !== null ? calcPoints(scoreVal) : '',
+        提出済み: absent ? '欠席' : row.is_submitted ? '済' : '未',
+        開始時刻: row.started_at ? new Date(row.started_at).toLocaleString('ja-JP') : '',
+        提出時刻: row.submitted_at ? new Date(row.submitted_at).toLocaleString('ja-JP') : '',
       }
     })
 
@@ -318,7 +539,45 @@ export default function TestManagerClient({
 
   const submittedCount = sessions.filter((s) => s.is_submitted).length
   const startedCount = sessions.filter((s) => s.started_at).length
-  const pagesMap = Object.fromEntries(sessions.map((s) => [s.id, s.current_page]))
+
+  // セッションあり・なし両方を統合した表示行
+  const sessionByStudentId = Object.fromEntries(sessions.map((s) => [s.student_id, s]))
+  const tableRows: TableRow[] = [
+    // セッションあり
+    ...sessions.map((s) => ({
+      sessionId: s.id,
+      studentId: s.student_id,
+      class_name: s.students?.class_name ?? '',
+      seat_number: s.students?.seat_number ?? 0,
+      name: s.students?.name ?? '-',
+      test_name: s.students?.test_name ?? '',
+      started_at: s.started_at,
+      submitted_at: s.submitted_at,
+      is_submitted: s.is_submitted,
+      is_absent: (s as Session & { is_absent?: boolean }).is_absent ?? false,
+      score: s.score,
+    })),
+    // セッションなし（未受験者）
+    ...allStudents
+      .filter((st) => !sessionByStudentId[st.id])
+      .map((st) => ({
+        sessionId: null,
+        studentId: st.id,
+        class_name: st.class_name,
+        seat_number: st.seat_number,
+        name: st.name,
+        test_name: st.test_name,
+        started_at: null,
+        submitted_at: null,
+        is_submitted: false,
+        is_absent: false,
+        score: null,
+      })),
+  ].sort((a, b) => {
+    const ak = `${a.class_name}${String(a.seat_number).padStart(3, '0')}`
+    const bk = `${b.class_name}${String(b.seat_number).padStart(3, '0')}`
+    return ak.localeCompare(bk)
+  })
 
   const cheatEventLabel: Record<string, string> = {
     tab_leave: 'タブ離脱',
@@ -498,9 +757,9 @@ export default function TestManagerClient({
         ))}
       </div>
 
-      {/* テスト開始（予約開始 + クラス別開始） */}
+      {/* テスト開始 */}
       {(test.status === 'waiting' || test.status === 'open') && (
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-5">
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-gray-800">テスト開始</h2>
             {(test.status === 'open' || (test.open_classes ?? []).length > 0) && (
@@ -514,89 +773,100 @@ export default function TestManagerClient({
             )}
           </div>
 
-          {/* 予約開始（waiting のみ） */}
-          {test.status === 'waiting' && (
-            <div className="space-y-3 pb-4 border-b border-gray-100">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">① 予約開始</p>
-                  <p className="text-xs text-gray-400 mt-0.5">指定日時に全クラスを自動で開始します</p>
-                </div>
-                {test.scheduled_at && (
-                  <span className="text-xs bg-yellow-100 text-yellow-700 font-medium px-3 py-1 rounded-full">
-                    🕐 予約済み
-                  </span>
-                )}
+          {/* 予約済み情報（全クラス一括） */}
+          {test.status === 'waiting' && test.scheduled_at && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-yellow-700 mb-0.5">🕐 全クラス一括 — 予約開始</p>
+                <p className="text-sm font-semibold text-yellow-800">
+                  {new Date(test.scheduled_at).toLocaleString('ja-JP', {
+                    year: 'numeric', month: 'long', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit',
+                  })}
+                </p>
               </div>
-              {test.scheduled_at && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-yellow-800">
-                      {new Date(test.scheduled_at).toLocaleString('ja-JP', {
-                        year: 'numeric', month: 'long', day: 'numeric',
-                        hour: '2-digit', minute: '2-digit',
-                      })} に自動開始
-                    </p>
-                    <p className="text-xs text-yellow-600 mt-0.5">その時刻になると全クラスが一斉に開始されます</p>
-                  </div>
-                  <button
-                    onClick={handleCancelSchedule}
-                    disabled={savingSchedule}
-                    className="text-xs text-red-500 border border-red-200 bg-white hover:bg-red-50 px-3 py-1.5 rounded-lg font-medium transition ml-3 shrink-0"
-                  >
-                    予約を解除
-                  </button>
-                </div>
-              )}
-              <div className="flex items-end gap-3 flex-wrap">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">日時を選択</label>
-                  <input
-                    type="datetime-local"
-                    value={scheduledAt}
-                    onChange={(e) => setScheduledAt(e.target.value)}
-                    min={new Date().toISOString().slice(0, 16)}
-                    className="border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <button
-                  onClick={handleSaveSchedule}
-                  disabled={savingSchedule || !scheduledAt}
-                  className="bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-50"
-                >
-                  {savingSchedule ? '保存中...' : test.scheduled_at ? '予約を更新' : '予約を設定'}
-                </button>
-              </div>
+              <button
+                onClick={handleCancelSchedule}
+                disabled={savingSchedule}
+                className="text-xs text-red-500 border border-red-200 bg-white hover:bg-red-50 px-3 py-1.5 rounded-lg font-medium transition ml-3 shrink-0"
+              >
+                解除
+              </button>
             </div>
           )}
 
-          {/* クラス別開始 */}
-          {classes.length > 0 && (
+          {/* 予約済み情報（クラス別） */}
+          {test.status === 'waiting' && Object.keys(test.scheduled_class_starts ?? {}).length > 0 && (
+            <div className="space-y-2">
+              {Object.entries(test.scheduled_class_starts ?? {}).map(([cls, isoTime]) => (
+                <div key={cls} className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-blue-700 mb-0.5">🕐 {cls} — 予約開始</p>
+                    <p className="text-sm font-semibold text-blue-800">
+                      {new Date(isoTime).toLocaleString('ja-JP', {
+                        year: 'numeric', month: 'long', day: 'numeric',
+                        hour: '2-digit', minute: '2-digit',
+                      })}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleCancelClassSchedule(cls)}
+                    disabled={savingSchedule}
+                    className="text-xs text-red-500 border border-red-200 bg-white hover:bg-red-50 px-3 py-1.5 rounded-lg font-medium transition ml-3 shrink-0"
+                  >
+                    解除
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* クラス別ボタン */}
+          {visibleClasses.length > 0 && (
             <div className="space-y-3">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">② クラス別開始</p>
               <div className="flex flex-wrap gap-2">
-                {classes.map((cls) => {
+                {visibleClasses.map((cls) => {
                   const opened = (test.open_classes ?? []).includes(cls) || test.status === 'open'
+                  const isScheduled = !!(test.scheduled_class_starts ?? {})[cls]
                   const isLoading = loadingClass === cls
                   return (
                     <button
                       key={cls}
-                      onClick={() => handleOpenClass(cls)}
+                      onClick={() => {
+                        if (opened || test.status === 'open') return
+                        const existing = (test.scheduled_class_starts ?? {})[cls]
+                        const localExisting = existing
+                          ? (() => { const d = new Date(existing); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16) })()
+                          : ''
+                        setModalScheduledAt(localExisting)
+                        setModalScheduleMode(false)
+                        setStartModal({ open: true, target: cls })
+                      }}
                       disabled={opened || isLoading || test.status === 'open'}
                       className={`px-4 py-2 rounded-xl text-sm font-semibold transition active:scale-95 ${
                         opened
                           ? 'bg-green-100 text-green-700 cursor-default'
+                          : isScheduled
+                          ? 'bg-yellow-100 text-yellow-800 border border-yellow-300 hover:bg-yellow-200'
                           : 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50'
                       }`}
                     >
-                      {isLoading ? '...' : opened ? `${cls} ✓` : `${cls} 開始`}
+                      {isLoading ? '...' : opened ? `${cls} ✓` : isScheduled ? `${cls} 🕐` : cls}
                     </button>
                   )
                 })}
               </div>
               {test.status === 'waiting' && (
                 <button
-                  onClick={handleOpenTest}
+                  onClick={() => {
+                    const existing = test.scheduled_at
+                    const localExisting = existing
+                      ? (() => { const d = new Date(existing); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16) })()
+                      : ''
+                    setModalScheduledAt(localExisting)
+                    setModalScheduleMode(false)
+                    setStartModal({ open: true, target: 'all' })
+                  }}
                   disabled={loading}
                   className="w-full bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 active:scale-95 transition disabled:opacity-50"
                 >
@@ -641,12 +911,12 @@ export default function TestManagerClient({
           </div>
 
           {/* クラスごと公開 — 開始済みクラスのみ・全員公開済みでなければ表示 */}
-          {test.status !== 'published' && ((test.status === 'open' ? classes : (test.open_classes ?? [])).length > 0) && (
+          {test.status !== 'published' && ((test.status === 'open' ? visibleClasses : (test.open_classes ?? [])).length > 0) && (
             <div className="space-y-2 pt-3 border-t border-gray-100">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">② クラスごとに公開</p>
               <p className="text-xs text-gray-400">開始済みのクラスに結果を返します</p>
               <div className="flex flex-wrap gap-2">
-                {(test.status === 'open' ? classes : (test.open_classes ?? [])).map((cls) => {
+                {(test.status === 'open' ? visibleClasses : (test.open_classes ?? [])).map((cls) => {
                   const published = (test.published_classes ?? []).includes(cls)
                   const isLoading = publishingClass === cls
                   return (
@@ -784,81 +1054,311 @@ export default function TestManagerClient({
       {/* 生徒状況一覧 */}
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="font-semibold text-gray-800">生徒ステータス</h2>
-          <button
-            onClick={fetchData}
-            className="text-sm text-blue-600 hover:text-blue-800 transition"
-          >
+          <h2 className="font-semibold text-gray-800">
+            生徒ステータス
+            <span className="ml-2 text-xs text-gray-400 font-normal">
+              提出済み {submittedCount} / 全体 {tableRows.length}
+            </span>
+          </h2>
+          <button onClick={fetchData} className="text-sm text-blue-600 hover:text-blue-800 transition">
             更新
           </button>
         </div>
-        {sessions.length === 0 ? (
-          <p className="text-center text-gray-400 py-8 text-sm">まだ接続している生徒がいません</p>
+        {tableRows.length === 0 ? (
+          <p className="text-center text-gray-400 py-8 text-sm">まだデータがありません</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-600">
                 <tr>
+                  {/* 全選択チェックボックス */}
+                  <th className="pl-4 pr-2 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.size === tableRows.length && tableRows.length > 0}
+                      onChange={() => handleSelectAll(tableRows)}
+                      className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                    />
+                  </th>
                   <th className="px-4 py-3 text-left">クラス</th>
                   <th className="px-4 py-3 text-left">番号</th>
                   <th className="px-4 py-3 text-left">名前</th>
                   <th className="px-4 py-3 text-left">開始時刻</th>
-                  <th className="px-4 py-3 text-center">ページ</th>
                   <th className="px-4 py-3 text-center">提出</th>
                   <th className="px-4 py-3 text-right">点数</th>
-                  <th className="px-4 py-3 text-center">再受験</th>
+                  {test.mode === 50 && <th className="px-4 py-3 text-right">pt</th>}
+                  <th className="px-4 py-3 text-center">修正</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {sessions
-                  .sort((a, b) => {
-                    const aName = `${a.students?.class_name}${String(a.students?.seat_number).padStart(3, '0')}`
-                    const bName = `${b.students?.class_name}${String(b.students?.seat_number).padStart(3, '0')}`
-                    return aName.localeCompare(bName)
-                  })
-                  .map((s) => (
-                    <tr key={s.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-700">{s.students?.class_name ?? '-'}</td>
-                      <td className="px-4 py-3 text-gray-700">{s.students?.seat_number ?? '-'}</td>
-                      <td className="px-4 py-3 text-gray-800 font-medium">{s.students?.name ?? '-'}</td>
-                      <td className="px-4 py-3 text-gray-500">
-                        {s.started_at ? new Date(s.started_at).toLocaleTimeString('ja-JP') : '未開始'}
+                {tableRows.map((row) => {
+                  const submitted = row.is_submitted === true
+                  const absent = row.is_absent === true
+                  const hasData = row.sessionId !== null
+                  const isChecked = selectedIds.has(row.studentId)
+                  const dash = <span className="text-gray-300">———</span>
+                  return (
+                    <tr
+                      key={row.sessionId ?? `ns-${row.studentId}`}
+                      className={`hover:bg-gray-50 ${isChecked ? 'bg-blue-50' : ''}`}
+                    >
+                      <td className="pl-4 pr-2 py-3">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleSelectToggle(row.studentId)}
+                          className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">{row.class_name || '-'}</td>
+                      <td className="px-4 py-3 text-gray-700">{row.seat_number || '-'}</td>
+                      <td className="px-4 py-3 text-gray-800 font-medium">{row.name}</td>
+                      <td className="px-4 py-3 text-gray-500 text-sm">
+                        {hasData && row.started_at
+                          ? new Date(row.started_at).toLocaleTimeString('ja-JP')
+                          : dash}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {s.started_at ? (
-                          <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
-                            {pagesMap[s.id] ?? 1}ページ
-                          </span>
-                        ) : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {s.is_submitted ? (
+                        {absent ? (
+                          <span className="text-orange-500 font-medium text-xs bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">欠席</span>
+                        ) : submitted ? (
                           <span className="text-green-600 font-medium">済</span>
                         ) : (
-                          <span className="text-gray-400">未</span>
+                          <span className="text-red-500 font-medium">未</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right font-medium text-gray-800">
-                        {s.score !== null ? `${s.score}点` : '-'}
+                        {!absent && row.score !== null ? `${row.score}点` : dash}
                       </td>
+                      {test.mode === 50 && (
+                        <td className="px-4 py-3 text-right text-purple-700 font-medium">
+                          {!absent && row.score !== null ? `${calcPoints(row.score)}pt` : dash}
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-center">
-                        {s.is_submitted && (
-                          <button
-                            onClick={() => handleResetSession(s.id, s.students?.name ?? '生徒')}
-                            disabled={resettingId === s.id}
-                            className="text-xs text-orange-600 border border-orange-300 bg-orange-50 hover:bg-orange-100 px-2 py-1 rounded-lg font-medium transition disabled:opacity-50"
-                          >
-                            {resettingId === s.id ? '...' : 'リセット'}
-                          </button>
-                        )}
+                        <button
+                          onClick={() => handleOpenEdit(row)}
+                          className="text-xs text-blue-600 border border-blue-300 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg font-medium transition"
+                        >
+                          修正
+                        </button>
                       </td>
                     </tr>
-                  ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
+
+      {/* 一括操作バー（下からスライド） */}
+      <div
+        className={`fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300 ease-out ${
+          selectedIds.size > 0 ? 'translate-y-0' : 'translate-y-full'
+        }`}
+      >
+        <div className="bg-white border-t-2 border-blue-200 shadow-2xl">
+          <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <span className="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shrink-0">
+                {selectedIds.size}人
+              </span>
+              <span className="text-sm font-medium text-gray-700 truncate">を選択中</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleBulkAbsent(tableRows)}
+                disabled={bulkLoading}
+                className="bg-orange-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-orange-600 active:scale-95 transition disabled:opacity-50"
+              >
+                {bulkLoading ? '処理中...' : '欠席にする'}
+              </button>
+              <button
+                onClick={() => handleBulkReset(tableRows)}
+                disabled={bulkLoading}
+                className="bg-red-100 text-red-700 border border-red-300 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-red-200 active:scale-95 transition disabled:opacity-50"
+              >
+                {bulkLoading ? '処理中...' : 'リセット'}
+              </button>
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                disabled={bulkLoading}
+                className="text-gray-500 border border-gray-200 px-3 py-2 rounded-xl text-sm hover:bg-gray-50 transition"
+              >
+                解除
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 修正モーダル */}
+      {editTarget && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-5">
+            <div>
+              <h3 className="font-bold text-gray-800 text-lg">データ修正</h3>
+              <p className="text-sm text-gray-500 mt-0.5">
+                {editTarget.class_name} {editTarget.seat_number}番　{editTarget.name}
+              </p>
+            </div>
+
+            {/* 提出状態 */}
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-gray-700">ステータス</label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="editStatus"
+                    checked={editStatus === 'none'}
+                    onChange={() => setEditStatus('none')}
+                    className="accent-gray-500"
+                  />
+                  <span className="text-sm text-red-500 font-medium">未</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="editStatus"
+                    checked={editStatus === 'submitted'}
+                    onChange={() => setEditStatus('submitted')}
+                    className="accent-green-600"
+                  />
+                  <span className="text-sm text-green-600 font-medium">済</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="editStatus"
+                    checked={editStatus === 'absent'}
+                    onChange={() => setEditStatus('absent')}
+                    className="accent-orange-500"
+                  />
+                  <span className="text-sm text-orange-500 font-medium">欠席</span>
+                </label>
+              </div>
+            </div>
+
+            {/* 点数（欠席時は非表示） */}
+            {editStatus !== 'absent' && (
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-gray-700">
+                  点数（0〜{test.mode === 50 ? 100 : test.mode === 300 ? 300 : test.mode}）
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={test.mode === 300 ? 300 : test.mode === 50 ? 100 : test.mode}
+                  value={editScore}
+                  onChange={(e) => setEditScore(e.target.value)}
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  placeholder="点数を入力"
+                />
+                {test.mode === 50 && editScore.trim() !== '' && (
+                  <p className="text-xs text-purple-600 font-medium">
+                    → {calcPoints(Number(editScore))} pt
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* 欠席時のメッセージ */}
+            {editStatus === 'absent' && (
+              <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 text-sm text-orange-700">
+                欠席として記録します。点数・ポイントは空白になり、ランキングには含まれません。
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={handleSaveEdit}
+                disabled={editSaving}
+                className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl font-semibold hover:bg-blue-700 transition disabled:opacity-50"
+              >
+                {editSaving ? '保存中...' : '保存'}
+              </button>
+              <button
+                onClick={() => setEditTarget(null)}
+                className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl font-medium hover:bg-gray-50 transition"
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 開始モーダル */}
+      {startModal.open && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-bold text-gray-800 text-lg">
+              {startModal.target === 'all' ? '全クラス一括' : startModal.target} を開始
+            </h3>
+
+            {!modalScheduleMode ? (
+              <div className="space-y-3">
+                <button
+                  onClick={handleModalImmediateStart}
+                  disabled={loading}
+                  className="w-full bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 active:scale-95 transition disabled:opacity-50"
+                >
+                  今すぐ開始
+                </button>
+                <button
+                  onClick={() => setModalScheduleMode(true)}
+                  className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 active:scale-95 transition"
+                >
+                  予約開始
+                </button>
+                <button
+                  onClick={() => setStartModal({ open: false, target: 'all' })}
+                  className="w-full text-gray-500 py-2 text-sm hover:text-gray-700 transition"
+                >
+                  キャンセル
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1.5">開始日時を選択</label>
+                  <input
+                    type="datetime-local"
+                    value={modalScheduledAt}
+                    onChange={(e) => setModalScheduledAt(e.target.value)}
+                    min={new Date().toISOString().slice(0, 16)}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    autoFocus
+                  />
+                </div>
+                <button
+                  onClick={handleModalScheduledStart}
+                  disabled={!modalScheduledAt || savingSchedule}
+                  className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 active:scale-95 transition disabled:opacity-50"
+                >
+                  {savingSchedule ? '保存中...' : '予約する'}
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setModalScheduleMode(false)}
+                    className="flex-1 text-gray-500 border border-gray-200 py-2 rounded-xl text-sm hover:bg-gray-50 transition"
+                  >
+                    戻る
+                  </button>
+                  <button
+                    onClick={() => setStartModal({ open: false, target: 'all' })}
+                    className="flex-1 text-gray-500 border border-gray-200 py-2 rounded-xl text-sm hover:bg-gray-50 transition"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 問題プレビューモーダル */}
       {showPreview && (

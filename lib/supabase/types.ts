@@ -1,4 +1,4 @@
-export type TestMode = 50 | 300
+export type TestMode = number
 export type TestStatus = 'waiting' | 'open' | 'finished' | 'published'
 export type CheatEventType = 'tab_leave' | 'app_switch' | 'split_view'
 
@@ -35,6 +35,7 @@ export interface Test {
   published_classes: string[] | null
   published_student_ids: string[] | null
   teacher_message: string | null
+  scheduled_class_starts: Record<string, string> | null
 }
 
 /** 生徒がテスト結果を閲覧できるか判定 */
@@ -81,6 +82,8 @@ export interface Session {
   submitted_at: string | null
   score: number | null
   is_submitted: boolean
+  is_absent: boolean
+  is_practice: boolean
   current_page: number
   created_at: string
 }
@@ -91,6 +94,7 @@ export interface Answer {
   question_id: string
   selected_answer: number | null
   is_correct: boolean | null
+  flagged: boolean
 }
 
 export interface CheatLog {
@@ -110,15 +114,16 @@ export interface Point {
   created_at: string
 }
 
-// ポイント換算
+// ポイント換算（50問テスト用：各2点・偶数点のみ）
+// 100→10 / 98→7 / 96・94→6 / 92・90→5 / 88・86→4 / 84・82→3 / 80・78→2 / 76・74→1 / 72以下→0
 export function calcPoints(score: number): number {
   if (score === 100) return 10
-  if (score >= 96) return 7
-  if (score >= 92) return 6
-  if (score >= 88) return 5
-  if (score >= 84) return 4
-  if (score >= 80) return 3
-  if (score >= 76) return 2
-  if (score >= 72) return 1
+  if (score >= 98) return 7
+  if (score >= 94) return 6
+  if (score >= 90) return 5
+  if (score >= 86) return 4
+  if (score >= 82) return 3
+  if (score >= 78) return 2
+  if (score >= 74) return 1
   return 0
 }

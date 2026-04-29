@@ -10,6 +10,7 @@ type EditForm = {
   class_name: string
   seat_number: string
   student_id: string
+  test_name: string
 }
 
 export default function StudentsPage() {
@@ -25,8 +26,10 @@ export default function StudentsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
 
+  const [classGroup, setClassGroup] = useState<'numeric' | 'alpha' | 'other'>('numeric')
+
   const [editingStudent, setEditingStudent] = useState<Student | null>(null)
-  const [editForm, setEditForm] = useState<EditForm>({ name: '', class_name: '', seat_number: '', student_id: '' })
+  const [editForm, setEditForm] = useState<EditForm>({ name: '', class_name: '', seat_number: '', student_id: '', test_name: '' })
   const [saving, setSaving] = useState(false)
   const [editError, setEditError] = useState('')
 
@@ -49,6 +52,13 @@ export default function StudentsPage() {
   useEffect(() => { fetchStudents() }, [])
 
   const filtered = students.filter((s) => {
+    // クラスグループフィルター
+    const isNumeric = /^\d/.test(s.class_name)
+    const isAlpha = /^[A-Za-z]/.test(s.class_name)
+    if (classGroup === 'numeric' && !isNumeric) return false
+    if (classGroup === 'alpha' && !isAlpha) return false
+    if (classGroup === 'other' && (isNumeric || isAlpha)) return false
+    // テキスト検索
     if (!searchText) return true
     const q = searchText.toLowerCase()
     return (
@@ -150,6 +160,7 @@ export default function StudentsPage() {
       class_name: s.class_name,
       seat_number: String(s.seat_number),
       student_id: s.student_id,
+      test_name: s.test_name ?? '',
     })
     setEditError('')
   }
@@ -172,6 +183,7 @@ export default function StudentsPage() {
           class_name: editForm.class_name.trim(),
           seat_number: isNaN(seatNum) ? 0 : seatNum,
           student_id: editForm.student_id.trim(),
+          test_name: editForm.test_name.trim() || null,
         })
         .eq('id', editingStudent.id)
 
@@ -280,6 +292,7 @@ export default function StudentsPage() {
                 { label: '名前', key: 'name', type: 'text', placeholder: '山田 太郎' },
                 { label: 'クラス', key: 'class_name', type: 'text', placeholder: 'A' },
                 { label: '出席番号', key: 'seat_number', type: 'number', placeholder: '1' },
+                { label: 'テストネーム', key: 'test_name', type: 'text', placeholder: 'アルファ（空欄で削除）' },
               ].map(({ label, key, type, placeholder }) => (
                 <div key={key}>
                   <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
@@ -390,10 +403,42 @@ export default function StudentsPage() {
       {error && <div className="bg-red-50 text-red-700 rounded-xl p-4 text-sm">{error}</div>}
       {success && <div className="bg-green-50 text-green-700 rounded-xl p-4 text-sm">{success}</div>}
 
+      {/* クラスグループタブ */}
+      <div className="flex gap-2 flex-wrap">
+        {[
+          { key: 'numeric', label: '1〜6組', emoji: '🔢' },
+          { key: 'alpha',   label: 'A〜D組', emoji: '🔤' },
+          { key: 'other',   label: 'その他',  emoji: '🧪' },
+        ].map(({ key, label, emoji }) => {
+          const count = students.filter((s) => {
+            const isNumeric = /^\d/.test(s.class_name)
+            const isAlpha = /^[A-Za-z]/.test(s.class_name)
+            if (key === 'numeric') return isNumeric
+            if (key === 'alpha') return isAlpha
+            return !isNumeric && !isAlpha
+          }).length
+          return (
+            <button
+              key={key}
+              onClick={() => setClassGroup(key as 'numeric' | 'alpha' | 'other')}
+              className={`px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-1.5 ${
+                classGroup === key
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <span>{emoji}</span>
+              <span>{label}</span>
+              <span className={`text-xs px-1.5 py-0.5 rounded-full ${classGroup === key ? 'bg-blue-500 text-blue-100' : 'bg-gray-100 text-gray-500'}`}>{count}</span>
+            </button>
+          )
+        })}
+      </div>
+
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
-            <h2 className="font-semibold text-gray-800">生徒一覧 ({students.length}名)</h2>
+            <h2 className="font-semibold text-gray-800">生徒一覧 ({filtered.length}名)</h2>
             {selectedIds.size > 0 && (
               <button onClick={handleDeleteSelected} disabled={deleting}
                 className="bg-red-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-red-600 transition disabled:opacity-50">

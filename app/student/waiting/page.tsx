@@ -25,7 +25,9 @@ export default async function WaitingPage({
   if (!student) redirect('/auth/login')
   if (!student.test_name) redirect('/student/change-password')
 
-  // testIdが指定されていればそのテストを、なければ最新のものを取得
+  const studentClass = student.class_name ?? ''
+
+  // testIdが指定されていればそのテストを、なければ最新のopenテストを取得
   let test = null
   if (testId) {
     const { data } = await admin
@@ -38,11 +40,11 @@ export default async function WaitingPage({
   }
 
   if (!test) {
-    // フォールバック: 最新のwaiting/openテスト
+    // フォールバック: 最新のopenテスト
     const { data } = await admin
       .from('tests')
       .select('*')
-      .in('status', ['waiting', 'open'])
+      .eq('status', 'open')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -54,14 +56,22 @@ export default async function WaitingPage({
       <div className="min-h-screen flex items-center justify-center bg-blue-50 p-4">
         <div className="bg-white rounded-2xl shadow p-8 text-center max-w-sm w-full space-y-3">
           <div className="text-4xl">⏳</div>
-          <p className="text-gray-600">現在実施中のテストはありません</p>
+          <p className="text-gray-600">現在受付中のテストはありません</p>
           <a href="/student" className="text-blue-600 text-sm hover:underline">ホームに戻る</a>
         </div>
       </div>
     )
   }
 
-  // 既存セッションを確認（既に開始済みかどうか）
+  // この生徒がこのテストにアクセスできるか確認
+  const classOpen = (test.open_classes ?? []).includes(studentClass)
+  const isFullyOpen = test.status === 'open'
+  if (!isFullyOpen && !classOpen) {
+    // まだ開放されていないクラスはホームに戻す
+    redirect('/student')
+  }
+
+  // 既存セッションを確認（既に提出済みかどうか）
   const { data: existingSession } = await admin
     .from('sessions')
     .select('*')
@@ -72,6 +82,11 @@ export default async function WaitingPage({
   // 既に提出済みなら結果待ち画面へ
   if (existingSession?.is_submitted) {
     redirect('/student/waiting-result')
+  }
+
+  // 既にセッションがあれば（中断中）テスト画面へ直接
+  if (existingSession && !existingSession.is_submitted) {
+    redirect('/student/test')
   }
 
   return (

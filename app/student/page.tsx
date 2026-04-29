@@ -57,13 +57,33 @@ export default async function StudentHomePage() {
     .limit(1)
     .maybeSingle()
 
-  // 過去の全提出済みセッションを取得（グラフ・履歴用）
+  // 過去の全提出済みセッションを取得（グラフ・履歴用）。練習セッションは除外
   const { data: pastSessions } = await admin
     .from('sessions')
     .select('id, score, submitted_at, tests(id, title, mode, status, pass_score)')
     .eq('student_id', student.id)
     .eq('is_submitted', true)
+    .neq('is_practice', true)
     .order('submitted_at', { ascending: false })
+
+  // 練習セッションを取得（テストごとに最新1件のみ表示）
+  const { data: allPracticeSessions } = await admin
+    .from('sessions')
+    .select('id, test_id, score, submitted_at, tests(id, title, mode, pass_score)')
+    .eq('student_id', student.id)
+    .eq('is_submitted', true)
+    .eq('is_practice', true)
+    .order('submitted_at', { ascending: false })
+
+  // テストIDごとに最新の練習セッションを1件だけ残す
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const latestPracticeMap: Record<string, any> = {}
+  for (const s of allPracticeSessions ?? []) {
+    if (!latestPracticeMap[s.test_id]) {
+      latestPracticeMap[s.test_id] = s
+    }
+  }
+  const practiceSessions: typeof allPracticeSessions = Object.values(latestPracticeMap)
 
   // 最新テスト専用：この生徒がテストを開始したかつ結果が公開されているか確認
   const studentCanSeeLatest = latestTest
@@ -273,6 +293,48 @@ export default async function StudentHomePage() {
                       </div>
                       <div className="text-right">
                         <p className="font-bold text-gray-800">{s.score}点</p>
+                      </div>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 練習結果（テストごとに最新1件） */}
+        {practiceSessions.length > 0 && (
+          <div>
+            <h3 className="text-sm font-bold text-gray-500 mb-3 px-1">🔄 練習モードの結果</h3>
+            <div className="space-y-2">
+              {practiceSessions.map((s) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const test = (s.tests as any) as { id: string; title: string; mode: number; pass_score: number | null } | null
+                if (!test) return null
+                const passed = test.pass_score !== null ? (s.score ?? 0) >= test.pass_score : null
+                return (
+                  <Link
+                    key={s.id}
+                    href={`/student/result?sessionId=${s.id}`}
+                    className="block bg-amber-50 rounded-xl border border-amber-200 px-4 py-3 hover:bg-amber-100 transition"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">練習</span>
+                          <p className="font-semibold text-gray-800 text-sm">{test.title}</p>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {s.submitted_at ? new Date(s.submitted_at).toLocaleDateString('ja-JP') : ''}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-gray-800">{s.score}点</p>
+                        {passed !== null && (
+                          <p className={`text-xs font-medium ${passed ? 'text-green-600' : 'text-red-500'}`}>
+                            {passed ? '合格' : '不合格'}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </Link>

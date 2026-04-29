@@ -7,6 +7,7 @@ type AnswerItem = {
   question_id: string
   selected_answer: number | null
   is_correct: boolean | null
+  flagged: boolean
   order_num: number
   question_text: string
   choice1: string
@@ -18,7 +19,7 @@ type AnswerItem = {
   points: number
 }
 
-type SortMode = 'all' | 'incorrect' | 'correct'
+type SortMode = 'all' | 'incorrect' | 'correct' | 'flagged'
 
 export default function ReviewClient({
   answers,
@@ -34,11 +35,13 @@ export default function ReviewClient({
   const [sortMode, setSortMode] = useState<SortMode>('all')
 
   const correctCount = answers.filter((a) => a.is_correct).length
+  const flaggedCount = answers.filter((a) => a.flagged).length
   const totalCount = answers.length
 
   const filtered = answers.filter((a) => {
     if (sortMode === 'correct') return a.is_correct === true
     if (sortMode === 'incorrect') return a.is_correct === false || a.is_correct === null
+    if (sortMode === 'flagged') return a.flagged === true
     return true
   })
 
@@ -65,23 +68,29 @@ export default function ReviewClient({
         </div>
 
         {/* ソートボタン */}
-        <div className="max-w-2xl mx-auto px-4 pb-3 flex gap-2">
-          {(['all', 'incorrect', 'correct'] as SortMode[]).map((mode) => {
-            const labels = { all: `全問題 (${totalCount})`, incorrect: `不正解 (${totalCount - correctCount})`, correct: `正解 (${correctCount})` }
-            return (
-              <button
-                key={mode}
-                onClick={() => setSortMode(mode)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 ${
-                  sortMode === mode
+        <div className="max-w-2xl mx-auto px-4 pb-3 flex gap-2 flex-wrap">
+          {([
+            { mode: 'all',       label: `全問題 (${totalCount})` },
+            { mode: 'incorrect', label: `不正解 (${totalCount - correctCount})` },
+            { mode: 'correct',   label: `正解 (${correctCount})` },
+            { mode: 'flagged',   label: `★ 自信なし (${flaggedCount})` },
+          ] as { mode: SortMode; label: string }[]).map(({ mode, label }) => (
+            <button
+              key={mode}
+              onClick={() => setSortMode(mode)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 ${
+                mode === 'flagged'
+                  ? sortMode === mode
+                    ? 'bg-yellow-300 text-yellow-900'
+                    : 'bg-yellow-500/70 text-yellow-100 hover:bg-yellow-400/70'
+                  : sortMode === mode
                     ? 'bg-white text-blue-700'
                     : 'bg-blue-500 text-blue-100 hover:bg-blue-400'
-                }`}
-              >
-                {labels[mode]}
-              </button>
-            )
-          })}
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -114,6 +123,9 @@ export default function ReviewClient({
                   {isCorrect ? '✅' : '❌'}
                 </span>
                 <span className="text-sm font-medium text-gray-600">問題 {a.order_num}</span>
+                {a.flagged && (
+                  <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-medium">★ 自信なし</span>
+                )}
                 <span className="ml-auto text-xs text-gray-400">{a.points}点</span>
               </div>
 

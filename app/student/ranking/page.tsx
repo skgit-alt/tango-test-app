@@ -1,21 +1,197 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { calcPoints } from '@/lib/supabase/types'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { calcPoints } from '@/lib/supabase/types'
+import RankingView, { type RankEntry, type Settings, type ClassAvg } from './RankingView'
 
-interface RankEntry {
-  rank: number
-  test_name: string
-  score: number | null
-  points: number | null
+// ─── ランキングデータ取得ロジック ─────────────────────────────────────────────
+
+async function fetchRankingData(
+  admin: ReturnType<typeof createAdminClient>,
+  is20: boolean
+): Promise<{
+  settings: Settings | null
+  rounds: number[]
+  ranking: RankEntry[]
+  classAverages: ClassAvg[]
+}> {
+  const settingsId = is20 ? 2 : 1
+
+  const { data: settings } = await admin
+    .from('ranking_settings')
+    .select('*')
+    .eq('id', settingsId)
+    .maybeSingle()
+
+  if (!settings) {
+    return { settings: null, rounds: [], ranking: [], classAverages: [] }
+  }
+
+  // 対象テストを取得
+  let testsQuery = admin
+    .from('tests')
+    .select('id, round_number, mode')
+    .gte('round_number', settings.from_round)
+    .lte('round_number', settings.to_round)
+    .not('round_number', 'is', null)
+
+  if (is20) {
+    testsQuery = testsQuery.neq('mode', 50).neq('mode', 300)
+  } else {
+    testsQuery = testsQuery.eq('mode', 50)
+  }
+
+  const { data: targetTests } = await testsQuery
+
+  if (!targetTests || targetTests.length === 0) {
+    return { settings, rounds: [], ranking: [], classAverages: [] }
+  }
+
+  const testIds = targetTests.map((t: { id: string }) => t.id)
+  const testRoundMap: Record<string, number> = {}
+  for (const t of targetTests as { id: string; round_number: number }[]) {
+    testRoundMap[t.id] = t.round_number
+  }
+
+  const rounds = Array.from(
+    new Set(targetTests.map((t: { round_number: number }) => t.round_number))
+  ).sort((a, b) => a - b)
+
+  // ─── 個人ランキング ─────────────────────────────────────────────────────────
+
+  interface StudentInfo {
+    name: string
+    class_name: string
+    seat_number: number
+    test_name: string
+    roundValues: Record<string, number>
+    total: number
+  }
+
+  const grouped: Record<string, StudentInfo> = {}
+
+  // 共通: sessions テーブルから集計（50Q: calcPoints換算ポイント / 20Q: スコアそのまま）
+  // 実験用クラス（数字・英字どちらでも始まらないクラス）は除外
+  {
+    const { data: sessions } = await admin
+      .from('sessions')
+      .select('student_id, test_id, score, students(name, class_name, seat_number, test_name)')
+      .in('test_id', testIds)
+      .eq('is_submitted', true)
+      .not('score', 'is', null)
+
+    if (sessions && sessions.length > 0) {
+      const bestScores: Record<string, { score: number; student_id: string; test_id: string; students: unknown }> = {}
+      for (const s of sessions as { student_id: string; test_id: string; score: number; students: unknown }[]) {
+        const key = `${s.student_id}_${s.test_id}`
+        if (!bestScores[key] || s.score > bestScores[key].score) {
+          bestScores[key] = s
+        }
+      }
+
+      for (const s of Object.values(bestScores)) {
+        const st = Array.isArray(s.students)
+          ? (s.students as { name: string; class_name: string; seat_number: number; test_name: string }[])[0]
+          : s.students as { name: string; class_name: string; seat_number: number; test_name: string } | null
+        if (!st) continue
+
+        // クラスフィルタ: 実験用クラスを除外
+        const className = st.class_name ?? ''
+        if (is20) {
+          if (!/^\d/.test(className)) continue   // 20Q: 数字始まりのみ
+        } else {
+          if (!/^[A-Za-z]/.test(className)) continue  // 50Q: 英字始まりのみ
+        }
+
+        const round = testRoundMap[s.test_id]
+        if (!round) continue
+
+        // 50Q はポイント換算、20Q はスコアそのまま
+        const value = is20 ? s.score : calcPoints(s.score)
+
+        if (!grouped[s.student_id]) {
+          grouped[s.student_id] = {
+            name: st.name ?? '',
+            class_name: className,
+            seat_number: st.seat_number ?? 0,
+            test_name: st.test_name ?? '',
+            roundValues: {},
+            total: 0,
+          }
+        }
+
+        // 同じラウンドに複数テストある場合は最高値
+        const existing = grouped[s.student_id].roundValues[String(round)] ?? 0
+        if (value > existing) {
+          grouped[s.student_id].total += value - existing
+          grouped[s.student_id].roundValues[String(round)] = value
+        }
+      }
+    }
+  }
+
+  const ranking: RankEntry[] = Object.entries(grouped)
+    .map(([student_id, v]) => ({ student_id, ...v }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 30)
+    .map((entry, i) => ({ ...entry, rank: i + 1 }))
+
+  // ─── クラス平均点グラフ ─────────────────────────────────────────────────────
+
+  const classAverages: ClassAvg[] = []
+
+  const { data: allSessions } = await admin
+    .from('sessions')
+    .select('student_id, test_id, score, students(class_name)')
+    .in('test_id', testIds)
+    .eq('is_submitted', true)
+    .not('score', 'is', null)
+
+  if (allSessions && allSessions.length > 0) {
+    const bestScoreMap: Record<string, { score: number; test_id: string; class_name: string }> = {}
+    for (const s of allSessions as { student_id: string; test_id: string; score: number; students: unknown }[]) {
+      const st = Array.isArray(s.students)
+        ? (s.students as { class_name: string }[])[0]
+        : s.students as { class_name: string } | null
+      const className = st?.class_name ?? ''
+
+      if (is20) {
+        if (!/^\d/.test(className)) continue
+      } else {
+        if (!/^[A-Za-z]/.test(className)) continue
+      }
+
+      const key = `${s.student_id}_${s.test_id}`
+      if (!bestScoreMap[key] || s.score > bestScoreMap[key].score) {
+        bestScoreMap[key] = { score: s.score, test_id: s.test_id, class_name: className }
+      }
+    }
+
+    const roundClassScores: Record<number, Record<string, number[]>> = {}
+    for (const { score, test_id, class_name } of Object.values(bestScoreMap)) {
+      const round = testRoundMap[test_id]
+      if (!round) continue
+      if (!roundClassScores[round]) roundClassScores[round] = {}
+      if (!roundClassScores[round][class_name]) roundClassScores[round][class_name] = []
+      roundClassScores[round][class_name].push(score)
+    }
+
+    for (const round of rounds) {
+      const classes: Record<string, number> = {}
+      const classScores = roundClassScores[round] ?? {}
+      for (const [cls, scores] of Object.entries(classScores)) {
+        const avg = scores.reduce((a, b) => a + b, 0) / scores.length
+        classes[cls] = Math.round(avg * 10) / 10
+      }
+      classAverages.push({ round, classes })
+    }
+  }
+
+  return { settings, rounds, ranking, classAverages }
 }
 
-interface TotalRankEntry {
-  rank: number
-  test_name: string
-  total_points: number
-}
+// ─── ページコンポーネント ─────────────────────────────────────────────────────
 
 export default async function RankingPage() {
   const supabase = await createClient()
@@ -32,102 +208,20 @@ export default async function RankingPage() {
   if (!student) redirect('/auth/login')
 
   const admin = createAdminClient()
+  const className = student.class_name ?? ''
 
-  // 最新の published テスト
-  const { data: latestTest } = await admin
-    .from('tests')
-    .select('id, title, mode, status')
-    .eq('status', 'published')
-    .order('published_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  // クラス名の最初の文字でモードを判定
+  const show50 = /^[A-Za-z]/.test(className)
+  const show20 = /^\d/.test(className)
+  const showBoth = !show50 && !show20
 
-  // 今回のランキング（最新テスト）
-  let currentRanking: RankEntry[] = []
+  // データ取得
+  const [data50, data20] = await Promise.all([
+    (show50 || showBoth) ? fetchRankingData(admin, false) : Promise.resolve(null),
+    (show20 || showBoth) ? fetchRankingData(admin, true) : Promise.resolve(null),
+  ])
 
-  if (latestTest) {
-    const { data: sessions } = await admin
-      .from('sessions')
-      .select('student_id, score, students(test_name)')
-      .eq('test_id', latestTest.id)
-      .eq('is_submitted', true)
-      .not('score', 'is', null)
-
-    if (sessions) {
-      currentRanking = sessions
-        .filter((s) => {
-          const st = s.students as { test_name: string | null } | { test_name: string | null }[] | null
-          const stObj = Array.isArray(st) ? st[0] : st
-          return stObj?.test_name
-        })
-        .map((s) => {
-          const st = s.students as { test_name: string | null } | { test_name: string | null }[] | null
-          const stObj = Array.isArray(st) ? st[0] : st
-          const score = s.score as number
-          return {
-            test_name: stObj?.test_name ?? '',
-            score,
-            points: latestTest.mode === 50 ? calcPoints(score) : null,
-          }
-        })
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-        .slice(0, 30)
-        .map((entry, i) => ({ ...entry, rank: i + 1 }))
-    }
-  }
-
-  // ランキング設定を取得
-  const { data: rankingSettings } = await admin
-    .from('ranking_settings')
-    .select('*')
-    .eq('id', 1)
-    .maybeSingle()
-
-  // 通算ポイントランキング（設定された期間内）
-  let totalRanking: TotalRankEntry[] = []
-  let settingsLabel = ''
-
-  if (rankingSettings) {
-    settingsLabel = rankingSettings.label || `第${rankingSettings.from_round}回〜第${rankingSettings.to_round}回`
-
-    // 対象テスト（50問モードのround_numberが範囲内）
-    const { data: targetTests } = await admin
-      .from('tests')
-      .select('id')
-      .eq('mode', 50)
-      .gte('round_number', rankingSettings.from_round)
-      .lte('round_number', rankingSettings.to_round)
-      .not('round_number', 'is', null)
-
-    if (targetTests && targetTests.length > 0) {
-      const testIds = targetTests.map((t: { id: string }) => t.id)
-
-      const { data: points } = await admin
-        .from('points')
-        .select('student_id, points_earned, students(test_name)')
-        .in('test_id', testIds)
-
-      if (points && points.length > 0) {
-        const grouped: Record<string, { test_name: string; total: number }> = {}
-        points.forEach((p: any) => {
-          const st = Array.isArray(p.students) ? p.students[0] : p.students
-          if (!st?.test_name) return
-          if (!grouped[p.student_id]) {
-            grouped[p.student_id] = { test_name: st.test_name, total: 0 }
-          }
-          grouped[p.student_id].total += p.points_earned
-        })
-
-        totalRanking = Object.values(grouped)
-          .sort((a, b) => b.total - a.total)
-          .slice(0, 30)
-          .map((entry, i) => ({ rank: i + 1, test_name: entry.test_name, total_points: entry.total }))
-      }
-    }
-  }
-
-  const myCurrentRank = currentRanking.find((r) => r.test_name === student.test_name)
-  const myTotalRank = totalRanking.find((r) => r.test_name === student.test_name)
+  const myTestName = student.test_name ?? ''
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -142,97 +236,57 @@ export default async function RankingPage() {
         </div>
       </header>
 
-      <div className="max-w-lg mx-auto px-4 py-6 space-y-6">
-        {/* 自分の成績サマリー */}
-        {(myCurrentRank || myTotalRank) && (
-          <div className="bg-blue-600 text-white rounded-2xl p-5">
-            <p className="text-blue-200 text-sm mb-2">あなたの成績 ({student.test_name})</p>
-            <div className="flex gap-6">
-              {myCurrentRank && (
-                <div>
-                  <p className="text-2xl font-bold">{myCurrentRank.rank}位</p>
-                  <p className="text-blue-200 text-xs">今回のテスト</p>
-                </div>
-              )}
-              {myTotalRank && (
-                <div>
-                  <p className="text-2xl font-bold">{myTotalRank.total_points}pt</p>
-                  <p className="text-blue-200 text-xs">通算 ({myTotalRank.rank}位)</p>
-                </div>
-              )}
-            </div>
-          </div>
+      <div className="max-w-lg mx-auto px-4 py-6 space-y-8">
+        {/* 50問ポイントランキング */}
+        {data50 && (
+          <section>
+            {showBoth && (
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                ⚡ 50問ポイントランキング
+              </h2>
+            )}
+            <RankingView
+              mode={50}
+              settings={data50.settings}
+              rounds={data50.rounds}
+              ranking={data50.ranking}
+              classAverages={data50.classAverages}
+              myTestName={myTestName}
+              label="ポイントランキング"
+            />
+          </section>
         )}
 
-        {/* 今回のランキング */}
-        {latestTest && currentRanking.length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100">
-              <h2 className="font-semibold text-gray-800">今回のランキング</h2>
-              <p className="text-xs text-gray-400 mt-0.5">{latestTest.title}</p>
-            </div>
-            <div className="divide-y divide-gray-50">
-              {currentRanking.map((entry) => {
-                const isMe = entry.test_name === student.test_name
-                return (
-                  <div key={entry.rank} className={`flex items-center gap-4 px-5 py-3 ${isMe ? 'bg-blue-50' : ''}`}>
-                    <span className={`w-8 text-center font-bold shrink-0 ${
-                      entry.rank === 1 ? 'text-yellow-500 text-lg' :
-                      entry.rank === 2 ? 'text-gray-400' :
-                      entry.rank === 3 ? 'text-amber-600' : 'text-gray-400 text-sm'
-                    }`}>{entry.rank}</span>
-                    <span className={`flex-1 font-medium ${isMe ? 'text-blue-700' : 'text-gray-800'}`}>
-                      {entry.test_name}
-                      {isMe && <span className="text-xs text-blue-500 ml-2">(あなた)</span>}
-                    </span>
-                    <span className="text-gray-800 font-semibold">{entry.score}点</span>
-                    {entry.points !== null && (
-                      <span className="text-blue-600 font-bold text-sm w-14 text-right">+{entry.points}pt</span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
+        {/* 20問スコアランキング */}
+        {data20 && (
+          <section>
+            {showBoth && (
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                📄 20問スコアランキング
+              </h2>
+            )}
+            <RankingView
+              mode={20}
+              settings={data20.settings}
+              rounds={data20.rounds}
+              ranking={data20.ranking}
+              classAverages={data20.classAverages}
+              myTestName={myTestName}
+              label="スコアランキング"
+            />
+          </section>
         )}
 
-        {/* 通算ポイントランキング */}
-        {totalRanking.length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100">
-              <h2 className="font-semibold text-gray-800">通算ポイントランキング</h2>
-              {settingsLabel && <p className="text-xs text-gray-400 mt-0.5">{settingsLabel}の合計</p>}
-            </div>
-            <div className="divide-y divide-gray-50">
-              {totalRanking.map((entry) => {
-                const isMe = entry.test_name === student.test_name
-                return (
-                  <div key={entry.rank} className={`flex items-center gap-4 px-5 py-3 ${isMe ? 'bg-blue-50' : ''}`}>
-                    <span className={`w-8 text-center font-bold shrink-0 ${
-                      entry.rank === 1 ? 'text-yellow-500 text-lg' :
-                      entry.rank === 2 ? 'text-gray-400' :
-                      entry.rank === 3 ? 'text-amber-600' : 'text-gray-400 text-sm'
-                    }`}>{entry.rank}</span>
-                    <span className={`flex-1 font-medium ${isMe ? 'text-blue-700' : 'text-gray-800'}`}>
-                      {entry.test_name}
-                      {isMe && <span className="text-xs text-blue-500 ml-2">(あなた)</span>}
-                    </span>
-                    <span className="text-blue-600 font-bold">{entry.total_points}pt</span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {currentRanking.length === 0 && totalRanking.length === 0 && (
+        {!data50 && !data20 && (
           <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center text-gray-400">
             <p>まだランキングデータがありません</p>
           </div>
         )}
 
         <div className="pb-4 text-center">
-          <Link href="/student" className="text-blue-600 text-sm hover:underline">ホームに戻る</Link>
+          <Link href="/student" className="text-blue-600 text-sm hover:underline">
+            ホームに戻る
+          </Link>
         </div>
       </div>
     </div>

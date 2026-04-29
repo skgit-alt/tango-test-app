@@ -84,6 +84,7 @@ export default async function ReviewPage({
       question_id: a.question_id,
       selected_answer: a.selected_answer,
       is_correct: a.is_correct,
+      flagged: (a.flagged ?? false) as boolean,
       order_num: a.questions.order_num,
       question_text: a.questions.question_text,
       choice1: a.questions.choice1,

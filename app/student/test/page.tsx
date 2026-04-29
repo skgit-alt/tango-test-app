@@ -65,6 +65,7 @@ export default async function TestPage() {
       session={session}
       questions={questions}
       initialAnswers={answerMap}
+      isPractice={session.is_practice ?? false}
     />
   )
 }

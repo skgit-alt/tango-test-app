@@ -17,11 +17,13 @@ export default function TestClient({
   session,
   questions,
   initialAnswers,
+  isPractice = false,
 }: {
   test: Test
   session: Session
   questions: Question[]
   initialAnswers: Record<string, number | null>
+  isPractice?: boolean
 }) {
   const router = useRouter()
 
@@ -34,14 +36,17 @@ export default function TestClient({
     return Math.max(0, test.time_limit - elapsed)
   })
   const [submitting, setSubmitting] = useState(false)
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false)
   const [cheatWarning, setCheatWarning] = useState<CheatWarning>({
     visible: false,
     count: 0,
     eventType: '',
   })
   const [contentHidden, setContentHidden] = useState(false)
+  const [deviceBlocked, setDeviceBlocked] = useState(false)
   const cheatCountRef = useRef(0)
   const submittingRef = useRef(false)
+  const deviceTokenRef = useRef<string>('')
   const topRef = useRef<HTMLDivElement>(null)
 
   const totalPages = test.mode === 300 ? 3 : 1
@@ -58,19 +63,60 @@ export default function TestClient({
       const answersArray = questions.map((q) => ({
         question_id: q.id,
         selected_answer: answers[q.id] ?? null,
+        flagged: flagged.has(q.id),
       }))
       await fetch('/api/student/submit-test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.id, answers: answersArray }),
       })
-      router.push('/student/waiting-result')
+      if (isPractice) {
+        router.push(`/student/result?sessionId=${session.id}`)
+      } else {
+        router.push('/student/waiting-result')
+      }
     } catch (err) {
       console.error(err)
       setSubmitting(false)
       submittingRef.current = false
     }
-  }, [answers, questions, session.id, router])
+  }, [answers, questions, session.id, router, flagged])
+
+  // 端末ロック：このデバイスでセッションを確保し、30秒ごとにハートビート送信
+  useEffect(() => {
+    const token = crypto.randomUUID()
+    deviceTokenRef.current = token
+
+    const claim = async () => {
+      try {
+        const res = await fetch('/api/student/claim-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: session.id, deviceToken: token }),
+        })
+        const data = await res.json()
+        if (data.blocked) setDeviceBlocked(true)
+      } catch (e) {
+        console.error('[claim-session] error:', e)
+      }
+    }
+    claim()
+
+    const heartbeat = setInterval(async () => {
+      if (submittingRef.current) return
+      try {
+        await fetch('/api/student/heartbeat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: session.id, deviceToken: token }),
+        })
+      } catch (e) {
+        console.error('[heartbeat] error:', e)
+      }
+    }, 30000)
+
+    return () => clearInterval(heartbeat)
+  }, [session.id])
 
   useEffect(() => {
     if (timeLeft <= 0) { submitTest(); return }
@@ -184,8 +230,77 @@ export default function TestClient({
   const timerColor = timeLeft <= 30 ? 'text-red-600' : timeLeft <= 60 ? 'text-orange-500' : 'text-gray-800'
   const cheatEventLabel: Record<string, string> = { tab_leave: 'タブ離脱', app_switch: 'アプリ切替', split_view: '画面分割' }
 
+  // 別端末でテスト中の場合はブロック画面を表示
+  if (deviceBlocked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-red-50 p-4">
+        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-sm w-full text-center space-y-4">
+          <div className="text-5xl">🚫</div>
+          <h2 className="text-xl font-bold text-red-700">別の端末でテストが開かれています</h2>
+          <p className="text-gray-600 text-sm leading-relaxed">
+            このアカウントは現在、別の端末でテストを受験中です。<br />
+            同時に2台以上の端末でテストを開くことはできません。
+          </p>
+          <p className="text-gray-400 text-xs">
+            前の端末を閉じてから約1分後に、こちらでもう一度お試しください。
+          </p>
+          <a
+            href="/student"
+            className="block w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 transition"
+          >
+            ホームに戻る
+          </a>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* 送信中オーバーレイ */}
+      {submitting && (
+        <div className="fixed inset-0 bg-white/90 z-50 flex flex-col items-center justify-center gap-4">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-lg font-bold text-gray-700">送信中...</p>
+          <p className="text-sm text-gray-400">しばらくお待ちください</p>
+        </div>
+      )}
+
+      {/* 送信確認ダイアログ */}
+      {showSubmitConfirm && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full space-y-5 shadow-2xl">
+            <div className="text-center">
+              <div className="text-5xl mb-3">📝</div>
+              <h2 className="text-lg font-bold text-gray-800">回答を送信しますか？</h2>
+              <p className="text-sm text-gray-500 mt-2">
+                送信後は回答を変更できません。<br />
+                よろしければ「送信する」を押してください。
+              </p>
+              {questions.filter((q) => answers[q.id] == null).length > 0 && (
+                <p className="text-sm text-orange-600 font-medium mt-2">
+                  ⚠️ 未回答: {questions.filter((q) => answers[q.id] == null).length}問
+                </p>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowSubmitConfirm(false); submitTest() }}
+                className="flex-1 bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 transition"
+              >
+                送信する
+              </button>
+              <button
+                onClick={() => setShowSubmitConfirm(false)}
+                className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-200 transition"
+              >
+                戻る
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {cheatWarning.visible && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl">
@@ -295,11 +410,11 @@ export default function TestClient({
                 {currentPage < totalPages ? (
                   <button onClick={() => handlePageChange(currentPage + 1)} className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-semibold hover:bg-blue-700 active:bg-blue-800 active:scale-95 transition-all shadow-md">次のページ →</button>
                 ) : (
-                  <button onClick={submitTest} disabled={submitting} className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 active:bg-green-800 active:scale-95 transition-all disabled:opacity-50 shadow-md">{submitting ? '送信中...' : '回答を送信する'}</button>
+                  <button onClick={() => setShowSubmitConfirm(true)} disabled={submitting} className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 active:bg-green-800 active:scale-95 transition-all disabled:opacity-50 shadow-md">{submitting ? '送信中...' : '回答を送信する'}</button>
                 )}
               </div>
             ) : (
-              <button onClick={submitTest} disabled={submitting} className="w-full bg-green-600 text-white py-4 rounded-2xl font-bold text-lg hover:bg-green-700 transition disabled:opacity-50 shadow-md">{submitting ? '送信中...' : '回答を送信する'}</button>
+              <button onClick={() => setShowSubmitConfirm(true)} disabled={submitting} className="w-full bg-green-600 text-white py-4 rounded-2xl font-bold text-lg hover:bg-green-700 transition disabled:opacity-50 shadow-md">{submitting ? '送信中...' : '回答を送信する'}</button>
             )}
           </div>
           <div className="h-4" />

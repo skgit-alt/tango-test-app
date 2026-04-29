@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
 
   const { sessionId, answers } = await req.json() as {
     sessionId: string
-    answers: { question_id: string; selected_answer: number | null }[]
+    answers: { question_id: string; selected_answer: number | null; flagged?: boolean }[]
   }
   if (!sessionId || !Array.isArray(answers)) {
     return NextResponse.json({ error: 'sessionId and answers required' }, { status: 400 })
@@ -54,11 +54,28 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ★マーク（flagged）をanswersテーブルに保存（列が存在する場合のみ）
+  const flaggedAnswers = answers.filter((a) => a.flagged)
+  if (flaggedAnswers.length > 0) {
+    const { error: flagErr } = await admin.from('answers').upsert(
+      flaggedAnswers.map((a) => ({
+        session_id: sessionId,
+        question_id: a.question_id,
+        flagged: true,
+      })),
+      { onConflict: 'session_id,question_id' }
+    )
+    if (flagErr) {
+      // flaggedカラムが未作成の場合は無視（機能は動くが★は保存されない）
+      console.warn('[submit-test] flagged upsert skipped:', flagErr.message)
+    }
+  }
+
   // RPC 成功・失敗に関わらず、必ずセッションを提出済みにする
-  // （RPCが is_submitted を設定しない実装の場合もカバー）
+  // 提出と同時に端末ロック（device_token）を解放する
   const { error: updErr } = await admin
     .from('sessions')
-    .update({ is_submitted: true, submitted_at: now })
+    .update({ is_submitted: true, submitted_at: now, device_token: null, device_token_at: null })
     .eq('id', sessionId)
     .eq('is_submitted', false)  // 既に提出済みの場合は更新しない
 
