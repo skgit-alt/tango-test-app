@@ -115,15 +115,15 @@ export interface Point {
 }
 
 // ポイント換算（50問テスト用：各2点・偶数点のみ）
-// 100→10 / 98→7 / 96・94→6 / 92・90→5 / 88・86→4 / 84・82→3 / 80・78→2 / 76・74→1 / 72以下→0
+// 100→10 / 96〜98→7 / 92〜94→6 / 88〜90→5 / 84〜86→4 / 80〜82→3 / 76〜78→2 / 72〜74→1 / 70以下→0
 export function calcPoints(score: number): number {
   if (score === 100) return 10
-  if (score >= 98) return 7
-  if (score >= 94) return 6
-  if (score >= 90) return 5
-  if (score >= 86) return 4
-  if (score >= 82) return 3
-  if (score >= 78) return 2
-  if (score >= 74) return 1
+  if (score >= 96) return 7
+  if (score >= 92) return 6
+  if (score >= 88) return 5
+  if (score >= 84) return 4
+  if (score >= 80) return 3
+  if (score >= 76) return 2
+  if (score >= 72) return 1
   return 0
 }
