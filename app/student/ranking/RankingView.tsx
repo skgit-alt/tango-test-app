@@ -111,6 +111,7 @@ export default function RankingView({
               <thead className="bg-gray-50 text-gray-600">
                 <tr>
                   <th className="px-3 py-3 text-center w-12">順位</th>
+                  <th className="px-3 py-3 text-left w-10">クラス</th>
                   <th className="px-3 py-3 text-left">テストネーム</th>
                   {rounds.map((r) => (
                     <th key={r} className="px-3 py-3 text-right whitespace-nowrap">
@@ -145,6 +146,9 @@ export default function RankingView({
                     <tr key={r.student_id} className={rowBg}>
                       <td className="px-3 py-3 text-center">
                         <span className={`font-bold ${rankColor}`}>{r.rank}</span>
+                      </td>
+                      <td className="px-3 py-3 text-gray-500 text-xs whitespace-nowrap">
+                        {r.class_name}
                       </td>
                       <td className={`px-3 py-3 font-medium ${isMe ? 'text-blue-700' : 'text-gray-800'}`}>
                         {r.test_name}
