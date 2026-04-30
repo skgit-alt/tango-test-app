@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { calcPoints, canSeeResult } from '@/lib/supabase/types'
 import { Chart300, Chart50 } from './ScoreChart'
 import ActiveTestBanner from './ActiveTestBanner'
+import RequestNameChangeButton from './RequestNameChangeButton'
 
 export default async function StudentHomePage() {
   const supabase = await createClient()
@@ -176,6 +177,9 @@ export default async function StudentHomePage() {
                 テストネーム: {student.test_name}
                 {medalDisplay && <span className="ml-1">{medalDisplay}</span>}
               </p>
+              {student.test_name && (
+                <RequestNameChangeButton currentTestName={student.test_name} />
+              )}
             </div>
             <div className="text-4xl">👤</div>
           </div>

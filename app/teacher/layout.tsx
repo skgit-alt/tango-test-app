@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import LogoutButton from './LogoutButton'
 import TeacherNav from './TeacherNav'
@@ -27,6 +28,13 @@ export default async function TeacherLayout({
 
   const isAdmin = admin.role === 'admin'
 
+  // テストネーム変更申請の pending 件数を取得
+  const adminClient = createAdminClient()
+  const { count: pendingNameChangeCount } = await adminClient
+    .from('test_name_change_requests')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'pending')
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
@@ -34,7 +42,7 @@ export default async function TeacherLayout({
           <a href="/teacher" className="font-bold text-blue-600 text-lg">
             単語テスト管理
           </a>
-          <TeacherNav isAdmin={isAdmin} />
+          <TeacherNav isAdmin={isAdmin} pendingNameChangeCount={pendingNameChangeCount ?? 0} />
           <LogoutButton />
         </div>
       </header>

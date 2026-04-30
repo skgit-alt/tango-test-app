@@ -5,6 +5,95 @@ import { createClient } from '@/lib/supabase/client'
 import { Student } from '@/lib/supabase/types'
 import * as XLSX from 'xlsx'
 
+// ─── テストネーム変更申請パネル ───────────────────────────────────────────────
+
+interface NameChangeRequest {
+  id: string
+  student_id: string
+  current_name: string
+  requested_name: string
+  created_at: string
+  students: { name: string; class_name: string; seat_number: number } | null
+}
+
+function NameChangeRequestsPanel({ onResolved }: { onResolved: () => void }) {
+  const [requests, setRequests] = useState<NameChangeRequest[]>([])
+  const [loading, setLoading] = useState(true)
+  const [processing, setProcessing] = useState<string | null>(null)
+
+  const fetchRequests = async () => {
+    const res = await fetch('/api/teacher/name-change-requests')
+    if (res.ok) {
+      const data = await res.json()
+      setRequests(data.requests ?? [])
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => { fetchRequests() }, [])
+
+  const handleAction = async (id: string, action: 'approve' | 'reject') => {
+    setProcessing(id)
+    try {
+      const res = await fetch('/api/teacher/name-change-requests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action }),
+      })
+      if (res.ok) {
+        setRequests((prev) => prev.filter((r) => r.id !== id))
+        onResolved()
+      }
+    } finally {
+      setProcessing(null)
+    }
+  }
+
+  if (loading || requests.length === 0) return null
+
+  return (
+    <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-5 space-y-3">
+      <h2 className="font-bold text-yellow-800 flex items-center gap-2">
+        <span className="bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5">{requests.length}</span>
+        テストネーム変更申請
+      </h2>
+      <div className="space-y-2">
+        {requests.map((r) => {
+          const st = Array.isArray(r.students) ? r.students[0] : r.students
+          return (
+            <div key={r.id} className="bg-white border border-yellow-100 rounded-xl px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
+              <div className="text-sm">
+                <span className="text-gray-500 text-xs">{st?.class_name} {st?.seat_number}番 {st?.name}</span>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-gray-700 font-medium">{r.current_name}</span>
+                  <span className="text-gray-400">→</span>
+                  <span className="text-blue-700 font-bold">{r.requested_name}</span>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleAction(r.id, 'approve')}
+                  disabled={processing === r.id}
+                  className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-green-700 transition disabled:opacity-50"
+                >
+                  承認
+                </button>
+                <button
+                  onClick={() => handleAction(r.id, 'reject')}
+                  disabled={processing === r.id}
+                  className="bg-gray-200 text-gray-700 px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-gray-300 transition disabled:opacity-50"
+                >
+                  却下
+                </button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 type EditForm = {
   name: string
   class_name: string
@@ -280,6 +369,9 @@ export default function StudentsPage() {
 
   return (
     <div className="space-y-6">
+
+      {/* テストネーム変更申請パネル */}
+      <NameChangeRequestsPanel onResolved={fetchStudents} />
 
       {/* 編集モーダル */}
       {editingStudent && (
