@@ -200,9 +200,13 @@ function RankingTable({
   const [medalSuccess, setMedalSuccess] = useState(false)
   const [medalError, setMedalError] = useState<string | null>(null)
 
-  // 全回分のデータが揃っているか判定（50問のみ）
+  // 全回分に実際にスコアが入っているか判定（50問のみ）
+  // rounds.length ではなく、各回に実際に1人以上スコアがある回数で判定する
   const totalExpected = settings ? (settings.to_round - settings.from_round + 1) : 0
-  const allRoundsFilled = !is20 && totalExpected > 0 && rounds.length >= totalExpected
+  const roundsWithData = rounds.filter(r =>
+    ranking.some(entry => entry.roundValues[String(r)] != null)
+  )
+  const allRoundsFilled = !is20 && totalExpected > 0 && roundsWithData.length >= totalExpected
   const canAward = allRoundsFilled && !loading && !medalSuccess
 
   const handleAwardMedal = async () => {
@@ -250,7 +254,7 @@ function RankingTable({
             <button
               onClick={handleAwardMedal}
               disabled={!canAward || medalLoading}
-              title={!allRoundsFilled ? `全${totalExpected}回分のデータが揃うとアクティブになります（現在${rounds.length}回分）` : ''}
+              title={!allRoundsFilled ? `全${totalExpected}回分のスコアが揃うとアクティブになります（現在${roundsWithData.length}回分）` : ''}
               className={`px-4 py-2 rounded-xl text-sm font-bold transition whitespace-nowrap ${
                 canAward
                   ? 'bg-yellow-500 text-white hover:bg-yellow-600 cursor-pointer'
