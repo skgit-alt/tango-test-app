@@ -144,12 +144,17 @@ export async function POST(req: NextRequest) {
     grouped[s.student_id].total += value
   }
 
-  // ランキング上位30人
-  const ranked = Object.entries(grouped)
+  // タイを考慮したランキング（30位タイの全員を含める）
+  const sortedAll = Object.entries(grouped)
     .map(([student_id, v]) => ({ student_id, ...v }))
     .sort((a, b) => b.total - a.total)
-    .slice(0, 30)
-    .map((entry, i) => ({ ...entry, rank: i + 1 }))
+  const ranked: { student_id: string; rank: number; name: string; class_name: string; test_name: string; total: number }[] = []
+  let rankNum = 1
+  for (let i = 0; i < sortedAll.length; i++) {
+    if (i > 0 && sortedAll[i].total < sortedAll[i - 1].total) rankNum = i + 1
+    if (rankNum > 30) break
+    ranked.push({ ...sortedAll[i], rank: rankNum })
+  }
 
   // プレビューモードの場合はここで返す
   if (preview) {

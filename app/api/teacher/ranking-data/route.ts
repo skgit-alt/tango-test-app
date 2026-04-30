@@ -150,11 +150,17 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const ranking: RankEntry[] = Object.entries(grouped)
+  // タイを考慮したランキング（30位タイの全員を表示）
+  const sorted = Object.entries(grouped)
     .map(([student_id, v]) => ({ student_id, ...v }))
     .sort((a, b) => b.total - a.total)
-    .slice(0, 30)
-    .map((entry, i) => ({ ...entry, rank: i + 1 }))
+  const ranking: RankEntry[] = []
+  let rank = 1
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && sorted[i].total < sorted[i - 1].total) rank = i + 1
+    if (rank > 30) break
+    ranking.push({ ...sorted[i], rank })
+  }
 
   // ─── クラス平均点グラフ ─────────────────────────────────────────────────────
 
