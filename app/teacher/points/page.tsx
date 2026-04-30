@@ -183,23 +183,84 @@ function RankingTable({
   rounds,
   loading,
   is20,
+  settings,
 }: {
   ranking: RankEntry[]
   rounds: number[]
   loading: boolean
   is20: boolean
+  settings: Settings | null
 }) {
   const unit = is20 ? '点' : 'pt'
   const noDataMsg = is20
     ? 'テストに「第何回」を設定してください'
     : 'テストに「第何回」を設定し、ポイントが記録されるとここに表示されます'
 
+  const [medalLoading, setMedalLoading] = useState(false)
+  const [medalSuccess, setMedalSuccess] = useState(false)
+  const [medalError, setMedalError] = useState<string | null>(null)
+
+  // 全回分のデータが揃っているか判定（50問のみ）
+  const totalExpected = settings ? (settings.to_round - settings.from_round + 1) : 0
+  const allRoundsFilled = !is20 && totalExpected > 0 && rounds.length >= totalExpected
+  const canAward = allRoundsFilled && !loading && !medalSuccess
+
+  const handleAwardMedal = async () => {
+    if (!settings) return
+    if (!confirm(`第${settings.from_round}回〜第${settings.to_round}回の勲章を確定します。\nよろしいですか？`)) return
+    setMedalLoading(true)
+    setMedalError(null)
+    try {
+      const res = await fetch('/api/teacher/medals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from_round: settings.from_round,
+          to_round: settings.to_round,
+          preview: false,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setMedalError(data.error ?? 'エラーが発生しました')
+      } else {
+        setMedalSuccess(true)
+      }
+    } catch {
+      setMedalError('通信エラーが発生しました')
+    } finally {
+      setMedalLoading(false)
+    }
+  }
+
   return (
     <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-      <div className="px-5 py-4 border-b border-gray-100">
+      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
         <h2 className="font-semibold text-gray-800">
           個人ランキング（上位30名）
         </h2>
+        {!is20 && (
+          <div className="flex items-center gap-3">
+            {medalSuccess && (
+              <span className="text-green-600 text-sm font-medium">✅ 勲章を付与しました！</span>
+            )}
+            {medalError && (
+              <span className="text-red-500 text-sm">{medalError}</span>
+            )}
+            <button
+              onClick={handleAwardMedal}
+              disabled={!canAward || medalLoading}
+              title={!allRoundsFilled ? `全${totalExpected}回分のデータが揃うとアクティブになります（現在${rounds.length}回分）` : ''}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition whitespace-nowrap ${
+                canAward
+                  ? 'bg-yellow-500 text-white hover:bg-yellow-600 cursor-pointer'
+                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              {medalLoading ? '処理中...' : '👑 勲章を確定させる'}
+            </button>
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -448,6 +509,7 @@ export default function PointsPage() {
         rounds={activeData.rounds}
         loading={activeLoading}
         is20={activeTab === 20}
+        settings={activeData.settings}
       />
     </div>
   )
