@@ -20,8 +20,10 @@ function NameChangeRequestsPanel({ onResolved }: { onResolved: () => void }) {
   const [requests, setRequests] = useState<NameChangeRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const fetchRequests = async () => {
+    setLoading(true)
     const res = await fetch('/api/teacher/name-change-requests')
     if (res.ok) {
       const data = await res.json()
@@ -34,29 +36,42 @@ function NameChangeRequestsPanel({ onResolved }: { onResolved: () => void }) {
 
   const handleAction = async (id: string, action: 'approve' | 'reject') => {
     setProcessing(id)
+    setActionError(null)
     try {
       const res = await fetch('/api/teacher/name-change-requests', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, action }),
       })
-      if (res.ok) {
-        setRequests((prev) => prev.filter((r) => r.id !== id))
-        onResolved()
+      const data = await res.json()
+      if (!res.ok) {
+        setActionError(data.error ?? '処理に失敗しました')
+        return
       }
+      // 最新の申請リストをサーバーから再取得
+      await fetchRequests()
+      onResolved()
+    } catch {
+      setActionError('通信エラーが発生しました')
     } finally {
       setProcessing(null)
     }
   }
 
-  if (loading || requests.length === 0) return null
+  if (!loading && requests.length === 0) return null
 
   return (
     <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-5 space-y-3">
       <h2 className="font-bold text-yellow-800 flex items-center gap-2">
-        <span className="bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5">{requests.length}</span>
+        {requests.length > 0 && (
+          <span className="bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5">{requests.length}</span>
+        )}
         テストネーム変更申請
       </h2>
+      {actionError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-2 text-sm">{actionError}</div>
+      )}
+      {loading && <p className="text-sm text-gray-400">読み込み中...</p>}
       <div className="space-y-2">
         {requests.map((r) => {
           const st = Array.isArray(r.students) ? r.students[0] : r.students
@@ -265,24 +280,26 @@ export default function StudentsPage() {
     const seatNum = parseInt(editForm.seat_number, 10)
 
     try {
-      const { error } = await supabase
-        .from('students')
-        .update({
+      const res = await fetch('/api/teacher/update-student', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingStudent.id,
           name: editForm.name.trim(),
           class_name: editForm.class_name.trim(),
           seat_number: isNaN(seatNum) ? 0 : seatNum,
           student_id: editForm.student_id.trim(),
           test_name: editForm.test_name.trim() || null,
-        })
-        .eq('id', editingStudent.id)
-
-      if (error) throw error
+        }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error ?? '更新に失敗しました')
       setSuccess(`${editForm.name.trim()} の情報を更新しました`)
       setEditingStudent(null)
       await fetchStudents()
     } catch (err) {
       console.error(err)
-      setEditError('更新に失敗しました')
+      setEditError(err instanceof Error ? err.message : '更新に失敗しました')
     } finally {
       setSaving(false)
     }
