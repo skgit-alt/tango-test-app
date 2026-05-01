@@ -39,12 +39,29 @@ export async function PATCH(req: NextRequest) {
   if (!request) return NextResponse.json({ error: 'リクエストが見つかりません' }, { status: 404 })
 
   if (action === 'approve') {
+    // 同じテストネームがすでに使われていないか確認
+    const { data: existing } = await admin
+      .from('students')
+      .select('id, name')
+      .eq('test_name', request.requested_name)
+      .neq('id', request.student_id)
+      .maybeSingle()
+
+    if (existing) {
+      return NextResponse.json({
+        error: `「${request.requested_name}」はすでに${existing.name}さんが使用中のテストネームです`,
+      }, { status: 400 })
+    }
+
     const { error: updateError } = await admin
       .from('students')
       .update({ test_name: request.requested_name })
       .eq('id', request.student_id)
 
-    if (updateError) return NextResponse.json({ error: 'テストネームの更新に失敗しました' }, { status: 500 })
+    if (updateError) {
+      console.error('students update error:', updateError)
+      return NextResponse.json({ error: `更新エラー: ${updateError.message}` }, { status: 500 })
+    }
   }
 
   await admin
