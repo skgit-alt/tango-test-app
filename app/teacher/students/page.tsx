@@ -179,6 +179,9 @@ export default function StudentsPage() {
   const [resetConfirm, setResetConfirm] = useState('')
   const [resetting, setResetting] = useState(false)
   const [resetError, setResetError] = useState('')
+  // テストネーム修正依頼
+  const [requestingTestNameId, setRequestingTestNameId] = useState<string | null>(null)
+  const [requestedTestNameIds, setRequestedTestNameIds] = useState<Set<string>>(new Set())
 
   const fetchStudents = async () => {
     const { data } = await supabase
@@ -291,6 +294,24 @@ export default function StudentsPage() {
       setResetError(err instanceof Error ? err.message : 'リセットに失敗しました')
     } finally {
       setResetting(false)
+    }
+  }
+
+  const handleRequestTestNameChange = async (studentId: string) => {
+    setRequestingTestNameId(studentId)
+    try {
+      const res = await fetch('/api/teacher/request-test-name-change', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: studentId }),
+      })
+      if (res.ok) {
+        setRequestedTestNameIds((prev) => new Set([...prev, studentId]))
+      }
+    } catch {
+      // 無視
+    } finally {
+      setRequestingTestNameId(null)
     }
   }
 
@@ -637,16 +658,37 @@ export default function StudentsPage() {
                     <td className="px-4 py-3 text-gray-800 font-medium">{s.name}</td>
                     <td className="px-4 py-3 text-gray-500 font-mono text-xs">{s.student_id}</td>
                     <td className="px-4 py-3">
-                      <span className={s.test_name ? 'text-gray-800' : 'text-gray-400 italic'}>
-                        {s.test_name ?? '未設定'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={s.test_name ? 'text-gray-800' : 'text-gray-400 italic'}>
+                          {s.test_name ?? '未設定'}
+                        </span>
+                        {s.test_name && (
+                          requestedTestNameIds.has(s.id) ? (
+                            <span className="text-xs text-orange-500 font-medium whitespace-nowrap">依頼済</span>
+                          ) : (
+                            <button
+                              onClick={() => handleRequestTestNameChange(s.id)}
+                              disabled={requestingTestNameId === s.id}
+                              className="text-xs text-gray-400 border border-gray-300 px-1.5 py-0.5 rounded hover:text-orange-600 hover:border-orange-400 transition whitespace-nowrap disabled:opacity-50"
+                              title="テストネームの変更を依頼する"
+                            >
+                              {requestingTestNameId === s.id ? '...' : '修正依頼'}
+                            </button>
+                          )
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      {s.must_change_password ? (
-                        <span className="bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded-full font-medium">未完了</span>
-                      ) : (
-                        <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-medium">完了</span>
-                      )}
+                      <div className="flex flex-col items-center gap-1">
+                        {s.must_change_password ? (
+                          <span className="bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded-full font-medium">未完了</span>
+                        ) : (
+                          <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-medium">完了</span>
+                        )}
+                        {s.must_change_test_name && (
+                          <span className="bg-orange-50 text-orange-600 text-xs px-2 py-0.5 rounded-full font-medium border border-orange-200">名前依頼中</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-3">
