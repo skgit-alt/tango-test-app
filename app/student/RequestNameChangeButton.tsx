@@ -10,8 +10,11 @@ export default function RequestNameChangeButton({ currentTestName }: { currentTe
   const [success, setSuccess] = useState(false)
 
   const handleSubmit = async () => {
-    if (!newName.trim()) { setError('新しいテストネームを入力してください'); return }
-    if (newName.trim() === currentTestName) { setError('現在のテストネームと同じです'); return }
+    const trimmed = newName.trim()
+    if (!trimmed) { setError('新しいテストネームを入力してください'); return }
+    if (trimmed === currentTestName) { setError('現在のテストネームと同じです'); return }
+    if (trimmed.length < 3) { setError('テストネームは3文字以上で入力してください'); return }
+    if (trimmed.length > 10) { setError('テストネームは10文字以内で入力してください'); return }
     setLoading(true)
     setError(null)
     try {
@@ -55,14 +58,16 @@ export default function RequestNameChangeButton({ currentTestName }: { currentTe
           </p>
           <div>
             <label className="block text-xs text-gray-500 mb-1">新しいテストネーム</label>
+            <p className="text-xs text-gray-400 mb-2">3文字以上・10文字以内で入力してください</p>
             <input
               type="text"
               value={newName}
               onChange={(e) => { setNewName(e.target.value); setError(null) }}
               placeholder="例：タナカ"
-              maxLength={20}
+              maxLength={10}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
+            <p className="text-xs text-gray-400 mt-1 text-right">{newName.trim().length} / 10文字</p>
           </div>
           {error && <p className="text-red-500 text-xs">{error}</p>}
           <div className="flex gap-2">
