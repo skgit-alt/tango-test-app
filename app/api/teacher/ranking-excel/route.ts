@@ -3,12 +3,34 @@ import { createClient } from '@/lib/supabase/server'
 import { calcPoints } from '@/lib/supabase/types'
 import { NextResponse } from 'next/server'
 import ExcelJS from 'exceljs'
+import { createCanvas, GlobalFonts } from '@napi-rs/canvas'
+
+// ─── 日本語フォント（実行時にサブセット取得してキャッシュ）────────────────────
+let jpFontLoaded = false
+async function ensureJpFont() {
+  if (jpFontLoaded) return
+  try {
+    // 使用文字だけのサブセットを Google Fonts CDN から取得
+    const chars = encodeURIComponent('点以下〜0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
+    const cssUrl = `https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@700&display=block&text=${chars}`
+    const css = await fetch(cssUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36' },
+    }).then(r => r.text())
+    const match = css.match(/src:\s*url\(([^)]+\.woff2)\)/)
+    if (match) {
+      const fontBuf = await fetch(match[1]).then(r => r.arrayBuffer())
+      GlobalFonts.register(Buffer.from(fontBuf), 'NotoSansJP')
+      jpFontLoaded = true
+    }
+  } catch {
+    // フォント取得失敗時はシステムフォントで代替
+  }
+}
 
 // ─── スタイル定数 ──────────────────────────────────────────────────────────────
 const NAVY:    ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E5FA3' } }
 const BLUE_H:  ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E6F5' } }
 const GREEN:   ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3A6E40' } }
-const GREEN_H: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD6EAD7' } }
 const GOLD:    ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF3B0' } }
 const SILVER:  ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } }
 const BRONZE:  ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFECD2' } }
@@ -37,6 +59,8 @@ const green = (bold = false, size = 12): Partial<ExcelJS.Font> => ({ bold, size,
 
 // ─── GET ──────────────────────────────────────────────────────────────────────
 export async function GET() {
+  await ensureJpFont()
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -200,54 +224,94 @@ export async function GET() {
   // ══ 空行 ══
   ws.addRow([]).height = 12
 
-  // ══ ポイント早見表（横並び・9項目を全列に展開）══
+  // ══ ポイント早見表（画像として生成・埋め込み）══
   const ptSecRow = ws.addRow([]); ptSecRow.height = 32
   ws.mergeCells(ptSecRow.number, 1, ptSecRow.number, LC)
   sc(ptSecRow.getCell(1), { v: 'ポイント早見表', font: white(true, 13), fill: GREEN, align: center })
 
+  // 画像を置くための空行（2行）
+  const ptImgRow1 = ws.addRow([]); ptImgRow1.height = 52
+  const ptImgRow2 = ws.addRow([]); ptImgRow2.height = 64
+
+  // ── canvas で PNG を生成 ──────────────────────────────────────────────────
+  const PT_W = 1800
+  const PT_H = 200
+  const N = 9
+  const cw = PT_W / N      // 各列幅
+  const scoreH = 76        // 点数ラベル行の高さ
+  const ptH = PT_H - scoreH
+
+  const ptCanvas = createCanvas(PT_W, PT_H)
+  const ctx = ptCanvas.getContext('2d')
+
   const ptItems = [
-    { score: '100点', pt: '10pt' },
-    { score: '96〜98点', pt: '7pt' },
-    { score: '92〜94点', pt: '6pt' },
-    { score: '88〜90点', pt: '5pt' },
-    { score: '84〜86点', pt: '4pt' },
-    { score: '80〜82点', pt: '3pt' },
-    { score: '76〜78点', pt: '2pt' },
-    { score: '72〜74点', pt: '1pt' },
-    { score: '70点以下', pt: '0pt' },
+    { score: '100点',    pt: '10pt' },
+    { score: '96〜98点', pt: '7pt'  },
+    { score: '92〜94点', pt: '6pt'  },
+    { score: '88〜90点', pt: '5pt'  },
+    { score: '84〜86点', pt: '4pt'  },
+    { score: '80〜82点', pt: '3pt'  },
+    { score: '76〜78点', pt: '2pt'  },
+    { score: '72〜74点', pt: '1pt'  },
+    { score: '70点以下', pt: '0pt'  },
   ]
-  const ptN = ptItems.length  // 9
 
-  // 点数ラベル行
-  const ptScoreRow = ws.addRow([]); ptScoreRow.height = 30
-  // ポイント値行
-  const ptPtRow = ws.addRow([]); ptPtRow.height = 30
+  // 全体背景
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, PT_W, PT_H)
 
-  let prevEnd = 0
-  for (let i = 0; i < ptN; i++) {
-    const rawStart = 1 + Math.floor(i * LC / ptN)
-    const startCol = Math.max(rawStart, prevEnd + 1)
-    if (startCol > LC) break
-    const endCol = Math.min(Math.max(startCol, Math.floor((i + 1) * LC / ptN)), LC)
-    if (endCol > startCol) {
-      ws.mergeCells(ptScoreRow.number, startCol, ptScoreRow.number, endCol)
-      ws.mergeCells(ptPtRow.number,    startCol, ptPtRow.number,    endCol)
-    }
-    sc(ptScoreRow.getCell(startCol), {
-      v: ptItems[i].score,
-      font: dark(true, 12),
-      fill: GREEN_H,
-      align: center,
-      border: bm(),
-    })
-    sc(ptPtRow.getCell(startCol), {
-      v: ptItems[i].pt,
-      font: { bold: true, size: 15, color: { argb: 'FF1A5E24' } },
-      align: center,
-      border: bm(),
-    })
-    prevEnd = endCol
+  for (let i = 0; i < N; i++) {
+    const x = i * cw
+
+    // 点数行（緑背景）
+    ctx.fillStyle = '#C8E6C9'
+    ctx.fillRect(x, 0, cw, scoreH)
+
+    // ポイント行（白背景）
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(x, scoreH, cw, ptH)
+
+    const fontFamily = jpFontLoaded ? "'NotoSansJP', sans-serif" : 'sans-serif'
+
+    // 点数ラベル
+    ctx.fillStyle = '#1B5E20'
+    ctx.font = `bold ${Math.round(cw * 0.18)}px ${fontFamily}`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(ptItems[i].score, x + cw / 2, scoreH / 2)
+
+    // ポイント値（大きく）
+    ctx.fillStyle = '#1B5E20'
+    ctx.font = `bold ${Math.round(ptH * 0.55)}px ${fontFamily}`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(ptItems[i].pt, x + cw / 2, scoreH + ptH / 2)
   }
+
+  // 縦仕切り線
+  ctx.strokeStyle = '#4CAF50'
+  ctx.lineWidth = 2
+  for (let i = 1; i < N; i++) {
+    ctx.beginPath(); ctx.moveTo(i * cw, 0); ctx.lineTo(i * cw, PT_H); ctx.stroke()
+  }
+  // 横仕切り線（点数行とポイント行の境界）
+  ctx.strokeStyle = '#388E3C'
+  ctx.lineWidth = 3
+  ctx.beginPath(); ctx.moveTo(0, scoreH); ctx.lineTo(PT_W, scoreH); ctx.stroke()
+  // 外枠
+  ctx.strokeStyle = '#2E7D32'
+  ctx.lineWidth = 4
+  ctx.strokeRect(2, 2, PT_W - 4, PT_H - 4)
+
+  const ptPngBuf = ptCanvas.toBuffer('image/png')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ptImgId  = wb.addImage({ buffer: Buffer.from(ptPngBuf) as any, extension: 'png' })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ws.addImage(ptImgId, {
+    tl: { col: 0,  row: ptImgRow1.number - 1 } as any,
+    br: { col: LC, row: ptImgRow2.number }      as any,
+    editAs: 'oneCell',
+  })
 
   // ══ 空行 ══
   ws.addRow([]).height = 12
