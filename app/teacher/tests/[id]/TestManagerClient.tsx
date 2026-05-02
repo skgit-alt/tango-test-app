@@ -33,6 +33,7 @@ interface TableRow {
 }
 
 type EditStatus = 'none' | 'submitted' | 'absent'
+type SortKey = 'class_name' | 'seat_number' | 'name' | 'started_at' | 'is_submitted' | 'score'
 
 interface CheatLogWithStudent extends CheatLog {
   sessions: {
@@ -81,6 +82,9 @@ export default function TestManagerClient({
   // チェックボックス一括操作
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkLoading, setBulkLoading] = useState(false)
+  // テーブルソート
+  const [sortKey, setSortKey] = useState<SortKey | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   // モード別にクラスを絞り込む
   // 20問テスト → 1～6組（数字始まり）のみ / 50問テスト → A～D組（英字始まり）のみ
@@ -577,6 +581,47 @@ export default function TestManagerClient({
     const ak = `${a.class_name}${String(a.seat_number).padStart(3, '0')}`
     const bk = `${b.class_name}${String(b.seat_number).padStart(3, '0')}`
     return ak.localeCompare(bk)
+  })
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  const sortedTableRows = sortKey === null ? tableRows : [...tableRows].sort((a, b) => {
+    const dir = sortDir === 'asc' ? 1 : -1
+    switch (sortKey) {
+      case 'class_name': {
+        const cmp = a.class_name.localeCompare(b.class_name, 'ja')
+        return cmp !== 0 ? dir * cmp : a.seat_number - b.seat_number
+      }
+      case 'seat_number':
+        return dir * (a.seat_number - b.seat_number)
+      case 'name':
+        return dir * a.name.localeCompare(b.name, 'ja')
+      case 'started_at': {
+        if (!a.started_at && !b.started_at) return 0
+        if (!a.started_at) return 1
+        if (!b.started_at) return -1
+        return dir * (new Date(a.started_at).getTime() - new Date(b.started_at).getTime())
+      }
+      case 'is_submitted': {
+        const val = (r: TableRow) => r.is_absent ? -1 : r.is_submitted ? 1 : 0
+        return dir * (val(a) - val(b))
+      }
+      case 'score': {
+        if (a.score === null && b.score === null) return 0
+        if (a.score === null) return 1
+        if (b.score === null) return -1
+        return dir * (a.score - b.score)
+      }
+      default:
+        return 0
+    }
   })
 
   const cheatEventLabel: Record<string, string> = {
@@ -1080,18 +1125,31 @@ export default function TestManagerClient({
                       className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
                     />
                   </th>
-                  <th className="px-4 py-3 text-left">クラス</th>
-                  <th className="px-4 py-3 text-left">番号</th>
-                  <th className="px-4 py-3 text-left">名前</th>
-                  <th className="px-4 py-3 text-left">開始時刻</th>
-                  <th className="px-4 py-3 text-center">提出</th>
-                  <th className="px-4 py-3 text-right">点数</th>
+                  {([
+                    { key: 'class_name', label: 'クラス', align: 'text-left' },
+                    { key: 'seat_number', label: '番号', align: 'text-left' },
+                    { key: 'name', label: '名前', align: 'text-left' },
+                    { key: 'started_at', label: '開始時刻', align: 'text-left' },
+                    { key: 'is_submitted', label: '提出', align: 'text-center' },
+                    { key: 'score', label: '点数', align: 'text-right' },
+                  ] as { key: SortKey; label: string; align: string }[]).map(({ key, label, align }) => (
+                    <th
+                      key={key}
+                      onClick={() => handleSort(key)}
+                      className={`px-4 py-3 ${align} cursor-pointer select-none hover:bg-gray-100 transition-colors whitespace-nowrap`}
+                    >
+                      {label}
+                      <span className={`ml-1 text-xs ${sortKey === key ? 'text-blue-500' : 'text-gray-300'}`}>
+                        {sortKey === key ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+                      </span>
+                    </th>
+                  ))}
                   {test.mode === 50 && <th className="px-4 py-3 text-right">pt</th>}
                   <th className="px-4 py-3 text-center">修正</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {tableRows.map((row) => {
+                {sortedTableRows.map((row) => {
                   const submitted = row.is_submitted === true
                   const absent = row.is_absent === true
                   const hasData = row.sessionId !== null
