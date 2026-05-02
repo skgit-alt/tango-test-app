@@ -496,14 +496,25 @@ export default function PointsPage() {
       {/* ヘッダー */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">ランキング管理</h1>
-        {activeData.ranking.length > 0 && (
-          <button
-            onClick={handleDownload}
-            className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
-          >
-            Excelダウンロード
-          </button>
-        )}
+        <div className="flex gap-2">
+          {activeTab === 50 && data50.ranking.length > 0 && (
+            <a
+              href="/api/teacher/ranking-excel"
+              download
+              className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-blue-700 transition flex items-center gap-1.5"
+            >
+              📊 掲示用Excelダウンロード
+            </a>
+          )}
+          {activeData.ranking.length > 0 && (
+            <button
+              onClick={handleDownload}
+              className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition"
+            >
+              Excelダウンロード
+            </button>
+          )}
+        </div>
       </div>
 
       {/* タブ */}
