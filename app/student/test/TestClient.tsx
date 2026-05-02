@@ -30,6 +30,7 @@ export default function TestClient({
   const [answers, setAnswers] = useState<Record<string, number | null>>(initialAnswers)
   const [currentPage, setCurrentPage] = useState(session.current_page ?? 1)
   const [flagged, setFlagged] = useState<Set<string>>(new Set())
+  const [showFlaggedOnly, setShowFlaggedOnly] = useState(false)
   const [timeLeft, setTimeLeft] = useState<number>(() => {
     if (!session.started_at) return test.time_limit
     const elapsed = Math.floor((Date.now() - new Date(session.started_at).getTime()) / 1000)
@@ -54,6 +55,11 @@ export default function TestClient({
   const pageQuestions = test.mode === 300
     ? questions.slice((currentPage - 1) * QUESTIONS_PER_PAGE, currentPage * QUESTIONS_PER_PAGE)
     : questions
+
+  // ★絞り込み時は全問題から flagged のものだけを表示
+  const displayQuestions = showFlaggedOnly
+    ? questions.filter((q) => flagged.has(q.id))
+    : pageQuestions
 
   const submitTest = useCallback(async () => {
     if (submittingRef.current) return
@@ -341,8 +347,19 @@ export default function TestClient({
       ) : (
         <div className="flex-1 max-w-3xl mx-auto w-full px-4 py-6 space-y-6">
           <div ref={topRef} />
-          {pageQuestions.map((q, pageIndex) => {
-            const globalIndex = test.mode === 300 ? (currentPage - 1) * QUESTIONS_PER_PAGE + pageIndex : pageIndex
+          {/* ★絞り込みモード時のバナー */}
+          {showFlaggedOnly && (
+            <div className="bg-yellow-50 border border-yellow-300 rounded-xl px-4 py-2.5 flex items-center gap-2 text-sm text-yellow-800">
+              <span className="text-yellow-500 font-bold">★</span>
+              <span>自信がない <span className="font-bold">{flagged.size}問</span> を表示中です</span>
+            </div>
+          )}
+          {displayQuestions.map((q, pageIndex) => {
+            const globalIndex = showFlaggedOnly
+              ? questions.findIndex((item) => item.id === q.id)
+              : test.mode === 300
+                ? (currentPage - 1) * QUESTIONS_PER_PAGE + pageIndex
+                : pageIndex
             const validChoices = [
               { num: 1, text: q.choice1 },
               { num: 2, text: q.choice2 },
@@ -402,19 +419,58 @@ export default function TestClient({
             )
           })}
           <div className="sticky bottom-4">
-            {test.mode === 300 ? (
+            {/* ★絞り込みモード中のボタン */}
+            {showFlaggedOnly ? (
               <div className="flex gap-3">
+                <button
+                  onClick={() => setShowFlaggedOnly(false)}
+                  className="flex-1 bg-white border border-gray-300 text-gray-700 py-4 rounded-2xl font-semibold hover:bg-gray-50 active:bg-gray-200 active:scale-95 transition-all shadow-sm"
+                >
+                  ← 元に戻る
+                </button>
+                <button
+                  onClick={() => setShowSubmitConfirm(true)}
+                  disabled={submitting}
+                  className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 active:bg-green-800 active:scale-95 transition-all disabled:opacity-50 shadow-md"
+                >
+                  {submitting ? '送信中...' : '送信する'}
+                </button>
+              </div>
+            ) : test.mode === 300 ? (
+              /* 300問モード（通常） */
+              <div className="flex gap-2">
                 {currentPage > 1 && (
                   <button onClick={() => handlePageChange(currentPage - 1)} className="flex-1 bg-white border border-gray-300 text-gray-700 py-4 rounded-2xl font-semibold hover:bg-gray-50 active:bg-gray-200 active:scale-95 transition-all">← 前のページ</button>
                 )}
                 {currentPage < totalPages ? (
                   <button onClick={() => handlePageChange(currentPage + 1)} className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-semibold hover:bg-blue-700 active:bg-blue-800 active:scale-95 transition-all shadow-md">次のページ →</button>
                 ) : (
-                  <button onClick={() => setShowSubmitConfirm(true)} disabled={submitting} className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 active:bg-green-800 active:scale-95 transition-all disabled:opacity-50 shadow-md">{submitting ? '送信中...' : '回答を送信する'}</button>
+                  <>
+                    {flaggedCount > 0 && (
+                      <button
+                        onClick={() => { setShowFlaggedOnly(true); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+                        className="bg-yellow-400 text-white px-4 py-4 rounded-2xl font-bold hover:bg-yellow-500 active:scale-95 transition-all shadow-md whitespace-nowrap text-sm"
+                      >
+                        ★ {flaggedCount}問確認
+                      </button>
+                    )}
+                    <button onClick={() => setShowSubmitConfirm(true)} disabled={submitting} className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold hover:bg-green-700 active:bg-green-800 active:scale-95 transition-all disabled:opacity-50 shadow-md">{submitting ? '送信中...' : '回答を送信する'}</button>
+                  </>
                 )}
               </div>
             ) : (
-              <button onClick={() => setShowSubmitConfirm(true)} disabled={submitting} className="w-full bg-green-600 text-white py-4 rounded-2xl font-bold text-lg hover:bg-green-700 transition disabled:opacity-50 shadow-md">{submitting ? '送信中...' : '回答を送信する'}</button>
+              /* 50問モード（通常） */
+              <div className="flex gap-2">
+                {flaggedCount > 0 && (
+                  <button
+                    onClick={() => { setShowFlaggedOnly(true); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+                    className="bg-yellow-400 text-white px-4 py-4 rounded-2xl font-bold hover:bg-yellow-500 active:scale-95 transition-all shadow-md whitespace-nowrap text-sm"
+                  >
+                    ★ {flaggedCount}問を確認
+                  </button>
+                )}
+                <button onClick={() => setShowSubmitConfirm(true)} disabled={submitting} className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold text-lg hover:bg-green-700 transition disabled:opacity-50 shadow-md">{submitting ? '送信中...' : '回答を送信する'}</button>
+              </div>
             )}
           </div>
           <div className="h-4" />
