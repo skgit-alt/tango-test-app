@@ -1154,8 +1154,8 @@ export default function TestManagerClient({
 
       {/* 一括操作バー（下からスライド） */}
       <div
-        className={`fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300 ease-out ${
-          selectedIds.size > 0 ? 'translate-y-0' : 'translate-y-full'
+        className={`fixed bottom-0 left-0 right-0 z-40 transition-all duration-300 ease-out ${
+          selectedIds.size > 0 ? 'translate-y-0 visible' : 'translate-y-full invisible'
         }`}
       >
         <div className="bg-white border-t-2 border-blue-200 shadow-2xl">
