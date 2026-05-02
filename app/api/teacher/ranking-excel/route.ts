@@ -5,14 +5,18 @@ import { NextResponse } from 'next/server'
 import ExcelJS from 'exceljs'
 
 // ─── スタイル定数 ──────────────────────────────────────────────────────────────
-const NAVY:   ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E5FA3' } }
-const BLUE_H: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E6F5' } }
-const GOLD:   ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF8DC' } }
-const SILVER: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } }
-const BRONZE: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFECD2' } }
-const EVEN:   ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F9FF' } }
-const THIN: Partial<ExcelJS.Border> = { style: 'thin', color: { argb: 'FFBBBBBB' } }
+const NAVY:    ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E5FA3' } }
+const BLUE_H:  ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E6F5' } }
+const GREEN:   ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3A6E40' } }
+const GREEN_H: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD6EAD7' } }
+const GOLD:    ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF3B0' } }
+const SILVER:  ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } }
+const BRONZE:  ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFECD2' } }
+const EVEN:    ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F9FF' } }
+const THIN: Partial<ExcelJS.Border> = { style: 'thin', color: { argb: 'FF999999' } }
+const MED:  Partial<ExcelJS.Border> = { style: 'medium', color: { argb: 'FF666666' } }
 const b = (): Partial<ExcelJS.Borders> => ({ top: THIN, left: THIN, bottom: THIN, right: THIN })
+const bm = (): Partial<ExcelJS.Borders> => ({ top: MED, left: MED, bottom: MED, right: MED })
 
 function sc(
   cell: ExcelJS.Cell,
@@ -25,10 +29,11 @@ function sc(
   if (opts.border) cell.border = opts.border
 }
 
-const center: Partial<ExcelJS.Alignment> = { horizontal: 'center', vertical: 'middle' }
+const center: Partial<ExcelJS.Alignment> = { horizontal: 'center', vertical: 'middle', wrapText: true }
 const left:   Partial<ExcelJS.Alignment> = { horizontal: 'left',   vertical: 'middle' }
-const white = (bold = false, size = 10): Partial<ExcelJS.Font> => ({ bold, size, color: { argb: 'FFFFFFFF' } })
-const dark  = (bold = false, size = 10): Partial<ExcelJS.Font> => ({ bold, size, color: { argb: 'FF1A1A1A' } })
+const white = (bold = false, size = 12): Partial<ExcelJS.Font> => ({ bold, size, color: { argb: 'FFFFFFFF' } })
+const dark  = (bold = false, size = 12): Partial<ExcelJS.Font> => ({ bold, size, color: { argb: 'FF1A1A1A' } })
+const green = (bold = false, size = 12): Partial<ExcelJS.Font> => ({ bold, size, color: { argb: 'FF1A5E24' } })
 
 // ─── GET ──────────────────────────────────────────────────────────────────────
 export async function GET() {
@@ -133,115 +138,144 @@ export async function GET() {
   ws.pageSetup = {
     paperSize: 9, orientation: 'portrait',
     fitToPage: true, fitToWidth: 1, fitToHeight: 1,
-    margins: { left: 0.4, right: 0.4, top: 0.6, bottom: 0.6, header: 0.2, footer: 0.2 },
+    margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
   }
 
-  // 列幅
+  // 列幅 — A4縦に収まるよう余裕ある幅に設定
+  const roundColW = Math.max(10, Math.floor(52 / Math.max(rounds.length, 1)))
   ws.columns = [
-    { width: 5 },   // A: 順位
-    { width: 6 },   // B: クラス
-    { width: 16 },  // C: テストネーム
-    ...rounds.map(() => ({ width: 8 })), // D~: 各回
-    { width: 7 },   // last: 合計
+    { width: 8 },          // A: 順位
+    { width: 10 },         // B: クラス
+    { width: 24 },         // C: テストネーム
+    ...rounds.map(() => ({ width: roundColW })),
+    { width: 10 },         // last: 合計
   ]
 
   const LC = totalCols  // last column index (1-based)
 
   // ══ Row 1: タイトル ══
-  const r1 = ws.addRow([title]); r1.height = 30
+  const r1 = ws.addRow([title]); r1.height = 44
   ws.mergeCells(1, 1, 1, LC)
-  sc(r1.getCell(1), { font: { bold: true, size: 13 }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF4FF' } }, align: center })
+  sc(r1.getCell(1), {
+    font: { bold: true, size: 15, color: { argb: 'FF1A3A6E' } },
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF4FF' } },
+    align: center,
+  })
 
   // ══ Row 2: 副題 ══
-  const r2 = ws.addRow(['英単語ターゲット1900']); r2.height = 20
+  const r2 = ws.addRow(['英単語ターゲット1900']); r2.height = 26
   ws.mergeCells(2, 1, 2, LC)
-  sc(r2.getCell(1), { font: { bold: false, size: 10, color: { argb: 'FF444444' } }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF4FF' } }, align: center })
+  sc(r2.getCell(1), {
+    font: { bold: false, size: 12, color: { argb: 'FF444444' } },
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF4FF' } },
+    align: center,
+  })
 
   // ══ Row 3: クラス別平均点 セクションヘッダー ══
-  const r3 = ws.addRow(['クラス別平均点']); r3.height = 22
+  const r3 = ws.addRow(['クラス別平均点']); r3.height = 32
   ws.mergeCells(3, 1, 3, LC)
-  sc(r3.getCell(1), { font: white(true, 11), fill: NAVY, align: center })
+  sc(r3.getCell(1), { font: white(true, 13), fill: NAVY, align: center })
 
   // ══ Row 4: クラス別平均点 列ヘッダー ══
-  const r4 = ws.addRow([]); r4.height = 20
+  const r4 = ws.addRow([]); r4.height = 28
   ws.mergeCells(4, 1, 4, 3)
-  sc(r4.getCell(1), { v: 'クラス', font: dark(true, 10), fill: BLUE_H, align: center, border: b() })
-  rounds.forEach((rnd, i) => sc(r4.getCell(4 + i), { v: `第${rnd}回点`, font: dark(true, 10), fill: BLUE_H, align: center, border: b() }))
-  sc(r4.getCell(LC), { fill: BLUE_H, border: b() })
+  sc(r4.getCell(1), { v: 'クラス', font: dark(true, 12), fill: BLUE_H, align: center, border: bm() })
+  rounds.forEach((rnd, i) => sc(r4.getCell(4 + i), { v: `第${rnd}回点`, font: dark(true, 12), fill: BLUE_H, align: center, border: bm() }))
+  sc(r4.getCell(LC), { fill: BLUE_H, border: bm() })
 
   // ══ クラスデータ行 ══
   for (const cls of allClasses) {
-    const dr = ws.addRow([]); dr.height = 20
+    const dr = ws.addRow([]); dr.height = 28
     const rn = dr.number
     ws.mergeCells(rn, 1, rn, 3)
-    sc(dr.getCell(1), { v: cls, font: dark(true, 11), align: center, border: b() })
+    sc(dr.getCell(1), { v: cls, font: dark(true, 14), align: center, border: b() })
     rounds.forEach((rnd, i) => {
       const ca = classAverages.find(c => c.round === rnd)
       const val = ca?.classes[cls]
-      sc(dr.getCell(4 + i), { v: val != null ? val : '－', font: dark(false, 10), align: center, border: b() })
+      sc(dr.getCell(4 + i), { v: val != null ? val : '－', font: dark(false, 13), align: center, border: b() })
     })
     sc(dr.getCell(LC), { border: b() })
   }
 
   // ══ 空行 ══
-  ws.addRow([]).height = 8
+  ws.addRow([]).height = 12
 
-  // ══ ポイント早見表 ══
-  const ptSecRow = ws.addRow([]); ptSecRow.height = 20
+  // ══ ポイント早見表（横並び・9項目を全列に展開）══
+  const ptSecRow = ws.addRow([]); ptSecRow.height = 32
   ws.mergeCells(ptSecRow.number, 1, ptSecRow.number, LC)
-  sc(ptSecRow.getCell(1), { v: 'ポイント早見表', font: white(true, 11), fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4A7C4E' } }, align: center })
+  sc(ptSecRow.getCell(1), { v: 'ポイント早見表', font: white(true, 13), fill: GREEN, align: center })
 
-  // ヘッダー行
-  const ptHead = ws.addRow([]); ptHead.height = 18
-  sc(ptHead.getCell(1), { v: '点数', font: dark(true, 10), fill: BLUE_H, align: center, border: b() })
-  sc(ptHead.getCell(2), { v: 'ポイント', font: dark(true, 10), fill: BLUE_H, align: center, border: b() })
-  for (let c = 3; c <= LC; c++) sc(ptHead.getCell(c), { fill: BLUE_H, border: b() })
-
-  const ptData = [
-    ['100点', '10pt'],
-    ['96〜98点', '7pt'],
-    ['92〜94点', '6pt'],
-    ['88〜90点', '5pt'],
-    ['84〜86点', '4pt'],
-    ['80〜82点', '3pt'],
-    ['76〜78点', '2pt'],
-    ['72〜74点', '1pt'],
-    ['70点以下', '0pt'],
+  const ptItems = [
+    { score: '100点', pt: '10pt' },
+    { score: '96〜98点', pt: '7pt' },
+    { score: '92〜94点', pt: '6pt' },
+    { score: '88〜90点', pt: '5pt' },
+    { score: '84〜86点', pt: '4pt' },
+    { score: '80〜82点', pt: '3pt' },
+    { score: '76〜78点', pt: '2pt' },
+    { score: '72〜74点', pt: '1pt' },
+    { score: '70点以下', pt: '0pt' },
   ]
-  for (const [score, pt] of ptData) {
-    const pr = ws.addRow([]); pr.height = 17
-    sc(pr.getCell(1), { v: score, font: dark(false, 10), align: center, border: b() })
-    sc(pr.getCell(2), { v: pt,    font: dark(false, 10), align: center, border: b() })
-    for (let c = 3; c <= LC; c++) pr.getCell(c).border = b()
+  const ptN = ptItems.length  // 9
+
+  // 点数ラベル行
+  const ptScoreRow = ws.addRow([]); ptScoreRow.height = 30
+  // ポイント値行
+  const ptPtRow = ws.addRow([]); ptPtRow.height = 30
+
+  let prevEnd = 0
+  for (let i = 0; i < ptN; i++) {
+    const rawStart = 1 + Math.floor(i * LC / ptN)
+    const startCol = Math.max(rawStart, prevEnd + 1)
+    if (startCol > LC) break
+    const endCol = Math.min(Math.max(startCol, Math.floor((i + 1) * LC / ptN)), LC)
+    if (endCol > startCol) {
+      ws.mergeCells(ptScoreRow.number, startCol, ptScoreRow.number, endCol)
+      ws.mergeCells(ptPtRow.number,    startCol, ptPtRow.number,    endCol)
+    }
+    sc(ptScoreRow.getCell(startCol), {
+      v: ptItems[i].score,
+      font: dark(true, 12),
+      fill: GREEN_H,
+      align: center,
+      border: bm(),
+    })
+    sc(ptPtRow.getCell(startCol), {
+      v: ptItems[i].pt,
+      font: { bold: true, size: 15, color: { argb: 'FF1A5E24' } },
+      align: center,
+      border: bm(),
+    })
+    prevEnd = endCol
   }
 
   // ══ 空行 ══
-  ws.addRow([]).height = 8
+  ws.addRow([]).height = 12
 
   // ══ 個人ランキング セクションヘッダー ══
-  const rSec = ws.addRow(['個人ランキング（上位30名）']); rSec.height = 22
+  const rSec = ws.addRow(['個人ランキング（上位30名）']); rSec.height = 32
   ws.mergeCells(rSec.number, 1, rSec.number, LC)
-  sc(rSec.getCell(1), { font: white(true, 11), fill: NAVY, align: center })
+  sc(rSec.getCell(1), { font: white(true, 13), fill: NAVY, align: center })
 
   // ══ ランキング列ヘッダー ══
-  const rHead = ws.addRow([]); rHead.height = 20
+  const rHead = ws.addRow([]); rHead.height = 28
   const rankLabels = ['順位', 'クラス', 'テストネーム', ...rounds.map(r => `第${r}回`), '合計']
-  rankLabels.forEach((lbl, i) => sc(rHead.getCell(i + 1), { v: lbl, font: white(true, 10), fill: NAVY, align: center, border: b() }))
+  rankLabels.forEach((lbl, i) => sc(rHead.getCell(i + 1), { v: lbl, font: white(true, 12), fill: NAVY, align: center, border: bm() }))
 
   // ══ ランキングデータ ══
   for (const r of ranking) {
-    const dr = ws.addRow([]); dr.height = 17
+    const dr = ws.addRow([]); dr.height = 20
     const fill = r.rank === 1 ? GOLD : r.rank === 2 ? SILVER : r.rank === 3 ? BRONZE : dr.number % 2 === 0 ? EVEN : undefined
     const bold = r.rank <= 3
 
-    sc(dr.getCell(1), { v: r.rank,       font: dark(bold, 10), align: center, border: b(), ...(fill ? { fill } : {}) })
-    sc(dr.getCell(2), { v: r.class_name, font: dark(bold, 10), align: center, border: b(), ...(fill ? { fill } : {}) })
-    sc(dr.getCell(3), { v: r.test_name,  font: dark(bold, 10), align: left,   border: b(), ...(fill ? { fill } : {}) })
+    sc(dr.getCell(1), { v: r.rank,       font: dark(bold, 12), align: center, border: b(), ...(fill ? { fill } : {}) })
+    sc(dr.getCell(2), { v: r.class_name, font: dark(bold, 12), align: center, border: b(), ...(fill ? { fill } : {}) })
+    sc(dr.getCell(3), { v: r.test_name,  font: dark(bold, 12), align: left,   border: b(), ...(fill ? { fill } : {}) })
     rounds.forEach((rnd, i) => {
       const val = r.roundValues[String(rnd)]
-      sc(dr.getCell(4 + i), { v: val != null ? val : '－', font: dark(false, 10), align: center, border: b(), ...(fill ? { fill } : {}) })
+      sc(dr.getCell(4 + i), { v: val != null ? val : '－', font: dark(false, 12), align: center, border: b(), ...(fill ? { fill } : {}) })
     })
-    sc(dr.getCell(LC), { v: r.total, font: dark(bold, 10), align: center, border: b(), ...(fill ? { fill } : {}) })
+    sc(dr.getCell(LC), { v: r.total, font: dark(bold, 12), align: center, border: b(), ...(fill ? { fill } : {}) })
   }
 
   // ─── 出力 ────────────────────────────────────────────────────────────────────
