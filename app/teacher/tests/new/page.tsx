@@ -543,8 +543,8 @@ export default function NewTestPage() {
 
     try {
       const mode = questions.length === 300 ? 300 : questions.length === 50 ? 50 : questions.length
-      const time_limit = mode === 300 ? 1200
-        : mode === 50 ? 180
+      const time_limit = mode === 300 ? 1020
+        : mode === 50 ? 185
         : (parseInt(customTimeLimitMin) || 0) * 60 + (parseInt(customTimeLimitSec) || 0) || 120
       const pass_score = mode === 300 ? 285 : null
       const roundNum = mode !== 300 && roundNumber.trim() !== '' ? parseInt(roundNumber) : null
@@ -714,8 +714,8 @@ export default function NewTestPage() {
           <div className="bg-blue-50 rounded-xl p-4 space-y-1 text-sm">
             <p className="font-medium text-blue-800">自動設定内容</p>
             <p className="text-blue-700">問題数: <strong>{questions.length}問</strong></p>
-            {mode === 300 && <><p className="text-blue-700">制限時間: <strong>1200秒（20分）</strong></p><p className="text-blue-700">合格点: <strong>285点</strong></p></>}
-            {mode === 50 && <p className="text-blue-700">制限時間: <strong>180秒（3分）</strong></p>}
+            {mode === 300 && <><p className="text-blue-700">制限時間: <strong>1020秒（17分）</strong></p><p className="text-blue-700">合格点: <strong>285点</strong></p></>}
+            {mode === 50 && <p className="text-blue-700">制限時間: <strong>185秒（3分5秒）</strong></p>}
             {mode !== 50 && mode !== 300 && (
               <p className="text-blue-700">制限時間: <strong>{(parseInt(customTimeLimitMin)||0)}分{(parseInt(customTimeLimitSec)||0)}秒</strong>（上で変更可）</p>
             )}
