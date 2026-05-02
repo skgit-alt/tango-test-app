@@ -58,7 +58,11 @@ export default function RequestNameChangeButton({ currentTestName }: { currentTe
           </p>
           <div>
             <label className="block text-xs text-gray-500 mb-1">新しいテストネーム</label>
-            <p className="text-xs text-gray-400 mb-2">3文字以上・10文字以内で入力してください</p>
+            <ul className="text-xs text-gray-400 mb-2 space-y-1 list-none">
+              <li>・3文字以上・10文字以内で入力してください</li>
+              <li>・他人と被りそうな名前は避けてください（例：あいうえお、123 など）</li>
+              <li>・他人の名前を登録して成りすます行為はやめてください</li>
+            </ul>
             <input
               type="text"
               value={newName}
