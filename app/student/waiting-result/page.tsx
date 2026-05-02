@@ -31,11 +31,11 @@ export default function WaitingResultPage() {
         .limit(1)
         .maybeSingle()
 
-      if (!recentSession) { router.push('/student'); return }
+      if (!recentSession) return   // ボタンで戻れるのでリダイレクトしない
 
       const testRaw = recentSession.tests as { title: string } | { title: string }[] | null
       const testData = Array.isArray(testRaw) ? testRaw[0] : testRaw
-      if (!testData) { router.push('/student'); return }
+      if (!testData) return        // 同上
 
       setTestTitle(testData.title)
       testIdRef.current = recentSession.test_id
@@ -110,6 +110,13 @@ export default function WaitingResultPage() {
         <p className="text-xs text-gray-400">
           このページを閉じても結果は保存されています
         </p>
+
+        <button
+          onClick={() => router.push('/student')}
+          className="w-full bg-gray-100 text-gray-600 py-3 rounded-xl font-semibold hover:bg-gray-200 transition text-sm"
+        >
+          ホーム画面に戻る
+        </button>
       </div>
     </div>
   )
