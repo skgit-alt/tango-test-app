@@ -199,6 +199,9 @@ function RankingTable({
   const [medalLoading, setMedalLoading] = useState(false)
   const [medalSuccess, setMedalSuccess] = useState(false)
   const [medalError, setMedalError] = useState<string | null>(null)
+  // テストネーム修正依頼
+  const [requestingId, setRequestingId] = useState<string | null>(null)
+  const [requestedIds, setRequestedIds] = useState<Set<string>>(new Set())
 
   // 全回分に実際にスコアが入っているか判定（50問のみ）
   // rounds.length ではなく、各回に実際に1人以上スコアがある回数で判定する
@@ -208,6 +211,24 @@ function RankingTable({
   )
   const allRoundsFilled = !is20 && totalExpected > 0 && roundsWithData.length >= totalExpected
   const canAward = allRoundsFilled && !loading && !medalSuccess
+
+  const handleRequestNameChange = async (studentId: string) => {
+    setRequestingId(studentId)
+    try {
+      const res = await fetch('/api/teacher/request-test-name-change', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: studentId }),
+      })
+      if (res.ok) {
+        setRequestedIds((prev) => new Set([...prev, studentId]))
+      }
+    } catch {
+      // 無視
+    } finally {
+      setRequestingId(null)
+    }
+  }
 
   const handleAwardMedal = async () => {
     if (!settings) return
@@ -314,7 +335,23 @@ function RankingTable({
                     <td className="px-3 py-3 text-center">
                       <span className={`font-bold ${rankColor}`}>{r.rank}位</span>
                     </td>
-                    <td className="px-3 py-3 text-gray-700 font-medium">{r.test_name}</td>
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-700 font-medium">{r.test_name}</span>
+                        {requestedIds.has(r.student_id) ? (
+                          <span className="text-xs text-orange-500 font-medium whitespace-nowrap">依頼済</span>
+                        ) : (
+                          <button
+                            onClick={() => handleRequestNameChange(r.student_id)}
+                            disabled={requestingId === r.student_id}
+                            className="text-xs text-gray-400 border border-gray-300 px-1.5 py-0.5 rounded hover:text-orange-600 hover:border-orange-400 transition whitespace-nowrap disabled:opacity-50"
+                            title="テストネームの変更を依頼する"
+                          >
+                            {requestingId === r.student_id ? '...' : '修正依頼'}
+                          </button>
+                        )}
+                      </div>
+                    </td>
                     {rounds.map((round) => (
                       <td key={round} className="px-3 py-3 text-right text-gray-600">
                         {r.roundValues[String(round)] != null

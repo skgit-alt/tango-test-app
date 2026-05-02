@@ -62,5 +62,11 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: 'リクエストの作成に失敗しました' }, { status: 500 })
 
+  // 申請完了時点でフラグをリセット（先生の依頼に対応した扱い）
+  await admin
+    .from('students')
+    .update({ must_change_test_name: false })
+    .eq('id', user.id)
+
   return NextResponse.json({ ok: true })
 }

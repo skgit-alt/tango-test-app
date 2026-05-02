@@ -177,6 +177,11 @@ export default async function StudentHomePage() {
                 テストネーム: {student.test_name}
                 {medalDisplay && <span className="ml-1">{medalDisplay}</span>}
               </p>
+              {student.must_change_test_name && (
+                <div className="mt-2 bg-orange-50 border border-orange-300 rounded-xl px-3 py-2.5 text-sm text-orange-700 font-medium">
+                  ⚠️ 先生からテストネームの変更を依頼されています。下のボタンから申請してください。
+                </div>
+              )}
               {student.test_name && (
                 <RequestNameChangeButton currentTestName={student.test_name} />
               )}

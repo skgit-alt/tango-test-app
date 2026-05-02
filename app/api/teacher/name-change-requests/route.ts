@@ -55,7 +55,7 @@ export async function PATCH(req: NextRequest) {
 
     const { error: updateError } = await admin
       .from('students')
-      .update({ test_name: request.requested_name })
+      .update({ test_name: request.requested_name, must_change_test_name: false })
       .eq('id', request.student_id)
 
     if (updateError) {

@@ -16,6 +16,7 @@ export interface Student {
   seat_number: number
   test_name: string | null
   must_change_password: boolean
+  must_change_test_name: boolean
   created_at: string
 }
 
