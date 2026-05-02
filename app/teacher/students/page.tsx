@@ -21,6 +21,9 @@ function NameChangeRequestsPanel({ onResolved }: { onResolved: () => void }) {
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  // 却下理由入力
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
 
   const fetchRequests = async () => {
     setLoading(true)
@@ -34,20 +37,22 @@ function NameChangeRequestsPanel({ onResolved }: { onResolved: () => void }) {
 
   useEffect(() => { fetchRequests() }, [])
 
-  const handleAction = async (id: string, action: 'approve' | 'reject') => {
+  const handleAction = async (id: string, action: 'approve' | 'reject', reason?: string) => {
     setProcessing(id)
     setActionError(null)
     try {
       const res = await fetch('/api/teacher/name-change-requests', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, action }),
+        body: JSON.stringify({ id, action, ...(reason ? { reject_reason: reason } : {}) }),
       })
       const data = await res.json()
       if (!res.ok) {
         setActionError(data.error ?? '処理に失敗しました')
         return
       }
+      setRejectingId(null)
+      setRejectReason('')
       // 最新の申請リストをサーバーから再取得
       await fetchRequests()
       onResolved()
@@ -75,32 +80,64 @@ function NameChangeRequestsPanel({ onResolved }: { onResolved: () => void }) {
       <div className="space-y-2">
         {requests.map((r) => {
           const st = Array.isArray(r.students) ? r.students[0] : r.students
+          const isRejecting = rejectingId === r.id
           return (
-            <div key={r.id} className="bg-white border border-yellow-100 rounded-xl px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
-              <div className="text-sm">
-                <span className="text-gray-500 text-xs">{st?.class_name} {st?.seat_number}番 {st?.name}</span>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-gray-700 font-medium">{r.current_name}</span>
-                  <span className="text-gray-400">→</span>
-                  <span className="text-blue-700 font-bold">{r.requested_name}</span>
+            <div key={r.id} className="bg-white border border-yellow-100 rounded-xl px-4 py-3 space-y-2">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="text-sm">
+                  <span className="text-gray-500 text-xs">{st?.class_name} {st?.seat_number}番 {st?.name}</span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-gray-700 font-medium">{r.current_name}</span>
+                    <span className="text-gray-400">→</span>
+                    <span className="text-blue-700 font-bold">{r.requested_name}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleAction(r.id, 'approve')}
+                    disabled={processing === r.id || isRejecting}
+                    className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-green-700 transition disabled:opacity-50"
+                  >
+                    承認
+                  </button>
+                  <button
+                    onClick={() => { setRejectingId(r.id); setRejectReason(''); setActionError(null) }}
+                    disabled={processing === r.id || isRejecting}
+                    className="bg-gray-200 text-gray-700 px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-gray-300 transition disabled:opacity-50"
+                  >
+                    却下
+                  </button>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleAction(r.id, 'approve')}
-                  disabled={processing === r.id}
-                  className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-green-700 transition disabled:opacity-50"
-                >
-                  承認
-                </button>
-                <button
-                  onClick={() => handleAction(r.id, 'reject')}
-                  disabled={processing === r.id}
-                  className="bg-gray-200 text-gray-700 px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-gray-300 transition disabled:opacity-50"
-                >
-                  却下
-                </button>
-              </div>
+              {/* 却下理由入力フォーム */}
+              {isRejecting && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
+                  <label className="block text-xs font-medium text-gray-600">却下の理由（任意）</label>
+                  <input
+                    type="text"
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    placeholder="例：他の生徒と被っています"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleAction(r.id, 'reject', rejectReason)}
+                      disabled={processing === r.id}
+                      className="bg-red-500 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-red-600 transition disabled:opacity-50"
+                    >
+                      {processing === r.id ? '処理中...' : '却下する'}
+                    </button>
+                    <button
+                      onClick={() => { setRejectingId(null); setRejectReason('') }}
+                      className="bg-gray-100 text-gray-600 px-4 py-1.5 rounded-lg text-sm hover:bg-gray-200 transition"
+                    >
+                      キャンセル
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )
         })}

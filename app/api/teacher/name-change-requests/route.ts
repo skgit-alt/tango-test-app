@@ -23,7 +23,7 @@ export async function PATCH(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { id, action } = await req.json() // action: 'approve' | 'reject'
+  const { id, action, reject_reason } = await req.json() // action: 'approve' | 'reject'
   if (!id || !['approve', 'reject'].includes(action)) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   }
@@ -69,6 +69,7 @@ export async function PATCH(req: NextRequest) {
     .update({
       status: action === 'approve' ? 'approved' : 'rejected',
       resolved_at: new Date().toISOString(),
+      ...(action === 'reject' && reject_reason ? { reject_reason: reject_reason.trim() } : {}),
     })
     .eq('id', id)
 

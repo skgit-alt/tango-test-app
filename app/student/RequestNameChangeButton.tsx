@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export default function RequestNameChangeButton({ currentTestName }: { currentTestName: string }) {
   const [open, setOpen] = useState(false)
@@ -8,6 +8,33 @@ export default function RequestNameChangeButton({ currentTestName }: { currentTe
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+
+  // 初回ロード時に最新申請状況を確認
+  const [initLoading, setInitLoading] = useState(true)
+  const [latestStatus, setLatestStatus] = useState<'pending' | 'rejected' | 'approved' | null>(null)
+  const [rejectReason, setRejectReason] = useState<string | null>(null)
+  const [rejectedName, setRejectedName] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchLatest = async () => {
+      try {
+        const res = await fetch('/api/student/request-name-change')
+        if (res.ok) {
+          const data = await res.json()
+          if (data.request) {
+            setLatestStatus(data.request.status)
+            setRejectReason(data.request.reject_reason ?? null)
+            setRejectedName(data.request.requested_name ?? null)
+          }
+        }
+      } catch {
+        // 無視
+      } finally {
+        setInitLoading(false)
+      }
+    }
+    fetchLatest()
+  }, [])
 
   const handleSubmit = async () => {
     const trimmed = newName.trim()
@@ -26,6 +53,7 @@ export default function RequestNameChangeButton({ currentTestName }: { currentTe
       const data = await res.json()
       if (!res.ok) { setError(data.error); return }
       setSuccess(true)
+      setLatestStatus('pending')
       setOpen(false)
     } catch {
       setError('通信エラーが発生しました')
@@ -34,10 +62,38 @@ export default function RequestNameChangeButton({ currentTestName }: { currentTe
     }
   }
 
-  if (success) {
+  if (initLoading) return null
+
+  // 申請が却下された場合
+  if (latestStatus === 'rejected') {
     return (
-      <p className="text-green-600 text-xs mt-2">
-        ✅ テストネーム変更の申請を送りました。先生の承認をお待ちください。
+      <div className="mt-2 bg-red-50 border border-red-200 rounded-xl p-3 space-y-1.5">
+        <p className="text-red-600 text-xs font-medium">
+          ❌ テストネーム変更の申請が却下されました
+        </p>
+        {rejectReason && (
+          <p className="text-xs text-gray-600">
+            <span className="text-gray-400">理由：</span>{rejectReason}
+          </p>
+        )}
+        {rejectedName && (
+          <p className="text-xs text-gray-400">申請していたテストネーム：{rejectedName}</p>
+        )}
+        <button
+          onClick={() => { setLatestStatus(null); setRejectReason(null); setRejectedName(null) }}
+          className="text-xs text-blue-500 hover:underline mt-1 block"
+        >
+          再度申請する
+        </button>
+      </div>
+    )
+  }
+
+  // 申請が承認待ち（ページリロード後も表示）
+  if (latestStatus === 'pending' || success) {
+    return (
+      <p className="text-blue-600 text-xs mt-2">
+        ⏳ テストネーム変更の申請中です。先生の承認をお待ちください。
       </p>
     )
   }
