@@ -204,7 +204,7 @@ export default function TestClient({
 
   const handlePageChange = (newPage: number) => {
     setCurrentPage(newPage)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    window.scrollTo({ top: 0, behavior: 'instant' })
     saveCurrentPage(newPage) // fire and forget
   }
 
@@ -448,7 +448,7 @@ export default function TestClient({
                   <>
                     {flaggedCount > 0 && (
                       <button
-                        onClick={() => { setShowFlaggedOnly(true); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+                        onClick={() => { setShowFlaggedOnly(true); window.scrollTo({ top: 0, behavior: 'instant' }) }}
                         className="bg-yellow-400 text-white px-4 py-4 rounded-2xl font-bold hover:bg-yellow-500 active:scale-95 transition-all shadow-md whitespace-nowrap text-sm"
                       >
                         ★ {flaggedCount}問確認
@@ -463,7 +463,7 @@ export default function TestClient({
               <div className="flex gap-2">
                 {flaggedCount > 0 && (
                   <button
-                    onClick={() => { setShowFlaggedOnly(true); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+                    onClick={() => { setShowFlaggedOnly(true); window.scrollTo({ top: 0, behavior: 'instant' }) }}
                     className="bg-yellow-400 text-white px-4 py-4 rounded-2xl font-bold hover:bg-yellow-500 active:scale-95 transition-all shadow-md whitespace-nowrap text-sm"
                   >
                     ★ {flaggedCount}問を確認
