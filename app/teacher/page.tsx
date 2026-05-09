@@ -18,6 +18,7 @@ export default async function TeacherPage() {
   const { data: allSessions } = await admin
     .from('sessions')
     .select('id, test_id')
+    .neq('is_practice', true)   // 練習セッションの不正ログは除外
 
   const { data: cheatData } = await admin
     .from('cheat_logs')
