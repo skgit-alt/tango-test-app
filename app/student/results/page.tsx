@@ -38,6 +38,7 @@ export default async function ResultsPage() {
 
   const sessions300 = visibleSessions.filter((s) => (s.tests as any)?.mode === 300)
   const sessions50 = visibleSessions.filter((s) => (s.tests as any)?.mode === 50)
+  const sessions20 = visibleSessions.filter((s) => (s.tests as any)?.mode === 20)
 
   return (
     <div className="min-h-screen bg-blue-50">
@@ -127,6 +128,44 @@ export default async function ResultsPage() {
                           <div className="text-right">
                             <p className="font-bold text-gray-800 text-lg">{s.score}点</p>
                             <p className="text-xs text-blue-600 font-medium">+{pts}pt</p>
+                          </div>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 20問テストの結果 */}
+            {sessions20.length > 0 && (
+              <div>
+                <h2 className="text-sm font-bold text-gray-500 mb-3 px-1">📝 20問テスト</h2>
+                <div className="space-y-2">
+                  {sessions20.map((s) => {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const test = s.tests as any
+                    const passed = test.pass_score !== null ? (s.score ?? 0) >= test.pass_score : null
+                    return (
+                      <Link
+                        key={s.id}
+                        href={`/student/result?sessionId=${s.id}`}
+                        className="block bg-white rounded-2xl border border-gray-200 px-5 py-4 hover:bg-gray-50 active:bg-gray-100 transition"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <p className="font-semibold text-gray-800 text-sm">{test.title}</p>
+                            <p className="text-xs text-gray-400">
+                              {s.submitted_at ? new Date(s.submitted_at).toLocaleDateString('ja-JP') : ''}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-gray-800 text-lg">{s.score}点</p>
+                            {passed !== null && (
+                              <p className={`text-xs font-medium ${passed ? 'text-green-600' : 'text-red-500'}`}>
+                                {passed ? '合格' : '不合格'}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </Link>
