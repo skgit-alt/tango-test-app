@@ -1587,7 +1587,7 @@ export default function TestManagerClient({
                 {cheatLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-red-50">
                     <td className="px-4 py-3 text-gray-500">
-                      {new Date(log.occurred_at).toLocaleTimeString('ja-JP')}
+                      {new Date(log.occurred_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </td>
                     <td className="px-4 py-3 text-gray-700">
                       {log.sessions?.students?.class_name ?? '-'} {log.sessions?.students?.seat_number ?? ''}
