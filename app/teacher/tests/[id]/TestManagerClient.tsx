@@ -806,7 +806,7 @@ export default function TestManagerClient({
       )}
 
       {/* 統計カード */}
-      <div className={`grid gap-4 ${cheatLogs.length > 0 ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4'}`}>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         {[
           { label: '総問題数', value: questions.length, color: 'text-gray-800' },
           { label: '接続済み', value: sessions.length, color: 'text-blue-600' },
@@ -818,7 +818,13 @@ export default function TestManagerClient({
             <p className="text-sm text-gray-500 mt-1">{card.label}</p>
           </div>
         ))}
-        {cheatLogs.length > 0 && (
+        {/* 不正行為タイル（常に表示） */}
+        {cheatLogs.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-200 p-4 text-center">
+            <p className="text-3xl font-bold text-gray-300">0</p>
+            <p className="text-sm text-gray-400 mt-1">不正行為無し</p>
+          </div>
+        ) : (
           <button
             onClick={() => cheatLogRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
             className={`rounded-2xl border p-4 text-center transition cursor-pointer ${

@@ -14,17 +14,25 @@ export default async function TeacherPage() {
     .select('*')
     .order('created_at', { ascending: false })
 
-  // 各テストの未確認不正行為数を取得
-  // cheat_logs → sessions.test_id でグルーピング
+  // 各テストの不正行為最新時刻を取得（2ステップで確実にマッピング）
+  const { data: allSessions } = await admin
+    .from('sessions')
+    .select('id, test_id')
+
   const { data: cheatData } = await admin
     .from('cheat_logs')
-    .select('occurred_at, sessions!inner(test_id)')
+    .select('session_id, occurred_at')
+
+  // session_id → test_id のマップを作成
+  const sessionTestMap: Record<string, string> = {}
+  for (const s of allSessions ?? []) {
+    if (s.id && s.test_id) sessionTestMap[s.id] = s.test_id
+  }
 
   // テストIDごとに最新の不正行為発生時刻を集計
   const cheatLatestMap: Record<string, string> = {}
   for (const log of cheatData ?? []) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const testId = (log.sessions as any)?.test_id as string | undefined
+    const testId = sessionTestMap[log.session_id]
     if (!testId) continue
     if (!cheatLatestMap[testId] || log.occurred_at > cheatLatestMap[testId]) {
       cheatLatestMap[testId] = log.occurred_at
