@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Test, Session, CheatLog, Student, Question, calcPoints } from '@/lib/supabase/types'
 import * as XLSX from 'xlsx'
@@ -132,6 +132,9 @@ export default function TestManagerClient({
   })
   const [savingSchedule, setSavingSchedule] = useState(false)
 
+  // 不正行為ログセクションへのref
+  const cheatLogRef = useRef<HTMLDivElement>(null)
+
   const fetchData = useCallback(async () => {
     // admin権限APIでRLSをバイパスしてセッション・生徒一覧取得
     const res = await fetch(`/api/teacher/test-sessions?testId=${test.id}`)
@@ -183,6 +186,13 @@ export default function TestManagerClient({
       body: JSON.stringify({ testId: test.id, patch }),
     })
     return res.ok
+  }
+
+  // 不正行為を確認済みにする
+  const handleConfirmCheats = async () => {
+    const now = new Date().toISOString()
+    const ok = await updateTest({ cheats_confirmed_at: now })
+    if (ok) setTest((prev) => ({ ...prev, cheats_confirmed_at: now }))
   }
 
   const handleOpenClass = async (className: string) => {
@@ -544,6 +554,14 @@ export default function TestManagerClient({
   const submittedCount = sessions.filter((s) => s.is_submitted).length
   const startedCount = sessions.filter((s) => s.started_at).length
 
+  // 不正行為が全て確認済みかどうか
+  const latestCheatAt = cheatLogs.length > 0
+    ? cheatLogs.reduce((max, log) => log.occurred_at > max ? log.occurred_at : max, '')
+    : null
+  const isCheatConfirmed = latestCheatAt === null || (
+    test.cheats_confirmed_at != null && test.cheats_confirmed_at >= latestCheatAt
+  )
+
   // セッションあり・なし両方を統合した表示行
   const sessionByStudentId = Object.fromEntries(sessions.map((s) => [s.student_id, s]))
   const tableRows: TableRow[] = [
@@ -788,7 +806,7 @@ export default function TestManagerClient({
       )}
 
       {/* 統計カード */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className={`grid gap-4 ${cheatLogs.length > 0 ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4'}`}>
         {[
           { label: '総問題数', value: questions.length, color: 'text-gray-800' },
           { label: '接続済み', value: sessions.length, color: 'text-blue-600' },
@@ -800,6 +818,23 @@ export default function TestManagerClient({
             <p className="text-sm text-gray-500 mt-1">{card.label}</p>
           </div>
         ))}
+        {cheatLogs.length > 0 && (
+          <button
+            onClick={() => cheatLogRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            className={`rounded-2xl border p-4 text-center transition cursor-pointer ${
+              isCheatConfirmed
+                ? 'bg-white border-gray-200 hover:bg-gray-50'
+                : 'bg-red-50 border-red-300 hover:bg-red-100'
+            }`}
+          >
+            <p className={`text-3xl font-bold ${isCheatConfirmed ? 'text-gray-400' : 'text-red-600'}`}>
+              {cheatLogs.length}
+            </p>
+            <p className={`text-sm mt-1 ${isCheatConfirmed ? 'text-gray-400' : 'text-red-500'}`}>
+              不正行為{isCheatConfirmed ? '（確認済）' : ''}
+            </p>
+          </button>
+        )}
       </div>
 
       {/* テスト開始 */}
@@ -1173,7 +1208,7 @@ export default function TestManagerClient({
                       <td className="px-4 py-3 text-gray-800 font-medium">{row.name}</td>
                       <td className="px-4 py-3 text-gray-500 text-sm">
                         {hasData && row.started_at
-                          ? new Date(row.started_at).toLocaleTimeString('ja-JP')
+                          ? new Date(row.started_at).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
                           : dash}
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -1518,9 +1553,19 @@ export default function TestManagerClient({
 
       {/* 不正ログ */}
       {cheatLogs.length > 0 && (
-        <div className="bg-white rounded-2xl border border-red-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-red-100 bg-red-50">
+        <div ref={cheatLogRef} className="bg-white rounded-2xl border border-red-200 overflow-hidden">
+          <div className="px-5 py-4 border-b border-red-100 bg-red-50 flex items-center justify-between">
             <h2 className="font-semibold text-red-800">不正行為ログ ({cheatLogs.length}件)</h2>
+            {isCheatConfirmed ? (
+              <span className="text-xs text-gray-400 font-medium">✓ 確認済み</span>
+            ) : (
+              <button
+                onClick={handleConfirmCheats}
+                className="text-xs bg-red-600 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-red-700 transition"
+              >
+                確認
+              </button>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

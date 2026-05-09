@@ -37,6 +37,7 @@ export interface Test {
   published_student_ids: string[] | null
   teacher_message: string | null
   scheduled_class_starts: Record<string, string> | null
+  cheats_confirmed_at: string | null
 }
 
 /** 生徒がテスト結果を閲覧できるか判定 */

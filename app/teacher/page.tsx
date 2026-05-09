@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { Test } from '@/lib/supabase/types'
 import Link from 'next/link'
 import DownloadButtons from './DownloadButtons'
@@ -6,10 +7,29 @@ import TestListClient from './TestListClient'
 
 export default async function TeacherPage() {
   const supabase = await createClient()
+  const admin = createAdminClient()
+
   const { data: tests } = await supabase
     .from('tests')
     .select('*')
     .order('created_at', { ascending: false })
+
+  // 各テストの未確認不正行為数を取得
+  // cheat_logs → sessions.test_id でグルーピング
+  const { data: cheatData } = await admin
+    .from('cheat_logs')
+    .select('occurred_at, sessions!inner(test_id)')
+
+  // テストIDごとに最新の不正行為発生時刻を集計
+  const cheatLatestMap: Record<string, string> = {}
+  for (const log of cheatData ?? []) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const testId = (log.sessions as any)?.test_id as string | undefined
+    if (!testId) continue
+    if (!cheatLatestMap[testId] || log.occurred_at > cheatLatestMap[testId]) {
+      cheatLatestMap[testId] = log.occurred_at
+    }
+  }
 
   return (
     <div>
@@ -26,7 +46,7 @@ export default async function TeacherPage() {
         </div>
       </div>
 
-      <TestListClient tests={(tests ?? []) as Test[]} />
+      <TestListClient tests={(tests ?? []) as Test[]} cheatLatestMap={cheatLatestMap} />
     </div>
   )
 }

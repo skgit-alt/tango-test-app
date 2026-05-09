@@ -63,11 +63,13 @@ function TestCard({
   test,
   config,
   selected,
+  hasUnconfirmedCheat,
   onToggle,
 }: {
   test: Test
   config: ColumnConfig
   selected: boolean
+  hasUnconfirmedCheat: boolean
   onToggle: () => void
 }) {
   return (
@@ -81,9 +83,14 @@ function TestCard({
       />
       <Link href={`/teacher/tests/${test.id}`} className="flex-1 min-w-0 group">
         <div className="flex items-start justify-between gap-1">
-          <p className="text-sm font-semibold text-gray-800 leading-snug line-clamp-2 group-hover:text-blue-600 transition">
-            {test.title}
-          </p>
+          <div className="flex items-start gap-1.5 min-w-0">
+            {hasUnconfirmedCheat && (
+              <span className="w-2 h-2 rounded-full bg-red-500 shrink-0 mt-1.5" title="未確認の不正行為あり" />
+            )}
+            <p className="text-sm font-semibold text-gray-800 leading-snug line-clamp-2 group-hover:text-blue-600 transition">
+              {test.title}
+            </p>
+          </div>
           <svg className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-400 shrink-0 mt-0.5 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
@@ -112,12 +119,14 @@ function TestColumn({
   config,
   tests,
   selectedIds,
+  cheatLatestMap,
   onToggle,
   onToggleAll,
 }: {
   config: ColumnConfig
   tests: Test[]
   selectedIds: Set<string>
+  cheatLatestMap: Record<string, string>
   onToggle: (id: string) => void
   onToggleAll: (ids: string[], selectAll: boolean) => void
 }) {
@@ -167,15 +176,22 @@ function TestColumn({
           </div>
         ) : (
           <div className="overflow-y-auto max-h-[65vh] divide-y divide-gray-100">
-            {visible.map((test) => (
-              <TestCard
-                key={test.id}
-                test={test}
-                config={config}
-                selected={selectedIds.has(test.id)}
-                onToggle={() => onToggle(test.id)}
-              />
-            ))}
+            {visible.map((test) => {
+              const latestCheat = cheatLatestMap[test.id]
+              const hasUnconfirmedCheat = latestCheat != null && (
+                test.cheats_confirmed_at == null || latestCheat > test.cheats_confirmed_at
+              )
+              return (
+                <TestCard
+                  key={test.id}
+                  test={test}
+                  config={config}
+                  selected={selectedIds.has(test.id)}
+                  hasUnconfirmedCheat={hasUnconfirmedCheat}
+                  onToggle={() => onToggle(test.id)}
+                />
+              )
+            })}
           </div>
         )}
 
@@ -203,7 +219,13 @@ function TestColumn({
 
 // ─── メインコンポーネント ─────────────────────────────────────────────────────
 
-export default function TestListClient({ tests: initialTests }: { tests: Test[] }) {
+export default function TestListClient({
+  tests: initialTests,
+  cheatLatestMap,
+}: {
+  tests: Test[]
+  cheatLatestMap: Record<string, string>
+}) {
   const router = useRouter()
 
   const [tests, setTests] = useState<Test[]>(initialTests)
@@ -303,6 +325,7 @@ export default function TestListClient({ tests: initialTests }: { tests: Test[] 
             config={col}
             tests={grouped[col.key]}
             selectedIds={selectedIds}
+            cheatLatestMap={cheatLatestMap}
             onToggle={toggleSelect}
             onToggleAll={toggleColumnAll}
           />
