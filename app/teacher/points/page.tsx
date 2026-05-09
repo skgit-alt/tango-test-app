@@ -381,10 +381,12 @@ function ClassAveragesChart({
   classAverages,
   rounds,
   loading,
+  is20,
 }: {
   classAverages: ClassAvg[]
   rounds: number[]
   loading: boolean
+  is20: boolean
 }) {
   if (loading || classAverages.length === 0) return null
 
@@ -409,7 +411,7 @@ function ClassAveragesChart({
         <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="name" />
-          <YAxis domain={[0, 100]} />
+          <YAxis domain={[0, is20 ? 20 : 100]} />
           <Tooltip />
           <Legend />
           {allClasses.map((cls, i) => (
@@ -553,6 +555,7 @@ export default function PointsPage() {
         classAverages={activeData.classAverages}
         rounds={activeData.rounds}
         loading={activeLoading}
+        is20={activeTab === 20}
       />
 
       {/* ランキングテーブル */}
