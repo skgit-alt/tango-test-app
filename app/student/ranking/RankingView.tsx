@@ -103,6 +103,33 @@ export default function RankingView({
         </div>
       )}
 
+      {/* ポイント早見表（50問のみ） */}
+      {mode === 50 && (
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-2.5 bg-green-700">
+            <p className="text-xs font-bold text-white">ポイント早見表</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-center text-sm">
+              <thead>
+                <tr className="bg-green-600 text-white">
+                  {['100点','98〜96点','94〜92点','90〜88点','86〜84点','82〜80点','78〜76点','74〜72点','70点以下'].map((s) => (
+                    <th key={s} className="px-2 py-2 font-medium whitespace-nowrap border-r border-green-500 last:border-r-0 text-xs">{s}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  {['10p','7p','6p','5p','4p','3p','2p','1p','0p'].map((p) => (
+                    <td key={p} className="px-2 py-3 font-bold text-green-700 text-base border-r border-gray-100 last:border-r-0">{p}</td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* ランキングテーブル */}
       {ranking.length > 0 ? (
         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
