@@ -109,23 +109,29 @@ export default function RankingView({
           <div className="px-4 py-2.5 bg-green-700">
             <p className="text-xs font-bold text-white">ポイント早見表</p>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-center text-sm">
-              <thead>
-                <tr className="bg-green-600 text-white">
-                  {['100点','98〜96点','94〜92点','90〜88点','86〜84点','82〜80点','78〜76点','74〜72点','70点以下'].map((s) => (
-                    <th key={s} className="px-2 py-2 font-medium whitespace-nowrap border-r border-green-500 last:border-r-0 text-xs">{s}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  {['10p','7p','6p','5p','4p','3p','2p','1p','0p'].map((p) => (
-                    <td key={p} className="px-2 py-3 font-bold text-green-700 text-base border-r border-gray-100 last:border-r-0">{p}</td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
+          <div className="grid grid-cols-3">
+            {[
+              { score: '100点',    pt: '10p' },
+              { score: '98〜96点', pt: '7p'  },
+              { score: '94〜92点', pt: '6p'  },
+              { score: '90〜88点', pt: '5p'  },
+              { score: '86〜84点', pt: '4p'  },
+              { score: '82〜80点', pt: '3p'  },
+              { score: '78〜76点', pt: '2p'  },
+              { score: '74〜72点', pt: '1p'  },
+              { score: '70点以下', pt: '0p'  },
+            ].map(({ score, pt }, i) => (
+              <div
+                key={score}
+                className={`flex flex-col items-center py-3 bg-white
+                  ${i % 3 !== 2 ? 'border-r border-gray-100' : ''}
+                  ${i < 6 ? 'border-b border-gray-100' : ''}
+                `}
+              >
+                <p className="text-xs text-gray-400 mb-0.5">{score}</p>
+                <p className="text-xl font-bold text-green-700">{pt}</p>
+              </div>
+            ))}
           </div>
         </div>
       )}
