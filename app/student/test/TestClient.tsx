@@ -37,6 +37,8 @@ export default function TestClient({
     return Math.max(0, test.time_limit - elapsed)
   })
   const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false)
   const [cheatWarning, setCheatWarning] = useState<CheatWarning>({
     visible: false,
@@ -49,6 +51,11 @@ export default function TestClient({
   const submittingRef = useRef(false)
   const deviceTokenRef = useRef<string>('')
   const topRef = useRef<HTMLDivElement>(null)
+  const answersRef = useRef(answers)
+
+  const MAX_RETRIES = 3
+  const RETRY_DELAYS = [1000, 2000, 3000]
+  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
   const totalPages = test.mode === 300 ? 3 : 1
 
@@ -61,32 +68,56 @@ export default function TestClient({
     ? questions.filter((q) => flagged.has(q.id))
     : pageQuestions
 
+  // answersRefを常に最新の状態に保つ（定期保存用）
+  useEffect(() => { answersRef.current = answers }, [answers])
+
   const submitTest = useCallback(async () => {
     if (submittingRef.current) return
     submittingRef.current = true
     setSubmitting(true)
-    try {
-      const answersArray = questions.map((q) => ({
-        question_id: q.id,
-        selected_answer: answers[q.id] ?? null,
-        flagged: flagged.has(q.id),
-      }))
-      await fetch('/api/student/submit-test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: session.id, answers: answersArray }),
-      })
-      if (isPractice) {
-        router.push(`/student/result?sessionId=${session.id}`)
-      } else {
-        router.push('/student/waiting-result')
+    setSubmitError(null)
+    setRetryCount(0)
+
+    const answersArray = questions.map((q) => ({
+      question_id: q.id,
+      selected_answer: answers[q.id] ?? null,
+      flagged: flagged.has(q.id),
+    }))
+
+    let lastError = '不明なエラー'
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        setRetryCount(attempt)
+        await sleep(RETRY_DELAYS[attempt - 1])
       }
-    } catch (err) {
-      console.error(err)
-      setSubmitting(false)
-      submittingRef.current = false
+      try {
+        const res = await fetch('/api/student/submit-test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: session.id, answers: answersArray }),
+        })
+        if (res.ok) {
+          // 成功 → ページ遷移（submittingRefはリセットしない）
+          if (isPractice) router.push(`/student/result?sessionId=${session.id}`)
+          else router.push('/student/waiting-result')
+          return
+        }
+        lastError = `サーバーエラー (${res.status})`
+        console.error(`[submit-test] attempt ${attempt + 1} failed: HTTP ${res.status}`)
+      } catch (err) {
+        lastError = 'ネットワークエラー'
+        console.error(`[submit-test] attempt ${attempt + 1} network error:`, err)
+      }
     }
-  }, [answers, questions, session.id, router, flagged])
+
+    // 全リトライ失敗
+    console.error('[submit-test] all retries failed:', lastError)
+    setSubmitting(false)
+    setRetryCount(0)
+    submittingRef.current = false
+    setSubmitError(lastError)
+  }, [answers, questions, session.id, router, flagged, isPractice])
 
   // 端末ロック：このデバイスでセッションを確保し、30秒ごとにハートビート送信
   useEffect(() => {
@@ -123,6 +154,28 @@ export default function TestClient({
 
     return () => clearInterval(heartbeat)
   }, [session.id])
+
+  // 60秒ごとに答案をDBへ定期保存（練習テストは除外）
+  useEffect(() => {
+    if (isPractice) return
+    const interval = setInterval(async () => {
+      if (submittingRef.current) return
+      const answersArray = questions.map((q) => ({
+        question_id: q.id,
+        selected_answer: answersRef.current[q.id] ?? null,
+      }))
+      try {
+        await fetch('/api/student/save-answers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: session.id, answers: answersArray }),
+        })
+      } catch (e) {
+        console.error('[save-answers] periodic save failed:', e)
+      }
+    }, 60_000)
+    return () => clearInterval(interval)
+  }, [questions, session.id, isPractice])
 
   useEffect(() => {
     if (timeLeft <= 0) { submitTest(); return }
@@ -267,8 +320,42 @@ export default function TestClient({
       {submitting && (
         <div className="fixed inset-0 bg-white/90 z-50 flex flex-col items-center justify-center gap-4">
           <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-lg font-bold text-gray-700">送信中...</p>
-          <p className="text-sm text-gray-400">しばらくお待ちください</p>
+          {retryCount === 0 ? (
+            <>
+              <p className="text-lg font-bold text-gray-700">送信中...</p>
+              <p className="text-sm text-gray-400">しばらくお待ちください</p>
+            </>
+          ) : (
+            <>
+              <p className="text-lg font-bold text-orange-600">再送信中... ({retryCount}/{MAX_RETRIES})</p>
+              <p className="text-sm text-gray-400">接続を再試行しています</p>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* 送信失敗オーバーレイ */}
+      {submitError && !submitting && (
+        <div className="fixed inset-0 bg-white/95 z-50 flex flex-col items-center justify-center gap-6 p-6">
+          <div className="text-5xl">⚠️</div>
+          <div className="text-center space-y-2">
+            <p className="text-xl font-bold text-red-700">送信に失敗しました</p>
+            <p className="text-sm text-gray-600">
+              通信エラーが発生しました。<br />
+              <span className="font-semibold text-gray-800">回答はまだ残っています。</span><br />
+              もう一度お試しください。
+            </p>
+            <p className="text-xs text-gray-400">({submitError})</p>
+          </div>
+          <button
+            onClick={() => { setSubmitError(null); submitTest() }}
+            className="w-full max-w-xs bg-green-600 text-white py-4 rounded-2xl font-bold text-lg hover:bg-green-700 active:scale-95 transition-all shadow-md"
+          >
+            もう一度送信する
+          </button>
+          <p className="text-xs text-gray-400 text-center">
+            何度試しても失敗する場合は、先生に知らせてください。
+          </p>
         </div>
       )}
 
