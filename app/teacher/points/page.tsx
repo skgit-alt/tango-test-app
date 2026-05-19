@@ -56,8 +56,6 @@ function SettingsPanel({
   const [fromRound, setFromRound] = useState('')
   const [toRound, setToRound] = useState('')
   const [label, setLabel] = useState('')
-  const [rankingType, setRankingType] = useState<'points' | 'score'>('points')
-  const [maxRank, setMaxRank] = useState('30')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -65,21 +63,14 @@ function SettingsPanel({
       setFromRound(String(settings.from_round))
       setToRound(String(settings.to_round))
       setLabel(settings.label ?? '')
-      setRankingType((settings.ranking_type as 'points' | 'score') ?? (activeMode === 20 ? 'score' : 'points'))
-      setMaxRank(String(settings.max_rank ?? 30))
     }
-  }, [settings, activeMode])
+  }, [settings])
 
   const handleSave = async () => {
     const from = parseInt(fromRound)
     const to = parseInt(toRound)
-    const maxR = parseInt(maxRank)
     if (isNaN(from) || isNaN(to) || from > to || from < 1) {
       alert('正しい回数を入力してください')
-      return
-    }
-    if (isNaN(maxR) || maxR < 1 || maxR > 200) {
-      alert('表示順位数は1〜200で入力してください')
       return
     }
     setSaving(true)
@@ -91,8 +82,6 @@ function SettingsPanel({
         to_round: to,
         label: label || `第${from}回〜第${to}回`,
         mode: activeMode,
-        ranking_type: rankingType,
-        max_rank: maxR,
       }),
     })
     if (res.ok) {
@@ -168,48 +157,6 @@ function SettingsPanel({
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-2">ランキング表示方法</label>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setRankingType('points')}
-                className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition ${
-                  rankingType === 'points'
-                    ? 'bg-green-600 text-white border-green-600'
-                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                ポイント（pt）
-              </button>
-              <button
-                type="button"
-                onClick={() => setRankingType('score')}
-                className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition ${
-                  rankingType === 'score'
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                点数（点）
-              </button>
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">表示順位数</label>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">上位</span>
-              <input
-                type="number"
-                min={1}
-                max={200}
-                value={maxRank}
-                onChange={(e) => setMaxRank(e.target.value)}
-                className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <span className="text-sm text-gray-600">位まで</span>
-            </div>
-          </div>
           <div className="flex gap-2">
             <button
               onClick={handleSave}
@@ -227,6 +174,142 @@ function SettingsPanel({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── 各種設定パネル ───────────────────────────────────────────────────────────
+
+function AdvancedSettingsPanel({
+  settings,
+  activeMode,
+  onSaved,
+  onClose,
+}: {
+  settings: Settings | null
+  activeMode: 50 | 20
+  onSaved: () => void
+  onClose: () => void
+}) {
+  const [rankingType, setRankingType] = useState<'points' | 'score'>('points')
+  const [maxRank, setMaxRank] = useState('30')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (settings) {
+      setRankingType((settings.ranking_type as 'points' | 'score') ?? (activeMode === 20 ? 'score' : 'points'))
+      setMaxRank(String(settings.max_rank ?? 30))
+    }
+  }, [settings, activeMode])
+
+  const handleSave = async () => {
+    const maxR = parseInt(maxRank)
+    if (isNaN(maxR) || maxR < 1 || maxR > 200) {
+      alert('表示順位数は1〜200で入力してください')
+      return
+    }
+    setSaving(true)
+    const res = await fetch('/api/teacher/ranking-data', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from_round: settings?.from_round ?? 1,
+        to_round: settings?.to_round ?? 1,
+        label: settings?.label ?? '',
+        mode: activeMode,
+        ranking_type: rankingType,
+        max_rank: maxR,
+      }),
+    })
+    if (res.ok) {
+      onSaved()
+      onClose()
+    } else {
+      alert('保存に失敗しました')
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-5 shadow-md">
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold text-gray-800">
+          各種設定 <span className="text-sm text-gray-400 font-normal ml-1">（{activeMode === 50 ? '50問' : '20問'}ランキング）</span>
+        </h2>
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-gray-600 text-xl leading-none transition"
+          aria-label="閉じる"
+        >
+          ×
+        </button>
+      </div>
+
+      <div className="space-y-5 pt-1 border-t border-gray-100">
+        {/* ランキング表示方法 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">ランキング表示方法</label>
+          <p className="text-xs text-gray-400 mb-3">合計値を「ポイント換算」か「点数そのまま」かを選びます</p>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setRankingType('points')}
+              className={`flex-1 py-3 rounded-xl text-sm font-semibold border-2 transition ${
+                rankingType === 'points'
+                  ? 'bg-green-600 text-white border-green-600'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              ⭐ ポイント（pt）
+            </button>
+            <button
+              type="button"
+              onClick={() => setRankingType('score')}
+              className={`flex-1 py-3 rounded-xl text-sm font-semibold border-2 transition ${
+                rankingType === 'score'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              📊 点数（点）
+            </button>
+          </div>
+        </div>
+
+        {/* 表示順位数 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">表示順位数</label>
+          <p className="text-xs text-gray-400 mb-3">何位まで表示するかを設定します（同率タイはその位内に全員表示）</p>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gray-600">上位</span>
+            <input
+              type="number"
+              min={1}
+              max={200}
+              value={maxRank}
+              onChange={(e) => setMaxRank(e.target.value)}
+              className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-center font-bold"
+            />
+            <span className="text-sm text-gray-600">位まで表示</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex gap-2 pt-1">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="bg-blue-600 text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-50"
+        >
+          {saving ? '保存中...' : '保存して再集計'}
+        </button>
+        <button
+          onClick={onClose}
+          className="border border-gray-300 text-gray-600 px-4 py-2.5 rounded-xl text-sm hover:bg-gray-50 transition"
+        >
+          キャンセル
+        </button>
+      </div>
     </div>
   )
 }
@@ -494,6 +577,7 @@ export default function PointsPage() {
   const [data20, setData20] = useState<RankingData>({ settings: null, rounds: [], ranking: [], classAverages: [] })
   const [loading50, setLoading50] = useState(true)
   const [loading20, setLoading20] = useState(true)
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
   const fetchData = async (mode: 50 | 20) => {
     const setter = mode === 50 ? setData50 : setData20
@@ -574,8 +658,8 @@ export default function PointsPage() {
         </div>
       </div>
 
-      {/* タブ */}
-      <div className="flex gap-2">
+      {/* タブ + 各種設定ボタン */}
+      <div className="flex items-center gap-2 flex-wrap">
         <button
           onClick={() => setActiveTab(50)}
           className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
@@ -596,7 +680,27 @@ export default function PointsPage() {
         >
           📄 20問スコアランキング
         </button>
+        <button
+          onClick={() => setShowAdvanced((v) => !v)}
+          className={`ml-auto px-4 py-2 rounded-xl text-sm font-semibold border transition flex items-center gap-1.5 ${
+            showAdvanced
+              ? 'bg-gray-700 text-white border-gray-700'
+              : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+          }`}
+        >
+          ⚙️ 各種設定
+        </button>
       </div>
+
+      {/* 各種設定パネル */}
+      {showAdvanced && (
+        <AdvancedSettingsPanel
+          settings={activeData.settings}
+          activeMode={activeTab}
+          onSaved={() => fetchData(activeTab)}
+          onClose={() => setShowAdvanced(false)}
+        />
+      )}
 
       {/* 集計期間設定 */}
       <SettingsPanel
