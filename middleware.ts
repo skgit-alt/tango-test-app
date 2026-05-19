@@ -50,6 +50,8 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|icons|manifest.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // API routeはそれぞれ独自に認証チェックするためミドルウェアから除外
+    // 静的ファイル・画像・フォントも除外
+    '/((?!api/|_next/static|_next/image|favicon.ico|icons|manifest.json|fonts/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ttf|woff2?)$).*)',
   ],
 }
