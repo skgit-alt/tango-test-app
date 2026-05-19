@@ -107,8 +107,8 @@ async function fetchRankingData(
         const round = testRoundMap[s.test_id]
         if (!round) continue
 
-        // 50Q はポイント換算、20Q はスコアそのまま
-        const value = is20 ? s.score : calcPoints(s.score)
+        // ranking_type='score' はスコアそのまま、'points' はポイント換算
+        const value = settings.ranking_type === 'score' ? s.score : calcPoints(s.score)
 
         if (!grouped[s.student_id]) {
           grouped[s.student_id] = {
@@ -131,7 +131,8 @@ async function fetchRankingData(
     }
   }
 
-  // タイを考慮したランキング（30位タイの全員を表示）
+  // タイを考慮したランキング（max_rank位タイの全員を表示）
+  const maxRank = settings.max_rank ?? 30
   const sorted = Object.entries(grouped)
     .map(([student_id, v]) => ({ student_id, ...v }))
     .sort((a, b) => b.total - a.total)
@@ -139,7 +140,7 @@ async function fetchRankingData(
   let rank = 1
   for (let i = 0; i < sorted.length; i++) {
     if (i > 0 && sorted[i].total < sorted[i - 1].total) rank = i + 1
-    if (rank > 30) break
+    if (rank > maxRank) break
     ranking.push({ ...sorted[i], rank })
   }
 

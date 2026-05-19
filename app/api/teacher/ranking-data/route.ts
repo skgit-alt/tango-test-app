@@ -126,8 +126,8 @@ export async function GET(req: NextRequest) {
         const round = testRoundMap[s.test_id]
         if (!round) continue
 
-        // 50Q はポイント換算、20Q はスコアそのまま
-        const value = is20 ? s.score : calcPoints(s.score)
+        // ranking_type='score' はスコアそのまま、'points' はポイント換算
+        const value = settings.ranking_type === 'score' ? s.score : calcPoints(s.score)
 
         if (!grouped[s.student_id]) {
           grouped[s.student_id] = {
@@ -150,7 +150,8 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // タイを考慮したランキング（30位タイの全員を表示）
+  // タイを考慮したランキング（max_rank位タイの全員を表示）
+  const maxRank = settings.max_rank ?? 30
   const sorted = Object.entries(grouped)
     .map(([student_id, v]) => ({ student_id, ...v }))
     .sort((a, b) => b.total - a.total)
@@ -158,7 +159,7 @@ export async function GET(req: NextRequest) {
   let rank = 1
   for (let i = 0; i < sorted.length; i++) {
     if (i > 0 && sorted[i].total < sorted[i - 1].total) rank = i + 1
-    if (rank > 30) break
+    if (rank > maxRank) break
     ranking.push({ ...sorted[i], rank })
   }
 
@@ -226,7 +227,7 @@ export async function PATCH(req: NextRequest) {
   if (!user) return NextResponse.json(null, { status: 401 })
 
   const body = await req.json()
-  const { from_round, to_round, label, mode } = body
+  const { from_round, to_round, label, mode, ranking_type, max_rank } = body
 
   if (!from_round || !to_round || from_round > to_round) {
     return NextResponse.json({ error: '無効な値です' }, { status: 400 })
@@ -235,12 +236,19 @@ export async function PATCH(req: NextRequest) {
   const settingsId = mode === 20 ? 2 : 1
   const admin = createAdminClient()
 
+  const upsertData: Record<string, unknown> = {
+    id: settingsId,
+    from_round,
+    to_round,
+    label,
+    updated_at: new Date().toISOString(),
+  }
+  if (ranking_type) upsertData.ranking_type = ranking_type
+  if (max_rank != null) upsertData.max_rank = max_rank
+
   const { error } = await admin
     .from('ranking_settings')
-    .upsert(
-      { id: settingsId, from_round, to_round, label, updated_at: new Date().toISOString() },
-      { onConflict: 'id' }
-    )
+    .upsert(upsertData, { onConflict: 'id' })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })

@@ -23,6 +23,8 @@ interface Settings {
   from_round: number
   to_round: number
   label: string
+  ranking_type: string  // 'points' | 'score'
+  max_rank: number
 }
 
 interface ClassAvg {
@@ -54,6 +56,8 @@ function SettingsPanel({
   const [fromRound, setFromRound] = useState('')
   const [toRound, setToRound] = useState('')
   const [label, setLabel] = useState('')
+  const [rankingType, setRankingType] = useState<'points' | 'score'>('points')
+  const [maxRank, setMaxRank] = useState('30')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -61,14 +65,21 @@ function SettingsPanel({
       setFromRound(String(settings.from_round))
       setToRound(String(settings.to_round))
       setLabel(settings.label ?? '')
+      setRankingType((settings.ranking_type as 'points' | 'score') ?? (activeMode === 20 ? 'score' : 'points'))
+      setMaxRank(String(settings.max_rank ?? 30))
     }
-  }, [settings])
+  }, [settings, activeMode])
 
   const handleSave = async () => {
     const from = parseInt(fromRound)
     const to = parseInt(toRound)
+    const maxR = parseInt(maxRank)
     if (isNaN(from) || isNaN(to) || from > to || from < 1) {
       alert('正しい回数を入力してください')
+      return
+    }
+    if (isNaN(maxR) || maxR < 1 || maxR > 200) {
+      alert('表示順位数は1〜200で入力してください')
       return
     }
     setSaving(true)
@@ -80,6 +91,8 @@ function SettingsPanel({
         to_round: to,
         label: label || `第${from}回〜第${to}回`,
         mode: activeMode,
+        ranking_type: rankingType,
+        max_rank: maxR,
       }),
     })
     if (res.ok) {
@@ -155,6 +168,48 @@ function SettingsPanel({
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-2">ランキング表示方法</label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setRankingType('points')}
+                className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition ${
+                  rankingType === 'points'
+                    ? 'bg-green-600 text-white border-green-600'
+                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                ポイント（pt）
+              </button>
+              <button
+                type="button"
+                onClick={() => setRankingType('score')}
+                className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition ${
+                  rankingType === 'score'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                点数（点）
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">表示順位数</label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">上位</span>
+              <input
+                type="number"
+                min={1}
+                max={200}
+                value={maxRank}
+                onChange={(e) => setMaxRank(e.target.value)}
+                className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-600">位まで</span>
+            </div>
+          </div>
           <div className="flex gap-2">
             <button
               onClick={handleSave}
@@ -191,7 +246,7 @@ function RankingTable({
   is20: boolean
   settings: Settings | null
 }) {
-  const unit = is20 ? '点' : 'pt'
+  const unit = settings?.ranking_type === 'score' ? '点' : (is20 ? '点' : 'pt')
   const noDataMsg = is20
     ? 'テストに「第何回」を設定してください'
     : 'テストに「第何回」を設定し、ポイントが記録されるとここに表示されます'
@@ -262,7 +317,7 @@ function RankingTable({
     <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
         <h2 className="font-semibold text-gray-800">
-          個人ランキング（上位30名）
+          個人ランキング（上位{settings?.max_rank ?? 30}名）
         </h2>
         {!is20 && (
           <div className="flex items-center gap-3">
@@ -467,7 +522,7 @@ export default function PointsPage() {
 
   const handleDownload = () => {
     const { ranking, rounds, settings } = activeData
-    const unit = activeTab === 20 ? '点' : 'pt'
+    const unit = settings?.ranking_type === 'score' ? '点' : (activeTab === 20 ? '点' : 'pt')
 
     const rows = ranking.map((r) => {
       const base: Record<string, string | number> = {

@@ -21,6 +21,8 @@ export interface Settings {
   from_round: number
   to_round: number
   label: string
+  ranking_type?: string  // 'points' | 'score'
+  max_rank?: number
 }
 
 export interface ClassAvg {
@@ -53,7 +55,7 @@ export default function RankingView({
   label,
   medalsByStudentId = {},
 }: RankingViewProps) {
-  const unit = mode === 20 ? '点' : 'pt'
+  const unit = settings?.ranking_type === 'score' ? '点' : (mode === 20 ? '点' : 'pt')
 
   // 自分の順位
   const myEntry = ranking.find((r) => r.test_name === myTestName)
@@ -103,8 +105,8 @@ export default function RankingView({
         </div>
       )}
 
-      {/* ポイント早見表（50問のみ） */}
-      {mode === 50 && (
+      {/* ポイント早見表（50問かつポイントランキングのみ） */}
+      {mode === 50 && settings?.ranking_type !== 'score' && (
         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
           <div className="px-4 py-2.5 bg-green-700">
             <p className="text-xs font-bold text-white">ポイント早見表</p>
