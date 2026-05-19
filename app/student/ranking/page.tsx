@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { calcPoints } from '@/lib/supabase/types'
+import { calcPointsFromRules, DEFAULT_POINT_RULES, getMedalEmoji, DEFAULT_MEDAL_RULES, type MedalRule } from '@/lib/supabase/types'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import RankingView, { type RankEntry, type Settings, type ClassAvg } from './RankingView'
@@ -107,8 +107,9 @@ async function fetchRankingData(
         const round = testRoundMap[s.test_id]
         if (!round) continue
 
-        // ranking_type='score' はスコアそのまま、'points' はポイント換算
-        const value = settings.ranking_type === 'score' ? s.score : calcPoints(s.score)
+        // ranking_type='score' はスコアそのまま、'points' はカスタムルールでポイント換算
+        const ptRules = settings.point_rules ?? DEFAULT_POINT_RULES
+        const value = settings.ranking_type === 'score' ? s.score : calcPointsFromRules(s.score, ptRules)
 
         if (!grouped[s.student_id]) {
           grouped[s.student_id] = {
@@ -236,12 +237,14 @@ export default async function RankingPage() {
     ? await admin.from('medals').select('student_id, rank').in('student_id', rankedStudentIds50)
     : { data: [] }
 
+  const medalRules50 = (data50?.settings?.medal_rules ?? DEFAULT_MEDAL_RULES) as MedalRule[]
   const medalsByStudentId50: Record<string, string> = {}
   for (const studentId of rankedStudentIds50) {
     const ms = (medals50 ?? []).filter((m) => m.student_id === studentId)
-    const crowns = ms.filter((m) => m.rank === 1).length
-    const ribbons = ms.filter((m) => m.rank > 1).length
-    const display = '👑'.repeat(crowns) + '🎖️'.repeat(ribbons)
+    const display = ms
+      .map((m) => getMedalEmoji(m.rank, medalRules50))
+      .filter(Boolean)
+      .join('')
     if (display) medalsByStudentId50[studentId] = display
   }
 

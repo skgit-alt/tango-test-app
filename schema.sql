@@ -136,9 +136,11 @@ CREATE TABLE IF NOT EXISTS ranking_settings (
   to_round      INTEGER NOT NULL DEFAULT 5,
   label         TEXT DEFAULT '第1回〜第5回',
   updated_at    TIMESTAMPTZ DEFAULT now(),
-  ranking_type  TEXT NOT NULL DEFAULT 'points',  -- 'points' or 'score'
-  max_rank      INTEGER NOT NULL DEFAULT 30,      -- 何位まで表示するか
-  point_rules   JSONB                             -- ポイント割り振りルール（NULLの場合はデフォルト適用）
+  ranking_type    TEXT NOT NULL DEFAULT 'points',  -- 'points' or 'score'
+  max_rank        INTEGER NOT NULL DEFAULT 30,      -- 何位まで表示するか
+  point_rules     JSONB,                            -- ポイント割り振りルール（NULLの場合はデフォルト適用）
+  medals_enabled  BOOLEAN NOT NULL DEFAULT true,    -- 勲章機能ON/OFF
+  medal_rules     JSONB                             -- 勲章ルール（NULLの場合はデフォルト適用）
 );
 
 -- アプリ設定テーブル（汎用キーバリュー）

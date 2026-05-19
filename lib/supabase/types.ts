@@ -123,6 +123,25 @@ export interface PointRule {
   points: number // 獲得ポイント
 }
 
+// 勲章ルールの型
+export interface MedalRule {
+  rank_from: number  // 適用開始順位
+  rank_to: number    // 適用終了順位
+  emoji: string      // 表示する絵文字
+}
+
+// デフォルトの勲章ルール
+export const DEFAULT_MEDAL_RULES: MedalRule[] = [
+  { rank_from: 1, rank_to: 1,  emoji: '👑' },
+  { rank_from: 2, rank_to: 30, emoji: '🎖️' },
+]
+
+// 勲章ルールからemoji文字列を取得（マッチしない場合は空文字）
+export function getMedalEmoji(rank: number, rules: MedalRule[]): string {
+  const rule = rules.find(r => rank >= r.rank_from && rank <= r.rank_to)
+  return rule?.emoji ?? ''
+}
+
 // デフォルトのポイントルール（設定未登録のときに使用）
 export const DEFAULT_POINT_RULES: PointRule[] = [
   { min: 100, max: 100, points: 10 },

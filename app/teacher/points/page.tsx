@@ -5,7 +5,10 @@ import * as XLSX from 'xlsx'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
-import { DEFAULT_POINT_RULES, ruleLabel, type PointRule } from '@/lib/supabase/types'
+import {
+  DEFAULT_POINT_RULES, ruleLabel, type PointRule,
+  DEFAULT_MEDAL_RULES, type MedalRule,
+} from '@/lib/supabase/types'
 
 // ─── 型定義 ──────────────────────────────────────────────────────────────────
 
@@ -27,6 +30,8 @@ interface Settings {
   ranking_type: string      // 'points' | 'score'
   max_rank: number
   point_rules?: PointRule[]
+  medals_enabled?: boolean
+  medal_rules?: MedalRule[]
 }
 
 interface ClassAvg {
@@ -196,6 +201,8 @@ function AdvancedSettingsPanel({
   const [rankingType, setRankingType] = useState<'points' | 'score'>('points')
   const [maxRank, setMaxRank] = useState('30')
   const [pointRules, setPointRules] = useState<PointRule[]>(DEFAULT_POINT_RULES)
+  const [medalsEnabled, setMedalsEnabled] = useState(true)
+  const [medalRules, setMedalRules] = useState<MedalRule[]>(DEFAULT_MEDAL_RULES)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -203,8 +210,22 @@ function AdvancedSettingsPanel({
       setRankingType((settings.ranking_type as 'points' | 'score') ?? (activeMode === 20 ? 'score' : 'points'))
       setMaxRank(String(settings.max_rank ?? 30))
       setPointRules(settings.point_rules ?? DEFAULT_POINT_RULES)
+      setMedalsEnabled(settings.medals_enabled !== false)
+      setMedalRules(settings.medal_rules ?? DEFAULT_MEDAL_RULES)
     }
   }, [settings, activeMode])
+
+  const updateMedalRule = (i: number, field: keyof MedalRule, value: string) => {
+    setMedalRules(prev => prev.map((r, idx) => {
+      if (idx !== i) return r
+      if (field === 'emoji') return { ...r, emoji: value }
+      const n = parseInt(value)
+      if (isNaN(n) || n < 1) return r
+      return { ...r, [field]: n }
+    }))
+  }
+  const removeMedalRule = (i: number) => setMedalRules(prev => prev.filter((_, idx) => idx !== i))
+  const addMedalRule = () => setMedalRules(prev => [...prev, { rank_from: 1, rank_to: 1, emoji: '🎖️' }])
 
   const updateRule = (i: number, field: keyof PointRule, raw: string) => {
     const n = parseInt(raw)
@@ -237,6 +258,8 @@ function AdvancedSettingsPanel({
         ranking_type: rankingType,
         max_rank: maxR,
         point_rules: rankingType === 'points' ? pointRules : undefined,
+        medals_enabled: activeMode === 50 ? medalsEnabled : undefined,
+        medal_rules: activeMode === 50 && medalsEnabled ? medalRules : undefined,
       }),
     })
     if (res.ok) {
@@ -372,6 +395,100 @@ function AdvancedSettingsPanel({
         )}
       </div>
 
+        {/* 勲章機能設定（50問のみ） */}
+        {activeMode === 50 && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">勲章機能</label>
+                <p className="text-xs text-gray-400 mt-0.5">ランキング確定時に勲章を付与するか設定します</p>
+              </div>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setMedalsEnabled(true)}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-semibold border-2 transition ${
+                    medalsEnabled
+                      ? 'bg-yellow-500 text-white border-yellow-500'
+                      : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  ON
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMedalsEnabled(false)}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-semibold border-2 transition ${
+                    !medalsEnabled
+                      ? 'bg-gray-400 text-white border-gray-400'
+                      : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  OFF
+                </button>
+              </div>
+            </div>
+
+            {medalsEnabled && (
+              <div>
+                <p className="text-xs text-gray-400 mb-3">
+                  順位の範囲ごとに付与する絵文字を設定します。<br />
+                  範囲外の順位には勲章が付きません。
+                </p>
+                <div className="space-y-2 mb-3">
+                  <div className="grid grid-cols-[2rem_auto_3.5rem_auto_3.5rem_auto] gap-1.5 items-center text-xs text-gray-400 px-1">
+                    <span className="text-center">絵文字</span>
+                    <span></span>
+                    <span className="text-center">開始順位</span>
+                    <span></span>
+                    <span className="text-center">終了順位</span>
+                    <span></span>
+                  </div>
+                  {medalRules.map((rule, i) => (
+                    <div key={i} className="grid grid-cols-[2rem_auto_3.5rem_auto_3.5rem_auto] gap-1.5 items-center">
+                      <input
+                        type="text"
+                        value={rule.emoji}
+                        onChange={(e) => updateMedalRule(i, 'emoji', e.target.value)}
+                        className="border border-gray-300 rounded-lg px-1 py-1.5 text-base text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-400 text-xs text-center">を</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={rule.rank_from}
+                        onChange={(e) => updateMedalRule(i, 'rank_from', e.target.value)}
+                        className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      <span className="text-gray-500 text-sm text-center">〜</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={rule.rank_to}
+                        onChange={(e) => updateMedalRule(i, 'rank_to', e.target.value)}
+                        className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      <button
+                        onClick={() => removeMedalRule(i)}
+                        className="text-red-400 hover:text-red-600 text-lg leading-none px-1 transition"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={addMedalRule}
+                  className="text-sm text-blue-600 border border-blue-300 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition"
+                >
+                  ＋ 行を追加
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="flex gap-2 pt-1">
         <button
           onClick={handleSave}
@@ -425,7 +542,8 @@ function RankingTable({
     ranking.some(entry => entry.roundValues[String(r)] != null)
   )
   const allRoundsFilled = !is20 && totalExpected > 0 && roundsWithData.length >= totalExpected
-  const canAward = allRoundsFilled && !loading && !medalSuccess
+  const medalsOn = settings?.medals_enabled !== false
+  const canAward = medalsOn && allRoundsFilled && !loading && !medalSuccess
 
   const handleRequestNameChange = async (studentId: string) => {
     setRequestingId(studentId)
@@ -479,7 +597,7 @@ function RankingTable({
         <h2 className="font-semibold text-gray-800">
           個人ランキング（上位{settings?.max_rank ?? 30}名）
         </h2>
-        {!is20 && (
+        {!is20 && medalsOn && (
           <div className="flex items-center gap-3">
             {medalSuccess && (
               <span className="text-green-600 text-sm font-medium">✅ 勲章を付与しました！</span>

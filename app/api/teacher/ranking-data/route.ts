@@ -228,7 +228,7 @@ export async function PATCH(req: NextRequest) {
   if (!user) return NextResponse.json(null, { status: 401 })
 
   const body = await req.json()
-  const { from_round, to_round, label, mode, ranking_type, max_rank, point_rules } = body
+  const { from_round, to_round, label, mode, ranking_type, max_rank, point_rules, medals_enabled, medal_rules } = body
 
   if (!from_round || !to_round || from_round > to_round) {
     return NextResponse.json({ error: '無効な値です' }, { status: 400 })
@@ -247,6 +247,8 @@ export async function PATCH(req: NextRequest) {
   if (ranking_type) upsertData.ranking_type = ranking_type
   if (max_rank != null) upsertData.max_rank = max_rank
   if (point_rules) upsertData.point_rules = point_rules
+  if (medals_enabled !== undefined) upsertData.medals_enabled = medals_enabled
+  if (medal_rules) upsertData.medal_rules = medal_rules
 
   const { error } = await admin
     .from('ranking_settings')

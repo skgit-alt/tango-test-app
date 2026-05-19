@@ -1,6 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { calcPoints } from '@/lib/supabase/types'
+import {
+  calcPointsFromRules, DEFAULT_POINT_RULES,
+  getMedalEmoji, DEFAULT_MEDAL_RULES,
+  type MedalRule, type PointRule,
+} from '@/lib/supabase/types'
 import { NextRequest, NextResponse } from 'next/server'
 
 // ─── GET: 過去の勲章付与サイクル一覧 ─────────────────────────────────────────
@@ -68,6 +72,25 @@ export async function POST(req: NextRequest) {
 
   const admin = createAdminClient()
 
+  // ランキング設定を取得（勲章ルール・ポイントルール）
+  const { data: rSettings } = await admin
+    .from('ranking_settings')
+    .select('medals_enabled, medal_rules, point_rules')
+    .eq('id', 1)
+    .maybeSingle()
+
+  // 勲章機能がOFFの場合は拒否
+  if (rSettings?.medals_enabled === false) {
+    return NextResponse.json({ error: '勲章機能はOFFに設定されています' }, { status: 403 })
+  }
+
+  const medalRules = (rSettings?.medal_rules ?? DEFAULT_MEDAL_RULES) as MedalRule[]
+  const pointRules = (rSettings?.point_rules ?? DEFAULT_POINT_RULES) as PointRule[]
+  // 勲章を付与する最大順位（ルール内の最大 rank_to）
+  const maxMedalRank = medalRules.length > 0
+    ? Math.max(...medalRules.map(r => r.rank_to))
+    : 30
+
   // 対象テストを取得（50問モードのみ）
   const { data: targetTests } = await admin
     .from('tests')
@@ -131,7 +154,7 @@ export async function POST(req: NextRequest) {
     const round = testRoundMap[s.test_id]
     if (!round) continue
 
-    const value = calcPoints(s.score)
+    const value = calcPointsFromRules(s.score, pointRules)
     if (!grouped[s.student_id]) {
       grouped[s.student_id] = {
         name: st.name ?? '',
@@ -144,7 +167,7 @@ export async function POST(req: NextRequest) {
     grouped[s.student_id].total += value
   }
 
-  // タイを考慮したランキング（30位タイの全員を含める）
+  // タイを考慮したランキング（勲章ルールの最大順位まで）
   const sortedAll = Object.entries(grouped)
     .map(([student_id, v]) => ({ student_id, ...v }))
     .sort((a, b) => b.total - a.total)
@@ -152,8 +175,11 @@ export async function POST(req: NextRequest) {
   let rankNum = 1
   for (let i = 0; i < sortedAll.length; i++) {
     if (i > 0 && sortedAll[i].total < sortedAll[i - 1].total) rankNum = i + 1
-    if (rankNum > 30) break
-    ranked.push({ ...sortedAll[i], rank: rankNum })
+    if (rankNum > maxMedalRank) break
+    // 勲章ルールに対応する順位の生徒だけ対象にする
+    if (getMedalEmoji(rankNum, medalRules) !== '') {
+      ranked.push({ ...sortedAll[i], rank: rankNum })
+    }
   }
 
   // プレビューモードの場合はここで返す
