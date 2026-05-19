@@ -29,3 +29,15 @@ input, textarea {
   -moz-user-select: text;
   user-select: text;
 }
+
+/* 管理画面：ボタンを押したときの視覚フィードバック（iPad対応） */
+.teacher-layout button,
+.teacher-layout a[href] {
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.1s ease, transform 0.1s ease;
+}
+.teacher-layout button:active,
+.teacher-layout a[href]:active {
+  opacity: 0.65;
+  transform: scale(0.96);
+}
