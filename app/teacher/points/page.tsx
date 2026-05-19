@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
+import { DEFAULT_POINT_RULES, ruleLabel, type PointRule } from '@/lib/supabase/types'
 
 // ─── 型定義 ──────────────────────────────────────────────────────────────────
 
@@ -23,8 +24,9 @@ interface Settings {
   from_round: number
   to_round: number
   label: string
-  ranking_type: string  // 'points' | 'score'
+  ranking_type: string      // 'points' | 'score'
   max_rank: number
+  point_rules?: PointRule[]
 }
 
 interface ClassAvg {
@@ -193,14 +195,29 @@ function AdvancedSettingsPanel({
 }) {
   const [rankingType, setRankingType] = useState<'points' | 'score'>('points')
   const [maxRank, setMaxRank] = useState('30')
+  const [pointRules, setPointRules] = useState<PointRule[]>(DEFAULT_POINT_RULES)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (settings) {
       setRankingType((settings.ranking_type as 'points' | 'score') ?? (activeMode === 20 ? 'score' : 'points'))
       setMaxRank(String(settings.max_rank ?? 30))
+      setPointRules(settings.point_rules ?? DEFAULT_POINT_RULES)
     }
   }, [settings, activeMode])
+
+  const updateRule = (i: number, field: keyof PointRule, raw: string) => {
+    const n = parseInt(raw)
+    if (isNaN(n) || n < 0 || n > 100) return
+    setPointRules(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: n } : r))
+  }
+  const updatePoints = (i: number, raw: string) => {
+    const n = parseInt(raw)
+    if (isNaN(n) || n < 0) return
+    setPointRules(prev => prev.map((r, idx) => idx === i ? { ...r, points: n } : r))
+  }
+  const removeRule = (i: number) => setPointRules(prev => prev.filter((_, idx) => idx !== i))
+  const addRule = () => setPointRules(prev => [...prev, { min: 0, max: 0, points: 0 }])
 
   const handleSave = async () => {
     const maxR = parseInt(maxRank)
@@ -219,6 +236,7 @@ function AdvancedSettingsPanel({
         mode: activeMode,
         ranking_type: rankingType,
         max_rank: maxR,
+        point_rules: rankingType === 'points' ? pointRules : undefined,
       }),
     })
     if (res.ok) {
@@ -293,6 +311,65 @@ function AdvancedSettingsPanel({
             <span className="text-sm text-gray-600">位まで表示</span>
           </div>
         </div>
+      </div>
+
+        {/* ポイント割り振り設定（ポイントランキング選択時のみ） */}
+        {rankingType === 'points' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">ポイント割り振り設定</label>
+            <p className="text-xs text-gray-400 mb-3">
+              スコアの範囲（最低点〜最高点）と獲得ポイントを設定します。<br />
+              上から順に判定し、最初に当てはまったルールが適用されます。
+            </p>
+            <div className="space-y-2 mb-3">
+              <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr_auto] gap-1.5 items-center text-xs text-gray-400 px-1">
+                <span className="text-center">最低点</span>
+                <span></span>
+                <span className="text-center">最高点</span>
+                <span></span>
+                <span className="text-center">ポイント</span>
+                <span></span>
+              </div>
+              {pointRules.map((rule, i) => (
+                <div key={i} className="grid grid-cols-[1fr_auto_1fr_auto_1fr_auto] gap-1.5 items-center">
+                  <input
+                    type="number" min={0} max={100} value={rule.min}
+                    onChange={(e) => updateRule(i, 'min', e.target.value)}
+                    className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <span className="text-gray-400 text-sm text-center">〜</span>
+                  <input
+                    type="number" min={0} max={100} value={rule.max}
+                    onChange={(e) => updateRule(i, 'max', e.target.value)}
+                    className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <span className="text-gray-500 text-sm">→</span>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number" min={0} value={rule.points}
+                      onChange={(e) => updatePoints(i, e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <span className="text-gray-500 text-xs whitespace-nowrap">pt</span>
+                  </div>
+                  <button
+                    onClick={() => removeRule(i)}
+                    className="text-red-400 hover:text-red-600 text-lg leading-none px-1 transition"
+                    aria-label="削除"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={addRule}
+              className="text-sm text-blue-600 border border-blue-300 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition"
+            >
+              ＋ 行を追加
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-2 pt-1">
@@ -709,8 +786,8 @@ export default function PointsPage() {
         onSaved={() => fetchData(activeTab)}
       />
 
-      {/* ポイント早見表（50問のみ） */}
-      {activeTab === 50 && (
+      {/* ポイント早見表（50問かつポイントランキングのみ） */}
+      {activeTab === 50 && activeData.settings?.ranking_type !== 'score' && (
         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
           <div className="px-4 py-2.5 bg-green-700">
             <p className="text-xs font-bold text-white">ポイント早見表</p>
@@ -719,16 +796,24 @@ export default function PointsPage() {
             <table className="w-full text-center text-sm">
               <thead>
                 <tr className="bg-green-600 text-white">
-                  {['100点','98〜96点','94〜92点','90〜88点','86〜84点','82〜80点','78〜76点','74〜72点','70点以下'].map((s) => (
-                    <th key={s} className="px-2 py-2 font-medium whitespace-nowrap border-r border-green-500 last:border-r-0 text-xs">{s}</th>
-                  ))}
+                  {(activeData.settings?.point_rules ?? DEFAULT_POINT_RULES)
+                    .slice().sort((a, b) => b.min - a.min)
+                    .map((r) => (
+                      <th key={`${r.min}-${r.max}`} className="px-2 py-2 font-medium whitespace-nowrap border-r border-green-500 last:border-r-0 text-xs">
+                        {ruleLabel(r)}
+                      </th>
+                    ))}
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  {['10p','7p','6p','5p','4p','3p','2p','1p','0p'].map((p) => (
-                    <td key={p} className="px-2 py-3 font-bold text-green-700 text-base border-r border-gray-100 last:border-r-0">{p}</td>
-                  ))}
+                  {(activeData.settings?.point_rules ?? DEFAULT_POINT_RULES)
+                    .slice().sort((a, b) => b.min - a.min)
+                    .map((r) => (
+                      <td key={`pt-${r.min}-${r.max}`} className="px-2 py-3 font-bold text-green-700 text-base border-r border-gray-100 last:border-r-0">
+                        {r.points}p
+                      </td>
+                    ))}
                 </tr>
               </tbody>
             </table>

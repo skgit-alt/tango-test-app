@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { calcPoints } from '@/lib/supabase/types'
+import { calcPointsFromRules, DEFAULT_POINT_RULES, ruleLabel, type PointRule } from '@/lib/supabase/types'
 import { NextResponse } from 'next/server'
 import ExcelJS from 'exceljs'
 import { createCanvas, GlobalFonts } from '@napi-rs/canvas'
@@ -87,7 +87,8 @@ export async function GET() {
       const st = (Array.isArray(s.students) ? s.students[0] : s.students) as { name: string; class_name: string; seat_number: number; test_name: string } | null
       if (!st || !/^[A-Za-z]/.test(st.class_name ?? '')) continue
       const round = testRoundMap[s.test_id]; if (!round) continue
-      const value = calcPoints(s.score)
+      const rules = (settings.point_rules ?? DEFAULT_POINT_RULES) as PointRule[]
+      const value = calcPointsFromRules(s.score, rules)
       if (!grouped[s.student_id]) grouped[s.student_id] = { name: st.name ?? '', class_name: st.class_name ?? '', seat_number: st.seat_number ?? 0, test_name: st.test_name ?? '', roundValues: {}, total: 0 }
       const ex = grouped[s.student_id].roundValues[String(round)] ?? 0
       if (value > ex) { grouped[s.student_id].total += value - ex; grouped[s.student_id].roundValues[String(round)] = value }
@@ -95,10 +96,11 @@ export async function GET() {
   }
   const sorted = Object.entries(grouped).map(([sid, v]) => ({ student_id: sid, ...v })).sort((a, b) => b.total - a.total)
   const ranking: { rank: number; student_id: string; class_name: string; test_name: string; roundValues: Record<string, number>; total: number }[] = []
+  const maxRankExcel = settings.max_rank ?? 30
   let rankNum = 1
   for (let i = 0; i < sorted.length; i++) {
     if (i > 0 && sorted[i].total < sorted[i - 1].total) rankNum = i + 1
-    if (rankNum > 30) break
+    if (rankNum > maxRankExcel) break
     ranking.push({ ...sorted[i], rank: rankNum })
   }
 
@@ -211,17 +213,13 @@ export async function GET() {
   ws.mergeCells(ptSecRow.number, 1, ptSecRow.number, LC)
   sc(ptSecRow.getCell(1), { v: 'ポイント早見表', font: white(true, 13), fill: GREEN, align: center })
 
-  const PT_ITEMS = [
-    { score: '100点',    pt: '10p' },
-    { score: '98〜96点', pt: '7p'  },
-    { score: '94〜92点', pt: '6p'  },
-    { score: '90〜88点', pt: '5p'  },
-    { score: '86〜84点', pt: '4p'  },
-    { score: '82〜80点', pt: '3p'  },
-    { score: '78〜76点', pt: '2p'  },
-    { score: '74〜72点', pt: '1p'  },
-    { score: '70点以下', pt: '0p'  },
-  ]
+  const ptRules = ((settings.point_rules ?? DEFAULT_POINT_RULES) as PointRule[])
+    .slice()
+    .sort((a, b) => b.min - a.min)
+  const PT_ITEMS = ptRules.map((r) => ({
+    score: ruleLabel(r),
+    pt: `${r.points}p`,
+  }))
   const N = PT_ITEMS.length
   const PT_W = 1800
   const scoreH = 80
@@ -286,7 +284,7 @@ export async function GET() {
   ws.addRow([]).height = 12
 
   // ══ 個人ランキング ══
-  const rSec = ws.addRow(['個人ランキング（上位30名）']); rSec.height = 32
+  const rSec = ws.addRow([`個人ランキング（上位${maxRankExcel}名）`]); rSec.height = 32
   ws.mergeCells(rSec.number, 1, rSec.number, LC)
   sc(rSec.getCell(1), { font: white(true, 13), fill: NAVY, align: center })
 

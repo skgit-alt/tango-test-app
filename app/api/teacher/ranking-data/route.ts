@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { calcPoints } from '@/lib/supabase/types'
+import { calcPointsFromRules, DEFAULT_POINT_RULES } from '@/lib/supabase/types'
 import { NextRequest, NextResponse } from 'next/server'
 
 // ─── 型定義 ──────────────────────────────────────────────────────────────────
@@ -126,8 +126,9 @@ export async function GET(req: NextRequest) {
         const round = testRoundMap[s.test_id]
         if (!round) continue
 
-        // ranking_type='score' はスコアそのまま、'points' はポイント換算
-        const value = settings.ranking_type === 'score' ? s.score : calcPoints(s.score)
+        // ranking_type='score' はスコアそのまま、'points' はカスタムルールでポイント換算
+        const rules = settings.point_rules ?? DEFAULT_POINT_RULES
+        const value = settings.ranking_type === 'score' ? s.score : calcPointsFromRules(s.score, rules)
 
         if (!grouped[s.student_id]) {
           grouped[s.student_id] = {
@@ -227,7 +228,7 @@ export async function PATCH(req: NextRequest) {
   if (!user) return NextResponse.json(null, { status: 401 })
 
   const body = await req.json()
-  const { from_round, to_round, label, mode, ranking_type, max_rank } = body
+  const { from_round, to_round, label, mode, ranking_type, max_rank, point_rules } = body
 
   if (!from_round || !to_round || from_round > to_round) {
     return NextResponse.json({ error: '無効な値です' }, { status: 400 })
@@ -245,6 +246,7 @@ export async function PATCH(req: NextRequest) {
   }
   if (ranking_type) upsertData.ranking_type = ranking_type
   if (max_rank != null) upsertData.max_rank = max_rank
+  if (point_rules) upsertData.point_rules = point_rules
 
   const { error } = await admin
     .from('ranking_settings')

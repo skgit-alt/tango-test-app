@@ -3,6 +3,7 @@
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
+import { DEFAULT_POINT_RULES, ruleLabel, type PointRule } from '@/lib/supabase/types'
 
 // ─── 型定義 ──────────────────────────────────────────────────────────────────
 
@@ -21,8 +22,9 @@ export interface Settings {
   from_round: number
   to_round: number
   label: string
-  ranking_type?: string  // 'points' | 'score'
+  ranking_type?: string      // 'points' | 'score'
   max_rank?: number
+  point_rules?: PointRule[]
 }
 
 export interface ClassAvg {
@@ -112,28 +114,21 @@ export default function RankingView({
             <p className="text-xs font-bold text-white">ポイント早見表</p>
           </div>
           <div className="grid grid-cols-3">
-            {[
-              { score: '100点',    pt: '10p' },
-              { score: '98〜96点', pt: '7p'  },
-              { score: '94〜92点', pt: '6p'  },
-              { score: '90〜88点', pt: '5p'  },
-              { score: '86〜84点', pt: '4p'  },
-              { score: '82〜80点', pt: '3p'  },
-              { score: '78〜76点', pt: '2p'  },
-              { score: '74〜72点', pt: '1p'  },
-              { score: '70点以下', pt: '0p'  },
-            ].map(({ score, pt }, i) => (
-              <div
-                key={score}
-                className={`flex flex-col items-center py-3 bg-white
-                  ${i % 3 !== 2 ? 'border-r border-gray-100' : ''}
-                  ${i < 6 ? 'border-b border-gray-100' : ''}
-                `}
-              >
-                <p className="text-xs text-gray-400 mb-0.5">{score}</p>
-                <p className="text-xl font-bold text-green-700">{pt}</p>
-              </div>
-            ))}
+            {((settings?.point_rules ?? DEFAULT_POINT_RULES) as PointRule[])
+              .slice()
+              .sort((a, b) => b.min - a.min)
+              .map((rule, i, arr) => (
+                <div
+                  key={`${rule.min}-${rule.max}`}
+                  className={`flex flex-col items-center py-3 bg-white
+                    ${i % 3 !== 2 ? 'border-r border-gray-100' : ''}
+                    ${i + 3 < arr.length ? 'border-b border-gray-100' : ''}
+                  `}
+                >
+                  <p className="text-xs text-gray-400 mb-0.5">{ruleLabel(rule)}</p>
+                  <p className="text-xl font-bold text-green-700">{rule.points}p</p>
+                </div>
+              ))}
           </div>
         </div>
       )}

@@ -116,16 +116,42 @@ export interface Point {
   created_at: string
 }
 
-// ポイント換算（50問テスト用：各2点・偶数点のみ）
-// 100→10 / 96〜98→7 / 92〜94→6 / 88〜90→5 / 84〜86→4 / 80〜82→3 / 76〜78→2 / 72〜74→1 / 70以下→0
-export function calcPoints(score: number): number {
-  if (score === 100) return 10
-  if (score >= 96) return 7
-  if (score >= 92) return 6
-  if (score >= 88) return 5
-  if (score >= 84) return 4
-  if (score >= 80) return 3
-  if (score >= 76) return 2
-  if (score >= 72) return 1
+// ポイント換算ルールの型
+export interface PointRule {
+  min: number    // このルールが適用されるスコアの下限
+  max: number    // このルールが適用されるスコアの上限
+  points: number // 獲得ポイント
+}
+
+// デフォルトのポイントルール（設定未登録のときに使用）
+export const DEFAULT_POINT_RULES: PointRule[] = [
+  { min: 100, max: 100, points: 10 },
+  { min: 96,  max: 99,  points: 7  },
+  { min: 92,  max: 95,  points: 6  },
+  { min: 88,  max: 91,  points: 5  },
+  { min: 84,  max: 87,  points: 4  },
+  { min: 80,  max: 83,  points: 3  },
+  { min: 76,  max: 79,  points: 2  },
+  { min: 72,  max: 75,  points: 1  },
+  { min: 0,   max: 71,  points: 0  },
+]
+
+// カスタムルールでポイントを計算（上から順に最初にマッチしたルールを使用）
+export function calcPointsFromRules(score: number, rules: PointRule[]): number {
+  for (const rule of rules) {
+    if (score >= rule.min && score <= rule.max) return rule.points
+  }
   return 0
+}
+
+// 後方互換のためデフォルトルールで計算する関数を残す
+export function calcPoints(score: number): number {
+  return calcPointsFromRules(score, DEFAULT_POINT_RULES)
+}
+
+// PointRuleから早見表ラベルを生成する
+export function ruleLabel(rule: PointRule): string {
+  if (rule.min === rule.max) return `${rule.min}点`
+  if (rule.min === 0) return `${rule.max}点以下`
+  return `${rule.max}〜${rule.min}点`
 }
