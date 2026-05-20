@@ -393,7 +393,6 @@ function AdvancedSettingsPanel({
             </button>
           </div>
         )}
-      </div>
 
         {/* 勲章機能設定（50問のみ） */}
         {activeMode === 50 && (
