@@ -3,7 +3,7 @@
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
-import { DEFAULT_POINT_RULES, ruleLabel, type PointRule } from '@/lib/supabase/types'
+import { DEFAULT_POINT_RULES, ruleLabel, type PointRule, type MedalRule } from '@/lib/supabase/types'
 
 // ─── 型定義 ──────────────────────────────────────────────────────────────────
 
@@ -25,6 +25,8 @@ export interface Settings {
   ranking_type?: string      // 'points' | 'score'
   max_rank?: number
   point_rules?: PointRule[]
+  medals_enabled?: boolean
+  medal_rules?: MedalRule[]
 }
 
 export interface ClassAvg {
