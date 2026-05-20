@@ -334,7 +334,6 @@ function AdvancedSettingsPanel({
             <span className="text-sm text-gray-600">位まで表示</span>
           </div>
         </div>
-      </div>
 
         {/* ポイント割り振り設定（ポイントランキング選択時のみ） */}
         {rankingType === 'points' && (
