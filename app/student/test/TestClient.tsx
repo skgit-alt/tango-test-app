@@ -211,7 +211,9 @@ export default function TestClient({
   }, [logCheat])
 
   useEffect(() => {
-    const fn = () => { if (!document.hidden) logCheat('app_switch') }
+    const fn = () => {
+      setTimeout(() => { if (!document.hidden) logCheat('app_switch') }, 100)
+    }
     window.addEventListener('blur', fn)
     return () => window.removeEventListener('blur', fn)
   }, [logCheat])
