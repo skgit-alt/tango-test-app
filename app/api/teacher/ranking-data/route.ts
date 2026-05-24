@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { calcPointsFromRules, DEFAULT_POINT_RULES } from '@/lib/supabase/types'
+import { calcPointsFromRules, DEFAULT_POINT_RULES, getMedalEmoji, DEFAULT_MEDAL_RULES, type MedalRule } from '@/lib/supabase/types'
 import { NextRequest, NextResponse } from 'next/server'
 
 // ─── 型定義 ──────────────────────────────────────────────────────────────────
@@ -217,7 +217,28 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ settings, rounds, ranking, classAverages })
+  // ─── 勲章情報（50問のみ）──────────────────────────────────────────────────────
+  const medalsByStudentId: Record<string, string> = {}
+  if (!is20 && ranking.length > 0) {
+    const studentIds = ranking.map((r) => r.student_id)
+    const { data: medals } = await admin
+      .from('medals')
+      .select('student_id, rank')
+      .in('student_id', studentIds)
+    if (medals && medals.length > 0) {
+      const medalRules = (settings.medal_rules ?? DEFAULT_MEDAL_RULES) as MedalRule[]
+      for (const studentId of studentIds) {
+        const ms = medals.filter((m) => m.student_id === studentId)
+        const display = ms
+          .map((m) => getMedalEmoji(m.rank, medalRules))
+          .filter(Boolean)
+          .join('')
+        if (display) medalsByStudentId[studentId] = display
+      }
+    }
+  }
+
+  return NextResponse.json({ settings, rounds, ranking, classAverages, medalsByStudentId })
 }
 
 // ─── PATCH ────────────────────────────────────────────────────────────────────

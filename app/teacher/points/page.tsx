@@ -44,6 +44,7 @@ interface RankingData {
   rounds: number[]
   ranking: RankEntry[]
   classAverages: ClassAvg[]
+  medalsByStudentId: Record<string, string>
 }
 
 const COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4']
@@ -514,12 +515,16 @@ function RankingTable({
   loading,
   is20,
   settings,
+  medalsByStudentId = {},
+  onMedalAwarded,
 }: {
   ranking: RankEntry[]
   rounds: number[]
   loading: boolean
   is20: boolean
   settings: Settings | null
+  medalsByStudentId?: Record<string, string>
+  onMedalAwarded?: () => void
 }) {
   const unit = settings?.ranking_type === 'score' ? '点' : (is20 ? '点' : 'pt')
   const noDataMsg = is20
@@ -581,6 +586,7 @@ function RankingTable({
         setMedalError(data.error ?? 'エラーが発生しました')
       } else {
         setMedalSuccess(true)
+        onMedalAwarded?.()
       }
     } catch {
       setMedalError('通信エラーが発生しました')
@@ -669,6 +675,9 @@ function RankingTable({
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-2">
                         <span className="text-gray-700 font-medium">{r.test_name}</span>
+                        {medalsByStudentId[r.student_id] && (
+                          <span className="text-base">{medalsByStudentId[r.student_id]}</span>
+                        )}
                         {requestedIds.has(r.student_id) ? (
                           <span className="text-xs text-orange-500 font-medium whitespace-nowrap">依頼済</span>
                         ) : (
@@ -766,8 +775,8 @@ function ClassAveragesChart({
 
 export default function PointsPage() {
   const [activeTab, setActiveTab] = useState<50 | 20>(50)
-  const [data50, setData50] = useState<RankingData>({ settings: null, rounds: [], ranking: [], classAverages: [] })
-  const [data20, setData20] = useState<RankingData>({ settings: null, rounds: [], ranking: [], classAverages: [] })
+  const [data50, setData50] = useState<RankingData>({ settings: null, rounds: [], ranking: [], classAverages: [], medalsByStudentId: {} })
+  const [data20, setData20] = useState<RankingData>({ settings: null, rounds: [], ranking: [], classAverages: [], medalsByStudentId: {} })
   const [loading50, setLoading50] = useState(true)
   const [loading20, setLoading20] = useState(true)
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -784,6 +793,7 @@ export default function PointsPage() {
         rounds: json.rounds ?? [],
         ranking: json.ranking ?? [],
         classAverages: json.classAverages ?? [],
+        medalsByStudentId: json.medalsByStudentId ?? {},
       })
     }
     loadSetter(false)
@@ -952,6 +962,8 @@ export default function PointsPage() {
         loading={activeLoading}
         is20={activeTab === 20}
         settings={activeData.settings}
+        medalsByStudentId={activeData.medalsByStudentId}
+        onMedalAwarded={() => fetchData(50)}
       />
     </div>
   )
