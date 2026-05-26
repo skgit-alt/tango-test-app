@@ -6,6 +6,7 @@ import { calcPoints, canSeeResult } from '@/lib/supabase/types'
 import { Chart300, Chart50 } from './ScoreChart'
 import ActiveTestBanner from './ActiveTestBanner'
 import RequestNameChangeButton from './RequestNameChangeButton'
+import MyRankBadge from './MyRankBadge'
 
 export default async function StudentHomePage() {
   const supabase = await createClient()
@@ -100,48 +101,9 @@ export default async function StudentHomePage() {
     .filter((s) => (s.tests as any)?.mode === 50)
     .map((s) => ({ ...s, points: calcPoints(s.score ?? 0) }))
 
-  // 50問モードのポイント・順位情報
+  // 50問モードが存在するかだけ確認（重いランキング計算はクライアント側で非同期取得）
   const has50modeActive = (activeTests ?? []).some((t) => t.mode === 50)
   const has50modePublished = sessions50.length > 0
-  let totalPoints = 0
-  let rank = 0
-
-  if (has50modeActive || has50modePublished) {
-    const { data: rankingSettings } = await admin
-      .from('ranking_settings')
-      .select('from_round, to_round')
-      .eq('id', 1)
-      .maybeSingle()
-
-    if (rankingSettings) {
-      const { data: targetTests } = await admin
-        .from('tests')
-        .select('id')
-        .eq('mode', 50)
-        .gte('round_number', rankingSettings.from_round)
-        .lte('round_number', rankingSettings.to_round)
-        .not('round_number', 'is', null)
-
-      if (targetTests && targetTests.length > 0) {
-        const testIds = targetTests.map((t: { id: string }) => t.id)
-        const { data: allPoints } = await admin
-          .from('points')
-          .select('student_id, points_earned')
-          .in('test_id', testIds)
-
-        if (allPoints && allPoints.length > 0) {
-          const grouped: Record<string, number> = {}
-          allPoints.forEach((p: { student_id: string; points_earned: number }) => {
-            grouped[p.student_id] = (grouped[p.student_id] ?? 0) + p.points_earned
-          })
-          totalPoints = grouped[student.id] ?? 0
-          const sorted = Object.values(grouped).sort((a, b) => b - a)
-          const rankIndex = sorted.findIndex((pts) => pts <= totalPoints)
-          rank = rankIndex + 1
-        }
-      }
-    }
-  }
 
   const logoutAction = async () => {
     'use server'
@@ -190,16 +152,7 @@ export default async function StudentHomePage() {
           </div>
 
           {(has50modeActive || has50modePublished) && (
-            <div className="mt-4 pt-4 border-t border-gray-100 flex gap-6">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-blue-600">{totalPoints}pt</p>
-                <p className="text-xs text-gray-500 mt-0.5">通算ポイント</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-purple-600">{rank > 0 ? `${rank}位` : '-'}</p>
-                <p className="text-xs text-gray-500 mt-0.5">現在の順位</p>
-              </div>
-            </div>
+            <MyRankBadge />
           )}
         </div>
 

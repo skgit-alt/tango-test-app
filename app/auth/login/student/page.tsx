@@ -2,16 +2,22 @@
 
 import { createClient } from '@/lib/supabase/client'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+// 認証エラー（IDorパスワード違い）かサーバーエラーかを判定
+function isAuthError(msg: string) {
+  return msg.includes('Invalid login') || msg.includes('invalid_grant') || msg.includes('Email not confirmed')
+}
 
 export default function StudentLoginPage() {
   const [studentId, setStudentId] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
   const supabase = createClient()
-  const router = useRouter()
 
   const handleLogin = async () => {
     const id = studentId.trim().toLowerCase()
@@ -22,27 +28,67 @@ export default function StudentLoginPage() {
 
     setLoading(true)
     setError('')
+    setRetryCount(0)
+
+    // ジッター: 0〜2秒のランダム遅延で同時アクセスを分散
+    await sleep(Math.random() * 2000)
 
     const email = `${id}@school.local`
-    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+    const MAX_RETRIES = 3
 
-    if (signInError || !signInData.user) {
-      setError('IDまたはパスワードが正しくありません')
-      setLoading(false)
-      return
-    }
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        setRetryCount(attempt)
+        await sleep(attempt * 1500)  // 1.5秒 → 3秒と段階的に待つ
+      }
 
-    // must_change_password を確認（ログインしたユーザーのIDで絞り込む）
-    const { data: student } = await supabase
-      .from('students')
-      .select('must_change_password')
-      .eq('id', signInData.user.id)
-      .single()
+      try {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password })
 
-    if (student?.must_change_password) {
-      window.location.href = '/student/change-password'
-    } else {
-      window.location.href = '/student'
+        if (signInError) {
+          // IDorパスワード違いは即終了（リトライしても意味がない）
+          if (isAuthError(signInError.message)) {
+            setError('IDまたはパスワードが正しくありません')
+            setLoading(false)
+            setRetryCount(0)
+            return
+          }
+          // サーバーエラーはリトライ
+          if (attempt < MAX_RETRIES - 1) continue
+          setError('サーバーが混雑しています。しばらくしてからもう一度お試しください。')
+          setLoading(false)
+          setRetryCount(0)
+          return
+        }
+
+        if (!signInData?.user) {
+          setError('IDまたはパスワードが正しくありません')
+          setLoading(false)
+          setRetryCount(0)
+          return
+        }
+
+        // must_change_password を確認
+        const { data: student } = await supabase
+          .from('students')
+          .select('must_change_password')
+          .eq('id', signInData.user.id)
+          .single()
+
+        if (student?.must_change_password) {
+          window.location.href = '/student/change-password'
+        } else {
+          window.location.href = '/student'
+        }
+        return
+
+      } catch {
+        if (attempt < MAX_RETRIES - 1) continue
+        setError('通信エラーが発生しました。もう一度お試しください。')
+        setLoading(false)
+        setRetryCount(0)
+        return
+      }
     }
   }
 
@@ -91,7 +137,12 @@ export default function StudentLoginPage() {
           disabled={loading}
           className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-lg hover:bg-blue-700 active:scale-95 transition disabled:opacity-50"
         >
-          {loading ? 'ログイン中...' : 'ログイン'}
+          {loading
+            ? retryCount > 0
+              ? `再接続中... (${retryCount}/${3})`
+              : 'ログイン中...'
+            : 'ログイン'
+          }
         </button>
 
         <Link href="/auth/login" className="text-xs text-gray-400 hover:text-gray-600 transition text-center">
