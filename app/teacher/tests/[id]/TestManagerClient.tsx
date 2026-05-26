@@ -30,6 +30,7 @@ interface TableRow {
   is_submitted: boolean
   is_absent: boolean
   score: number | null
+  is_retake: boolean
 }
 
 type EditStatus = 'none' | 'submitted' | 'absent'
@@ -578,6 +579,7 @@ export default function TestManagerClient({
       is_submitted: s.is_submitted,
       is_absent: (s as Session & { is_absent?: boolean }).is_absent ?? false,
       score: s.score,
+      is_retake: (s as Session & { is_retake?: boolean }).is_retake ?? false,
     })),
     // セッションなし（未受験者）
     ...allStudents
@@ -594,6 +596,7 @@ export default function TestManagerClient({
         is_submitted: false,
         is_absent: false,
         score: null,
+        is_retake: false,
       })),
   ].sort((a, b) => {
     const ak = `${a.class_name}${String(a.seat_number).padStart(3, '0')}`
@@ -1227,7 +1230,14 @@ export default function TestManagerClient({
                         )}
                       </td>
                       <td className="px-4 py-3 text-right font-medium text-gray-800">
-                        {!absent && row.score !== null ? `${row.score}点` : dash}
+                        {!absent && row.score !== null ? (
+                          <span className="inline-flex items-center gap-1 justify-end">
+                            {row.is_retake && (
+                              <span className="text-xs bg-orange-100 text-orange-600 font-medium px-1.5 py-0.5 rounded">受け直し</span>
+                            )}
+                            {row.score}点
+                          </span>
+                        ) : dash}
                       </td>
                       {test.mode === 50 && (
                         <td className="px-4 py-3 text-right text-purple-700 font-medium">

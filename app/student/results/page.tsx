@@ -22,7 +22,7 @@ export default async function ResultsPage() {
   // 正式な提出済みセッションを取得（練習除外）
   const { data: sessions } = await admin
     .from('sessions')
-    .select('id, score, submitted_at, tests(id, title, mode, status, pass_score, published_classes, published_student_ids)')
+    .select('id, score, submitted_at, is_retake, tests(id, title, mode, status, pass_score, published_classes, published_student_ids)')
     .eq('student_id', student.id)
     .eq('is_submitted', true)
     .neq('is_practice', true)
@@ -88,7 +88,12 @@ export default async function ResultsPage() {
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className="font-bold text-gray-800 text-lg">{s.score}点</p>
+                            <div className="flex items-center justify-end gap-1.5">
+                              {(s as any).is_retake && (
+                                <span className="text-xs bg-orange-100 text-orange-600 font-medium px-1.5 py-0.5 rounded">受け直し</span>
+                              )}
+                              <p className="font-bold text-gray-800 text-lg">{s.score}点</p>
+                            </div>
                             {passed !== null && (
                               <p className={`text-xs font-medium ${passed ? 'text-green-600' : 'text-red-500'}`}>
                                 {passed ? '合格' : '不合格'}
@@ -126,7 +131,12 @@ export default async function ResultsPage() {
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className="font-bold text-gray-800 text-lg">{s.score}点</p>
+                            <div className="flex items-center justify-end gap-1.5">
+                              {(s as any).is_retake && (
+                                <span className="text-xs bg-orange-100 text-orange-600 font-medium px-1.5 py-0.5 rounded">受け直し</span>
+                              )}
+                              <p className="font-bold text-gray-800 text-lg">{s.score}点</p>
+                            </div>
                             <p className="text-xs text-blue-600 font-medium">+{pts}pt</p>
                           </div>
                         </div>
@@ -160,7 +170,12 @@ export default async function ResultsPage() {
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className="font-bold text-gray-800 text-lg">{s.score}点</p>
+                            <div className="flex items-center justify-end gap-1.5">
+                              {(s as any).is_retake && (
+                                <span className="text-xs bg-orange-100 text-orange-600 font-medium px-1.5 py-0.5 rounded">受け直し</span>
+                              )}
+                              <p className="font-bold text-gray-800 text-lg">{s.score}点</p>
+                            </div>
                             {passed !== null && (
                               <p className={`text-xs font-medium ${passed ? 'text-green-600' : 'text-red-500'}`}>
                                 {passed ? '合格' : '不合格'}

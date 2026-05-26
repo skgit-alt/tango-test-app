@@ -1,8 +1,9 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { calcPointsFromRules, DEFAULT_POINT_RULES } from '@/lib/supabase/types'
 import { NextRequest, NextResponse } from 'next/server'
 
-// submit_test RPCを呼び出し、失敗時はadminクライアントでフォールバック保存する
+// submit_test RPCを呼び出し、失敗時はadminクライアントで手動採点してフォールバック保存する
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -38,23 +39,61 @@ export async function POST(req: NextRequest) {
   })
 
   if (rpcError) {
-    // RPC失敗時: answers を直接 upsert して手動採点なしで保存
+    // ─── RPC失敗時: 手動採点して保存 ─────────────────────────────────────────
     console.error('[submit-test] RPC failed:', rpcError.message)
-    const upsertData = answers.map((a) => ({
-      session_id: sessionId,
-      question_id: a.question_id,
-      selected_answer: a.selected_answer,
-      is_correct: null,
-    }))
+
+    // 問題の正解・配点を取得
+    const { data: questions } = await admin
+      .from('questions')
+      .select('id, correct_answer, points')
+      .eq('test_id', session.test_id)
+
+    // 手動採点
+    let manualScore = 0
+    const upsertData = answers.map((a) => {
+      const q = questions?.find((q) => q.id === a.question_id)
+      const isCorrect = q != null ? (a.selected_answer === q.correct_answer) : null
+      if (isCorrect) manualScore += (q?.points ?? 1)
+      return {
+        session_id: sessionId,
+        question_id: a.question_id,
+        selected_answer: a.selected_answer,
+        is_correct: isCorrect,
+      }
+    })
+
+    // 回答を保存
     const { error: upsertErr } = await admin
       .from('answers')
       .upsert(upsertData, { onConflict: 'session_id,question_id' })
     if (upsertErr) {
       console.error('[submit-test] upsert failed:', upsertErr.message)
     }
+
+    // スコアをセッションに保存
+    await admin
+      .from('sessions')
+      .update({ score: manualScore })
+      .eq('id', sessionId)
+
+    // points テーブルを更新（同一student+testの古い行を削除してから挿入）
+    await admin
+      .from('points')
+      .delete()
+      .eq('student_id', session.student_id)
+      .eq('test_id', session.test_id)
+
+    const pointsEarned = calcPointsFromRules(manualScore, DEFAULT_POINT_RULES)
+    await admin.from('points').insert({
+      student_id: session.student_id,
+      test_id: session.test_id,
+      score: manualScore,
+      points_earned: pointsEarned,
+      cycle: 1,
+    })
   }
 
-  // ★マーク（flagged）をanswersテーブルに保存（列が存在する場合のみ）
+  // ★マーク（flagged）をanswersテーブルに保存
   const flaggedAnswers = answers.filter((a) => a.flagged)
   if (flaggedAnswers.length > 0) {
     const { error: flagErr } = await admin.from('answers').upsert(
@@ -66,18 +105,16 @@ export async function POST(req: NextRequest) {
       { onConflict: 'session_id,question_id' }
     )
     if (flagErr) {
-      // flaggedカラムが未作成の場合は無視（機能は動くが★は保存されない）
       console.warn('[submit-test] flagged upsert skipped:', flagErr.message)
     }
   }
 
   // RPC 成功・失敗に関わらず、必ずセッションを提出済みにする
-  // 提出と同時に端末ロック（device_token）を解放する
   const { error: updErr } = await admin
     .from('sessions')
     .update({ is_submitted: true, submitted_at: now, device_token: null, device_token_at: null })
     .eq('id', sessionId)
-    .eq('is_submitted', false)  // 既に提出済みの場合は更新しない
+    .eq('is_submitted', false)
 
   if (updErr) {
     console.error('[submit-test] session update failed:', updErr.message)

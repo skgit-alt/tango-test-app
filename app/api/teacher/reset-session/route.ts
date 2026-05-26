@@ -21,10 +21,35 @@ export async function POST(req: NextRequest) {
   const { sessionId } = await req.json() as { sessionId: string }
   if (!sessionId) return NextResponse.json({ error: 'sessionId required' }, { status: 400 })
 
+  // セッション情報を取得（student_id / test_id が必要）
+  const { data: sessionInfo } = await admin
+    .from('sessions')
+    .select('student_id, test_id')
+    .eq('id', sessionId)
+    .maybeSingle()
+
+  if (!sessionInfo) return NextResponse.json({ error: 'session not found' }, { status: 404 })
+
+  // ① points テーブルの該当行を削除（再受験後に RPC が正常に記録できるよう）
+  await admin
+    .from('points')
+    .delete()
+    .eq('student_id', sessionInfo.student_id)
+    .eq('test_id', sessionInfo.test_id)
+
+  // ② 回答を削除
   await admin.from('answers').delete().eq('session_id', sessionId)
+
+  // ③ セッションをリセット（is_retake=true でマーク）
   const { error } = await admin
     .from('sessions')
-    .update({ is_submitted: false, score: null, submitted_at: null, current_page: 1 })
+    .update({
+      is_submitted: false,
+      score: null,
+      submitted_at: null,
+      current_page: 1,
+      is_retake: true,
+    })
     .eq('id', sessionId)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
