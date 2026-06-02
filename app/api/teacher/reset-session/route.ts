@@ -40,13 +40,14 @@ export async function POST(req: NextRequest) {
   // ② 回答を削除
   await admin.from('answers').delete().eq('session_id', sessionId)
 
-  // ③ セッションをリセット（is_retake=true でマーク）
+  // ③ セッションをリセット（is_retake=true でマーク、started_at もリセット）
   const { error } = await admin
     .from('sessions')
     .update({
       is_submitted: false,
       score: null,
       submitted_at: null,
+      started_at: null,   // タイマーを正しくリセットするために必須
       current_page: 1,
       is_retake: true,
     })

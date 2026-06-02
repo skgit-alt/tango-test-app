@@ -119,6 +119,18 @@ export default function TestClient({
     setSubmitError(lastError)
   }, [answers, questions, session.id, router, flagged, isPractice])
 
+  // started_at が null（リセット後の受け直し）のときは開始時刻を今に設定
+  useEffect(() => {
+    if (!session.started_at && !isPractice) {
+      fetch('/api/student/start-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ testId: test.id }),
+      }).catch((e) => console.error('[start-test on retake]', e))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // 端末ロック：このデバイスでセッションを確保し、30秒ごとにハートビート送信
   useEffect(() => {
     const token = crypto.randomUUID()
