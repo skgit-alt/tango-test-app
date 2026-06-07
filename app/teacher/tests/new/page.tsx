@@ -446,6 +446,12 @@ export default function NewTestPage() {
         setQuestions([])
         return
       }
+
+      // タイトルが未入力ならファイル名から自動セット（拡張子を除去）
+      if (!title.trim()) {
+        setTitle(file.name.replace(/\.xlsx$/i, ''))
+      }
+
       setQuestions(parsed)
       setPreview(true)
     } catch (err) {
