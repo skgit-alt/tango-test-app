@@ -16,7 +16,7 @@ interface NameChangeRequest {
   students: { name: string; class_name: string; seat_number: number } | null
 }
 
-function NameChangeRequestsPanel({ onResolved }: { onResolved: () => void }) {
+function NameChangeRequestsPanel({ onResolved, isAdmin = true }: { onResolved: () => void; isAdmin?: boolean }) {
   const [requests, setRequests] = useState<NameChangeRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState<string | null>(null)
@@ -92,22 +92,24 @@ function NameChangeRequestsPanel({ onResolved }: { onResolved: () => void }) {
                     <span className="text-blue-700 font-bold">{r.requested_name}</span>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleAction(r.id, 'approve')}
-                    disabled={processing === r.id || isRejecting}
-                    className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-green-700 transition disabled:opacity-50"
-                  >
-                    承認
-                  </button>
-                  <button
-                    onClick={() => { setRejectingId(r.id); setRejectReason(''); setActionError(null) }}
-                    disabled={processing === r.id || isRejecting}
-                    className="bg-gray-200 text-gray-700 px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-gray-300 transition disabled:opacity-50"
-                  >
-                    却下
-                  </button>
-                </div>
+                {isAdmin && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleAction(r.id, 'approve')}
+                      disabled={processing === r.id || isRejecting}
+                      className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-green-700 transition disabled:opacity-50"
+                    >
+                      承認
+                    </button>
+                    <button
+                      onClick={() => { setRejectingId(r.id); setRejectReason(''); setActionError(null) }}
+                      disabled={processing === r.id || isRejecting}
+                      className="bg-gray-200 text-gray-700 px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-gray-300 transition disabled:opacity-50"
+                    >
+                      却下
+                    </button>
+                  </div>
+                )}
               </div>
               {/* 却下理由入力フォーム */}
               {isRejecting && (
@@ -160,6 +162,11 @@ export default function StudentsPage() {
 
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    fetch('/api/teacher/me').then(r => r.json()).then(d => setIsAdmin(d.role === 'admin')).catch(() => setIsAdmin(false))
+  }, [])
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -446,7 +453,7 @@ export default function StudentsPage() {
     <div className="space-y-6">
 
       {/* テストネーム変更申請パネル */}
-      <NameChangeRequestsPanel onResolved={fetchStudents} />
+      <NameChangeRequestsPanel onResolved={fetchStudents} isAdmin={isAdmin === true} />
 
       {/* 編集モーダル */}
       {editingStudent && (
@@ -547,19 +554,23 @@ export default function StudentsPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-gray-800">生徒管理</h1>
         <div className="flex gap-2 flex-wrap">
-          <button onClick={() => fileRef.current?.click()} disabled={uploading}
-            className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50">
-            {uploading ? 'アップロード中...' : 'Excelで一括登録'}
-          </button>
-          <button onClick={handleDownloadTemplate}
-            className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition">
-            テンプレート
-          </button>
+          {isAdmin && (
+            <>
+              <button onClick={() => fileRef.current?.click()} disabled={uploading}
+                className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50">
+                {uploading ? 'アップロード中...' : 'Excelで一括登録'}
+              </button>
+              <button onClick={handleDownloadTemplate}
+                className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition">
+                テンプレート
+              </button>
+            </>
+          )}
           <button onClick={handleDownloadList}
             className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition">
             一覧ダウンロード
           </button>
-          <input ref={fileRef} type="file" accept=".xlsx" onChange={handleFileUpload} className="hidden" />
+          {isAdmin && <input ref={fileRef} type="file" accept=".xlsx" onChange={handleFileUpload} className="hidden" />}
         </div>
       </div>
 
@@ -606,7 +617,7 @@ export default function StudentsPage() {
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
             <h2 className="font-semibold text-gray-800">生徒一覧 ({filtered.length}名)</h2>
-            {selectedIds.size > 0 && (
+            {isAdmin && selectedIds.size > 0 && (
               <button onClick={handleDeleteSelected} disabled={deleting}
                 className="bg-red-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-red-600 transition disabled:opacity-50">
                 {deleting ? '削除中...' : `選択した ${selectedIds.size} 名を削除`}
@@ -633,26 +644,30 @@ export default function StudentsPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-600">
                 <tr>
-                  <th className="px-4 py-3 text-center w-10">
-                    <input type="checkbox" checked={allFilteredSelected} onChange={toggleSelectAll}
-                      className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer" />
-                  </th>
+                  {isAdmin && (
+                    <th className="px-4 py-3 text-center w-10">
+                      <input type="checkbox" checked={allFilteredSelected} onChange={toggleSelectAll}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer" />
+                    </th>
+                  )}
                   <th className="px-4 py-3 text-left">クラス</th>
                   <th className="px-4 py-3 text-left">番号</th>
                   <th className="px-4 py-3 text-left">名前</th>
                   <th className="px-4 py-3 text-left">生徒ID</th>
                   <th className="px-4 py-3 text-left">テストネーム</th>
                   <th className="px-4 py-3 text-center">初回設定</th>
-                  <th className="px-4 py-3 text-center">操作</th>
+                  {isAdmin && <th className="px-4 py-3 text-center">操作</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filtered.map((s) => (
                   <tr key={s.id} className={`hover:bg-gray-50 ${selectedIds.has(s.id) ? 'bg-blue-50' : ''}`}>
-                    <td className="px-4 py-3 text-center">
-                      <input type="checkbox" checked={selectedIds.has(s.id)} onChange={() => toggleSelect(s.id)}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer" />
-                    </td>
+                    {isAdmin && (
+                      <td className="px-4 py-3 text-center">
+                        <input type="checkbox" checked={selectedIds.has(s.id)} onChange={() => toggleSelect(s.id)}
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer" />
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-gray-700">{s.class_name}</td>
                     <td className="px-4 py-3 text-gray-700">{s.seat_number}</td>
                     <td className="px-4 py-3 text-gray-800 font-medium">{s.name}</td>
@@ -690,18 +705,20 @@ export default function StudentsPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-3">
-                        <button onClick={() => openEdit(s)}
-                          className="text-blue-600 hover:text-blue-800 text-xs font-medium hover:underline">
-                          修正
-                        </button>
-                        <button onClick={() => openReset(s)}
-                          className="text-orange-500 hover:text-orange-700 text-xs font-medium hover:underline">
-                          PW リセット
-                        </button>
-                      </div>
-                    </td>
+                    {isAdmin && (
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-3">
+                          <button onClick={() => openEdit(s)}
+                            className="text-blue-600 hover:text-blue-800 text-xs font-medium hover:underline">
+                            修正
+                          </button>
+                          <button onClick={() => openReset(s)}
+                            className="text-orange-500 hover:text-orange-700 text-xs font-medium hover:underline">
+                            PW リセット
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

@@ -19,7 +19,7 @@ const roleColor: Record<string, string> = {
   teacher: 'bg-blue-100 text-blue-700',
 }
 
-export default function AdminsClient({ admins: initial, myEmail }: { admins: Admin[], myEmail: string }) {
+export default function AdminsClient({ admins: initial, myEmail, isAdmin = true }: { admins: Admin[], myEmail: string, isAdmin?: boolean }) {
   const supabase = createClient()
   const [admins, setAdmins] = useState<Admin[]>(initial)
   const [newEmail, setNewEmail] = useState('')
@@ -94,38 +94,40 @@ export default function AdminsClient({ admins: initial, myEmail }: { admins: Adm
     <div className="space-y-6 max-w-3xl">
       <h1 className="text-2xl font-bold text-gray-800">スタッフ管理</h1>
 
-      {/* 新規追加フォーム */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
-        <h2 className="font-semibold text-gray-700">スタッフを追加</h2>
-        <div className="flex gap-3 flex-wrap">
-          <input
-            type="email"
-            value={newEmail}
-            onChange={e => { setNewEmail(e.target.value); setError('') }}
-            onKeyDown={e => e.key === 'Enter' && handleAdd()}
-            placeholder="先生のGmailアドレス"
-            className="flex-1 min-w-48 border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
-          <select
-            value={newRole}
-            onChange={e => setNewRole(e.target.value as 'admin' | 'teacher')}
-            className="border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
-          >
-            <option value="teacher">先生</option>
-            <option value="admin">管理者</option>
-          </select>
-          <button
-            onClick={handleAdd}
-            disabled={adding}
-            className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-50"
-          >
-            {adding ? '追加中...' : '追加'}
-          </button>
+      {/* 新規追加フォーム（管理者のみ） */}
+      {isAdmin && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
+          <h2 className="font-semibold text-gray-700">スタッフを追加</h2>
+          <div className="flex gap-3 flex-wrap">
+            <input
+              type="email"
+              value={newEmail}
+              onChange={e => { setNewEmail(e.target.value); setError('') }}
+              onKeyDown={e => e.key === 'Enter' && handleAdd()}
+              placeholder="先生のGmailアドレス"
+              className="flex-1 min-w-48 border border-gray-300 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+            <select
+              value={newRole}
+              onChange={e => setNewRole(e.target.value as 'admin' | 'teacher')}
+              className="border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+            >
+              <option value="teacher">先生</option>
+              <option value="admin">管理者</option>
+            </select>
+            <button
+              onClick={handleAdd}
+              disabled={adding}
+              className="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-50"
+            >
+              {adding ? '追加中...' : '追加'}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400">
+            先生：テスト開始ボタンのみ操作可　／　管理者：全機能＋スタッフ管理
+          </p>
         </div>
-        <p className="text-xs text-gray-400">
-          先生：テスト開始ボタンのみ操作可　／　管理者：全機能＋スタッフ管理
-        </p>
-      </div>
+      )}
 
       {error && <div className="bg-red-50 text-red-700 rounded-xl px-4 py-3 text-sm">{error}</div>}
       {success && <div className="bg-green-50 text-green-700 rounded-xl px-4 py-3 text-sm">{success}</div>}
@@ -144,7 +146,7 @@ export default function AdminsClient({ admins: initial, myEmail }: { admins: Adm
                 <th className="px-5 py-3 text-left">メールアドレス</th>
                 <th className="px-5 py-3 text-left">役割</th>
                 <th className="px-5 py-3 text-left">追加日</th>
-                <th className="px-5 py-3 text-center">操作</th>
+                {isAdmin && <th className="px-5 py-3 text-center">操作</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -164,26 +166,28 @@ export default function AdminsClient({ admins: initial, myEmail }: { admins: Adm
                   <td className="px-5 py-3 text-gray-400 text-xs">
                     {new Date(admin.created_at).toLocaleDateString('ja-JP')}
                   </td>
-                  <td className="px-5 py-3 text-center">
-                    <div className="flex items-center justify-center gap-3">
-                      {admin.email !== myEmail && (
-                        <>
-                          <button
-                            onClick={() => handleChangeRole(admin)}
-                            className="text-blue-600 hover:text-blue-800 text-xs font-medium hover:underline"
-                          >
-                            {admin.role === 'admin' ? '先生に変更' : '管理者に変更'}
-                          </button>
-                          <button
-                            onClick={() => handleDelete(admin)}
-                            className="text-red-500 hover:text-red-700 text-xs font-medium hover:underline"
-                          >
-                            削除
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
+                  {isAdmin && (
+                    <td className="px-5 py-3 text-center">
+                      <div className="flex items-center justify-center gap-3">
+                        {admin.email !== myEmail && (
+                          <>
+                            <button
+                              onClick={() => handleChangeRole(admin)}
+                              className="text-blue-600 hover:text-blue-800 text-xs font-medium hover:underline"
+                            >
+                              {admin.role === 'admin' ? '先生に変更' : '管理者に変更'}
+                            </button>
+                            <button
+                              onClick={() => handleDelete(admin)}
+                              className="text-red-500 hover:text-red-700 text-xs font-medium hover:underline"
+                            >
+                              削除
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

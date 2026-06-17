@@ -47,11 +47,13 @@ export default function TestClient({
   })
   const [contentHidden, setContentHidden] = useState(false)
   const [deviceBlocked, setDeviceBlocked] = useState(false)
+  const [splitViewBlocked, setSplitViewBlocked] = useState(false)
   const cheatCountRef = useRef(0)
   const submittingRef = useRef(false)
   const deviceTokenRef = useRef<string>('')
   const topRef = useRef<HTMLDivElement>(null)
   const answersRef = useRef(answers)
+  const submitTestRef = useRef<() => void>(() => {})
 
   const MAX_RETRIES = 3
   const RETRY_DELAYS = [1000, 2000, 3000]
@@ -189,16 +191,27 @@ export default function TestClient({
     return () => clearInterval(interval)
   }, [questions, session.id, isPractice])
 
+  useEffect(() => { submitTestRef.current = submitTest }, [submitTest])
+
   useEffect(() => {
-    if (timeLeft <= 0) { submitTest(); return }
+    if (timeLeft <= 0) { submitTestRef.current(); return }
+    // インターバルのカウントではなく実時刻から残り秒を計算する
+    // （連打等でJSスレッドが詰まっても時間が止まらない）
+    const startedAt = session.started_at
+      ? new Date(session.started_at).getTime()
+      : Date.now()
+    const endAt = startedAt + test.time_limit * 1000
     const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) { clearInterval(timer); submitTest(); return 0 }
-        return prev - 1
-      })
-    }, 1000)
+      const remaining = Math.max(0, Math.floor((endAt - Date.now()) / 1000))
+      setTimeLeft(remaining)
+      if (remaining <= 0) {
+        clearInterval(timer)
+        submitTestRef.current()
+      }
+    }, 500)
     return () => clearInterval(timer)
-  }, [timeLeft, submitTest])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const logCheat = useCallback(async (eventType: 'tab_leave' | 'app_switch' | 'split_view') => {
     if (submittingRef.current) return
@@ -231,28 +244,33 @@ export default function TestClient({
   }, [logCheat])
 
   useEffect(() => {
-    let w = window.innerWidth
-    let h = window.innerHeight
-
-    const fn = () => {
-      const cw = window.innerWidth
-      const ch = window.innerHeight
-      const widthDec = w - cw    // 幅の減少量（正 = 縮んだ）
-      const heightInc = ch - h   // 高さの増加量（正 = 伸びた）
-      // Split View: 幅が200px以上減り、かつ高さが100px以上増えていない（デバイス回転は除外）
-      if (widthDec > 200 && heightInc < 100) logCheat('split_view')
-      w = cw
-      h = ch
-    }
-    window.addEventListener('resize', fn)
-
-    // テスト開始前からSplit Viewだった場合の検知（比率チェック）
     const isSplitView = () => screen.width > 0 && (window.innerWidth / screen.width) < 0.7
-    if (isSplitView()) logCheat('split_view')
-    const interval = setInterval(() => { if (isSplitView()) logCheat('split_view') }, 5000)
+    let prevInSplitView = isSplitView()
+
+    // 初期チェック（テスト開始前から画面分割していた場合）
+    if (prevInSplitView) {
+      setSplitViewBlocked(true)
+      logCheat('split_view')
+    }
+
+    const check = () => {
+      const nowSplit = isSplitView()
+      if (nowSplit && !prevInSplitView) {
+        // 分割に入った → ブロック＋記録
+        setSplitViewBlocked(true)
+        logCheat('split_view')
+      } else if (!nowSplit && prevInSplitView) {
+        // 分割を解除した → ブロック解除
+        setSplitViewBlocked(false)
+      }
+      prevInSplitView = nowSplit
+    }
+
+    window.addEventListener('resize', check)
+    const interval = setInterval(check, 5000)
 
     return () => {
-      window.removeEventListener('resize', fn)
+      window.removeEventListener('resize', check)
       clearInterval(interval)
     }
   }, [logCheat])
@@ -330,6 +348,20 @@ export default function TestClient({
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* 画面分割ブロックオーバーレイ（閉じられない） */}
+      {splitViewBlocked && (
+        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-sm w-full text-center space-y-4 shadow-2xl">
+            <div className="text-5xl">🚫</div>
+            <h2 className="text-xl font-bold text-red-700">画面分割が検出されました</h2>
+            <p className="text-gray-600 text-sm leading-relaxed">
+              テスト中は画面分割できません。<br />
+              分割を解除すると自動的に再開されます。
+            </p>
+            <p className="text-xs text-gray-400">この行動は記録されています</p>
+          </div>
+        </div>
+      )}
       {/* 送信中オーバーレイ */}
       {submitting && (
         <div className="fixed inset-0 bg-white/90 z-50 flex flex-col items-center justify-center gap-4">

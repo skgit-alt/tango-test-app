@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound } from 'next/navigation'
 import TestManagerClient from './TestManagerClient'
 
@@ -24,10 +25,21 @@ export default async function TestDetailPage({
     .eq('test_id', id)
     .order('order_num')
 
+  // ロール取得（先生はテスト開始以外の操作を制限）
+  const { data: { user } } = await supabase.auth.getUser()
+  const adminClient = createAdminClient()
+  const { data: adminRec } = await adminClient
+    .from('admins')
+    .select('role')
+    .eq('email', user?.email ?? '')
+    .maybeSingle()
+  const isAdmin = adminRec?.role === 'admin'
+
   return (
     <TestManagerClient
       test={test}
       questions={questions ?? []}
+      isAdmin={isAdmin}
     />
   )
 }

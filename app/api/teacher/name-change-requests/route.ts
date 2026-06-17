@@ -30,6 +30,16 @@ export async function PATCH(req: NextRequest) {
 
   const admin = createAdminClient()
 
+  // 管理者のみ操作可能
+  const { data: adminRec } = await admin
+    .from('admins')
+    .select('role')
+    .eq('email', user.email!)
+    .maybeSingle()
+  if (!adminRec || adminRec.role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const { data: request } = await admin
     .from('test_name_change_requests')
     .select('*')

@@ -60,6 +60,16 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const adminCheck = createAdminClient()
+  const { data: adminRec } = await adminCheck
+    .from('admins')
+    .select('role')
+    .eq('email', user.email!)
+    .maybeSingle()
+  if (!adminRec || adminRec.role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const { from_round, to_round, preview } = await req.json() as {
     from_round: number
     to_round: number

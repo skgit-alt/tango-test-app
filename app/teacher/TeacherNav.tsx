@@ -11,13 +11,12 @@ export default function TeacherNav({
 }) {
   const pathname = usePathname()
 
+  // 先生・管理者ともに全ページを閲覧可能
   const links = [
     { href: '/teacher', label: 'テスト一覧', exact: true, badge: 0 },
-    ...(isAdmin ? [
-      { href: '/teacher/points', label: 'ランキング', exact: false, badge: 0 },
-      { href: '/teacher/admins', label: 'スタッフ管理', exact: false, badge: 0 },
-      { href: '/teacher/students', label: '生徒管理', exact: false, badge: pendingNameChangeCount },
-    ] : []),
+    { href: '/teacher/points', label: 'ランキング', exact: false, badge: 0 },
+    { href: '/teacher/admins', label: 'スタッフ管理', exact: false, badge: 0 },
+    { href: '/teacher/students', label: '生徒管理', exact: false, badge: isAdmin ? pendingNameChangeCount : 0 },
   ]
 
   return (

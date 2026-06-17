@@ -55,10 +55,12 @@ function SettingsPanel({
   settings,
   activeMode,
   onSaved,
+  isAdmin = true,
 }: {
   settings: Settings | null
   activeMode: 50 | 20
   onSaved: () => void
+  isAdmin?: boolean
 }) {
   const [editing, setEditing] = useState(false)
   const [fromRound, setFromRound] = useState('')
@@ -115,7 +117,7 @@ function SettingsPanel({
             </p>
           )}
         </div>
-        {!editing && (
+        {isAdmin && !editing && (
           <button
             onClick={() => setEditing(true)}
             className="text-sm text-blue-600 border border-blue-300 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg font-medium transition"
@@ -517,6 +519,7 @@ function RankingTable({
   settings,
   medalsByStudentId = {},
   onMedalAwarded,
+  isAdmin = true,
 }: {
   ranking: RankEntry[]
   rounds: number[]
@@ -525,6 +528,7 @@ function RankingTable({
   settings: Settings | null
   medalsByStudentId?: Record<string, string>
   onMedalAwarded?: () => void
+  isAdmin?: boolean
 }) {
   const unit = settings?.ranking_type === 'score' ? '点' : (is20 ? '点' : 'pt')
   const noDataMsg = is20
@@ -601,7 +605,7 @@ function RankingTable({
         <h2 className="font-semibold text-gray-800">
           個人ランキング（上位{settings?.max_rank ?? 30}名）
         </h2>
-        {!is20 && medalsOn && (
+        {!is20 && medalsOn && isAdmin && (
           <div className="flex items-center gap-3">
             {medalSuccess && (
               <span className="text-green-600 text-sm font-medium">✅ 勲章を付与しました！</span>
@@ -780,6 +784,11 @@ export default function PointsPage() {
   const [loading50, setLoading50] = useState(true)
   const [loading20, setLoading20] = useState(true)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [isAdmin, setIsAdmin] = useState<boolean>(true) // デフォルトtrue（ロード完了前に操作できないよう後でfalseに）
+
+  useEffect(() => {
+    fetch('/api/teacher/me').then(r => r.json()).then(d => setIsAdmin(d.role === 'admin')).catch(() => setIsAdmin(false))
+  }, [])
 
   const fetchData = async (mode: 50 | 20) => {
     const setter = mode === 50 ? setData50 : setData20
@@ -883,20 +892,22 @@ export default function PointsPage() {
         >
           📄 20問スコアランキング
         </button>
-        <button
-          onClick={() => setShowAdvanced((v) => !v)}
-          className={`ml-auto px-4 py-2 rounded-xl text-sm font-semibold border transition flex items-center gap-1.5 ${
-            showAdvanced
-              ? 'bg-gray-700 text-white border-gray-700'
-              : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
-          }`}
-        >
-          ⚙️ 各種設定
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setShowAdvanced((v) => !v)}
+            className={`ml-auto px-4 py-2 rounded-xl text-sm font-semibold border transition flex items-center gap-1.5 ${
+              showAdvanced
+                ? 'bg-gray-700 text-white border-gray-700'
+                : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            ⚙️ 各種設定
+          </button>
+        )}
       </div>
 
       {/* 各種設定パネル */}
-      {showAdvanced && (
+      {isAdmin && showAdvanced && (
         <AdvancedSettingsPanel
           settings={activeData.settings}
           activeMode={activeTab}
@@ -910,6 +921,7 @@ export default function PointsPage() {
         settings={activeData.settings}
         activeMode={activeTab}
         onSaved={() => fetchData(activeTab)}
+        isAdmin={isAdmin}
       />
 
       {/* ポイント早見表（50問かつポイントランキングのみ） */}
@@ -964,6 +976,7 @@ export default function PointsPage() {
         settings={activeData.settings}
         medalsByStudentId={activeData.medalsByStudentId}
         onMedalAwarded={() => fetchData(50)}
+        isAdmin={isAdmin}
       />
     </div>
   )

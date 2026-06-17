@@ -8,6 +8,17 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const admin = createAdminClient()
+
+  // 管理者のみ操作可能
+  const { data: adminRec } = await admin
+    .from('admins')
+    .select('role')
+    .eq('email', user.email!)
+    .maybeSingle()
+  if (!adminRec || adminRec.role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const { id, password }: { id: string; password: string } = await req.json()
 
   if (!id || !password || password.length < 6) {

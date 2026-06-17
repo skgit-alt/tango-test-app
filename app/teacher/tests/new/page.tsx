@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import * as XLSX from 'xlsx'
@@ -393,6 +393,13 @@ function parseRtfToQuestions(buffer: ArrayBuffer): { title: string; questions: Q
 export default function NewTestPage() {
   const router = useRouter()
   const supabase = createClient()
+
+  useEffect(() => {
+    fetch('/api/teacher/me')
+      .then(r => r.json())
+      .then(d => { if (d.role !== 'admin') router.push('/teacher') })
+      .catch(() => router.push('/teacher'))
+  }, [router])
   const xlsxRef = useRef<HTMLInputElement>(null)
   const rtfRef = useRef<HTMLInputElement>(null)
   const docxRef = useRef<HTMLInputElement>(null)

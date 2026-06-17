@@ -7,19 +7,21 @@ export default async function AdminsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  // 管理者（admin）のみアクセス可
   const { data: me } = await supabase
     .from('admins')
     .select('role')
     .eq('email', user.email)
     .single()
 
-  if (!me || me.role !== 'admin') redirect('/teacher')
+  // スタッフ以外はアクセス不可
+  if (!me) redirect('/teacher')
+
+  const isAdmin = me.role === 'admin'
 
   const { data: admins } = await supabase
     .from('admins')
     .select('id, email, role, created_at')
     .order('created_at')
 
-  return <AdminsClient admins={admins ?? []} myEmail={user.email!} />
+  return <AdminsClient admins={admins ?? []} myEmail={user.email!} isAdmin={isAdmin} />
 }

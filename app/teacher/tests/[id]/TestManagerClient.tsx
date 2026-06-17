@@ -61,9 +61,11 @@ type PreviewQuestion = Pick<Question, 'id' | 'order_num' | 'question_text' | 'ch
 export default function TestManagerClient({
   test: initialTest,
   questions,
+  isAdmin = true,
 }: {
   test: Test
   questions: PreviewQuestion[]
+  isAdmin?: boolean
 }) {
   const supabase = createClient()
   const [test, setTest] = useState<Test>(initialTest)
@@ -663,7 +665,7 @@ export default function TestManagerClient({
               </svg>
             </a>
 
-            {editingTitle ? (
+            {isAdmin && editingTitle ? (
               <div className="flex items-center gap-2">
                 <input
                   type="text"
@@ -679,15 +681,17 @@ export default function TestManagerClient({
             ) : (
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl font-bold text-gray-800">{test.title}</h1>
-                <button
-                  onClick={() => { setTitleInput(test.title); setEditingTitle(true) }}
-                  className="text-gray-400 hover:text-blue-500 transition p-1 rounded"
-                  title="テスト名を編集"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => { setTitleInput(test.title); setEditingTitle(true) }}
+                    className="text-gray-400 hover:text-blue-500 transition p-1 rounded"
+                    title="テスト名を編集"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                )}
               </div>
             )}
 
@@ -698,7 +702,7 @@ export default function TestManagerClient({
           <div className="text-sm text-gray-500 ml-8 flex items-center gap-3 flex-wrap">
             <span className="flex items-center gap-1">
               {test.mode}問モード /
-              {editingTimeLimit ? (
+              {isAdmin && editingTimeLimit ? (
                 <>
                   <span className="ml-1">制限時間</span>
                   <input
@@ -728,15 +732,17 @@ export default function TestManagerClient({
               ) : (
                 <>
                   <span className="ml-1">制限時間 {Math.floor(test.time_limit / 60)}分{test.time_limit % 60 > 0 ? `${test.time_limit % 60}秒` : ''}</span>
-                  <button
-                    onClick={() => { setTimeLimitMin(String(Math.floor(test.time_limit / 60))); setTimeLimitSec(String(test.time_limit % 60)); setEditingTimeLimit(true) }}
-                    className="text-gray-400 hover:text-blue-500 transition"
-                    title="制限時間を編集"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => { setTimeLimitMin(String(Math.floor(test.time_limit / 60))); setTimeLimitSec(String(test.time_limit % 60)); setEditingTimeLimit(true) }}
+                      className="text-gray-400 hover:text-blue-500 transition"
+                      title="制限時間を編集"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                  )}
                 </>
               )}
               {test.pass_score ? ` / 合格点 ${test.pass_score}点` : ''}
@@ -744,7 +750,7 @@ export default function TestManagerClient({
             {/* 50問モードのみ「第何回」を表示・編集 */}
             {test.mode === 50 && (
               <span className="flex items-center gap-1">
-                {editingRound ? (
+                {isAdmin && editingRound ? (
                   <>
                     <span>第</span>
                     <input
@@ -765,15 +771,17 @@ export default function TestManagerClient({
                     <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-xs font-medium">
                       {test.round_number != null ? `第${test.round_number}回` : '回数未設定'}
                     </span>
-                    <button
-                      onClick={() => { setRoundInput(String(test.round_number ?? '')); setEditingRound(true) }}
-                      className="text-gray-400 hover:text-blue-500 transition"
-                      title="回数を編集"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => { setRoundInput(String(test.round_number ?? '')); setEditingRound(true) }}
+                        className="text-gray-400 hover:text-blue-500 transition"
+                        title="回数を編集"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                    )}
                   </>
                 )}
               </span>
@@ -851,7 +859,7 @@ export default function TestManagerClient({
         <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-gray-800">テスト開始</h2>
-            {(test.status === 'open' || (test.open_classes ?? []).length > 0) && (
+            {isAdmin && (test.status === 'open' || (test.open_classes ?? []).length > 0) && (
               <button
                 onClick={handleResetToWaiting}
                 disabled={loading}
@@ -874,13 +882,15 @@ export default function TestManagerClient({
                   })}
                 </p>
               </div>
-              <button
-                onClick={handleCancelSchedule}
-                disabled={savingSchedule}
-                className="text-xs text-red-500 border border-red-200 bg-white hover:bg-red-50 px-3 py-1.5 rounded-lg font-medium transition ml-3 shrink-0"
-              >
-                解除
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={handleCancelSchedule}
+                  disabled={savingSchedule}
+                  className="text-xs text-red-500 border border-red-200 bg-white hover:bg-red-50 px-3 py-1.5 rounded-lg font-medium transition ml-3 shrink-0"
+                >
+                  解除
+                </button>
+              )}
             </div>
           )}
 
@@ -898,13 +908,15 @@ export default function TestManagerClient({
                       })}
                     </p>
                   </div>
-                  <button
-                    onClick={() => handleCancelClassSchedule(cls)}
-                    disabled={savingSchedule}
-                    className="text-xs text-red-500 border border-red-200 bg-white hover:bg-red-50 px-3 py-1.5 rounded-lg font-medium transition ml-3 shrink-0"
-                  >
-                    解除
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleCancelClassSchedule(cls)}
+                      disabled={savingSchedule}
+                      className="text-xs text-red-500 border border-red-200 bg-white hover:bg-red-50 px-3 py-1.5 rounded-lg font-medium transition ml-3 shrink-0"
+                    >
+                      解除
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -985,7 +997,7 @@ export default function TestManagerClient({
                 <span className="bg-blue-100 text-blue-700 px-4 py-2 rounded-xl text-sm font-semibold">✅ 全員に公開済み</span>
                 <p className="text-xs text-gray-400">再受験者の結果も自動で閲覧可能です</p>
               </div>
-            ) : (
+            ) : isAdmin ? (
               <div className="flex items-center gap-3">
                 <button
                   onClick={handlePublishResult}
@@ -996,6 +1008,8 @@ export default function TestManagerClient({
                 </button>
                 <p className="text-xs text-gray-400">全生徒に一斉に結果を公開します</p>
               </div>
+            ) : (
+              <p className="text-sm text-gray-400 italic">未公開（管理者のみ公開可能）</p>
             )}
           </div>
 
@@ -1008,21 +1022,25 @@ export default function TestManagerClient({
                 {(test.status === 'open' ? visibleClasses : (test.open_classes ?? [])).map((cls) => {
                   const published = (test.published_classes ?? []).includes(cls)
                   const isLoading = publishingClass === cls
+                  if (!isAdmin && !published) return null
                   return (
                     <button
                       key={cls}
-                      onClick={() => handlePublishToClass(cls)}
-                      disabled={published || isLoading}
-                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition active:scale-95 ${
+                      onClick={() => isAdmin && handlePublishToClass(cls)}
+                      disabled={published || isLoading || !isAdmin}
+                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
                         published
                           ? 'bg-green-100 text-green-700 cursor-default'
-                          : 'bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50'
+                          : 'bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 active:scale-95'
                       }`}
                     >
                       {isLoading ? '...' : published ? `${cls} ✓ 公開済` : `${cls} に公開`}
                     </button>
                   )
                 })}
+                {!isAdmin && (test.published_classes ?? []).length === 0 && (
+                  <p className="text-sm text-gray-400 italic">未公開（管理者のみ公開可能）</p>
+                )}
               </div>
             </div>
           )}
@@ -1036,7 +1054,7 @@ export default function TestManagerClient({
                   {messageSaved && (
                     <span className="text-green-600 text-sm font-medium">✓ 保存しました</span>
                   )}
-                  {!showMessageEditor && (
+                  {isAdmin && !showMessageEditor && (
                     <button
                       onClick={() => { setMessageInput(test.teacher_message ?? DEFAULT_TEACHER_MESSAGE); setShowMessageEditor(true) }}
                       className="text-sm text-blue-600 hover:text-blue-800 font-medium"
@@ -1122,7 +1140,7 @@ export default function TestManagerClient({
                         </div>
                         {alreadyPublished ? (
                           <span className="text-xs text-green-600 font-medium shrink-0">✓ 閲覧可</span>
-                        ) : (
+                        ) : isAdmin ? (
                           <button
                             onClick={() => handlePublishToStudent(s.student_id)}
                             disabled={isLoading}
@@ -1130,6 +1148,8 @@ export default function TestManagerClient({
                           >
                             {isLoading ? '...' : '公開'}
                           </button>
+                        ) : (
+                          <span className="text-xs text-gray-400 shrink-0">未公開</span>
                         )}
                       </div>
                     )
@@ -1160,15 +1180,17 @@ export default function TestManagerClient({
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-600">
                 <tr>
-                  {/* 全選択チェックボックス */}
-                  <th className="pl-4 pr-2 py-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.size === tableRows.length && tableRows.length > 0}
-                      onChange={() => handleSelectAll(tableRows)}
-                      className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
-                    />
-                  </th>
+                  {/* 全選択チェックボックス（管理者のみ） */}
+                  {isAdmin && (
+                    <th className="pl-4 pr-2 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.size === tableRows.length && tableRows.length > 0}
+                        onChange={() => handleSelectAll(tableRows)}
+                        className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                      />
+                    </th>
+                  )}
                   {([
                     { key: 'class_name', label: 'クラス', align: 'text-left' },
                     { key: 'seat_number', label: '番号', align: 'text-left' },
@@ -1189,7 +1211,7 @@ export default function TestManagerClient({
                     </th>
                   ))}
                   {test.mode === 50 && <th className="px-4 py-3 text-right">pt</th>}
-                  <th className="px-4 py-3 text-center">修正</th>
+                  {isAdmin && <th className="px-4 py-3 text-center">修正</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -1204,14 +1226,16 @@ export default function TestManagerClient({
                       key={row.sessionId ?? `ns-${row.studentId}`}
                       className={`hover:bg-gray-50 ${isChecked ? 'bg-blue-50' : ''}`}
                     >
-                      <td className="pl-4 pr-2 py-3">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => handleSelectToggle(row.studentId)}
-                          className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
-                        />
-                      </td>
+                      {isAdmin && (
+                        <td className="pl-4 pr-2 py-3">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleSelectToggle(row.studentId)}
+                            className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                          />
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-gray-700">{row.class_name || '-'}</td>
                       <td className="px-4 py-3 text-gray-700">{row.seat_number || '-'}</td>
                       <td className="px-4 py-3 text-gray-800 font-medium">{row.name}</td>
@@ -1244,14 +1268,16 @@ export default function TestManagerClient({
                           {!absent && row.score !== null ? `${calcPoints(row.score)}pt` : dash}
                         </td>
                       )}
-                      <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => handleOpenEdit(row)}
-                          className="text-xs text-blue-600 border border-blue-300 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg font-medium transition"
-                        >
-                          修正
-                        </button>
-                      </td>
+                      {isAdmin && (
+                        <td className="px-4 py-3 text-center">
+                          <button
+                            onClick={() => handleOpenEdit(row)}
+                            className="text-xs text-blue-600 border border-blue-300 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg font-medium transition"
+                          >
+                            修正
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   )
                 })}
@@ -1261,8 +1287,8 @@ export default function TestManagerClient({
         )}
       </div>
 
-      {/* 一括操作バー（下からスライド） */}
-      <div
+      {/* 一括操作バー（下からスライド）（管理者のみ） */}
+      {isAdmin && <div
         className={`fixed bottom-0 left-0 right-0 z-40 transition-all duration-300 ease-out ${
           selectedIds.size > 0 ? 'translate-y-0 visible' : 'translate-y-full invisible'
         }`}
@@ -1300,7 +1326,7 @@ export default function TestManagerClient({
             </div>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* 修正モーダル */}
       {editTarget && (
@@ -1574,13 +1600,15 @@ export default function TestManagerClient({
             <h2 className="font-semibold text-red-800">不正行為ログ ({cheatLogs.length}件)</h2>
             {isCheatConfirmed ? (
               <span className="text-xs text-gray-400 font-medium">✓ 確認済み</span>
-            ) : (
+            ) : isAdmin ? (
               <button
                 onClick={handleConfirmCheats}
                 className="text-xs bg-red-600 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-red-700 transition"
               >
                 確認
               </button>
+            ) : (
+              <span className="text-xs text-red-500 font-medium">未確認</span>
             )}
           </div>
           <div className="overflow-x-auto">

@@ -248,6 +248,16 @@ export async function PATCH(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json(null, { status: 401 })
 
+  const adminAuth = createAdminClient()
+  const { data: adminRec } = await adminAuth
+    .from('admins')
+    .select('role')
+    .eq('email', user.email!)
+    .maybeSingle()
+  if (!adminRec || adminRec.role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const body = await req.json()
   const { from_round, to_round, label, mode, ranking_type, max_rank, point_rules, medals_enabled, medal_rules } = body
 

@@ -22,6 +22,16 @@ export async function POST(req: NextRequest) {
   }
 
   const admin = createAdminClient()
+
+  // 管理者のみ操作可能
+  const { data: adminRec } = await admin
+    .from('admins')
+    .select('role')
+    .eq('email', user.email!)
+    .maybeSingle()
+  if (!adminRec || adminRec.role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
   const now = new Date().toISOString()
 
   // 欠席の場合は score=null、is_submitted=false に強制
