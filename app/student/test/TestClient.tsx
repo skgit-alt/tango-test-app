@@ -244,7 +244,17 @@ export default function TestClient({
   }, [logCheat])
 
   useEffect(() => {
-    const isSplitView = () => screen.width > 0 && (window.innerWidth / screen.width) < 0.7
+    const isSplitView = () => {
+      // Method 1: screen.widthが全画面幅を返す場合（デスクトップ・一部iOS）
+      if (screen.width > 0 && (window.innerWidth / screen.width) < 0.65) return true
+      // Method 2: iPadOSではscreen.width = window.innerWidthになるためデバイスの向きで閾値判定
+      // 横向き全画面の最小幅(iPad mini)=1024px → 1000px未満ならSplit View
+      // 縦向き全画面の最小幅(iPad mini)=744px  →  700px未満ならSplit View
+      const isLandscape = screen.orientation
+        ? screen.orientation.type.includes('landscape')
+        : window.matchMedia('(orientation: landscape)').matches
+      return window.innerWidth < (isLandscape ? 1000 : 700)
+    }
     let prevInSplitView = isSplitView()
 
     // 初期チェック（テスト開始前から画面分割していた場合）
