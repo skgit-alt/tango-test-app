@@ -243,6 +243,20 @@ export default function TestClient({
     return () => window.removeEventListener('blur', fn)
   }, [logCheat])
 
+  // Slide Over等でキーボードが出たことを検知（テスト画面に入力欄はないので外部キーボードと判断）
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    let prevKeyboardShowing = false
+    const onResize = () => {
+      const keyboardShowing = window.innerHeight - vv.height > 150
+      if (keyboardShowing && !prevKeyboardShowing) logCheat('app_switch')
+      prevKeyboardShowing = keyboardShowing
+    }
+    vv.addEventListener('resize', onResize)
+    return () => vv.removeEventListener('resize', onResize)
+  }, [logCheat])
+
   useEffect(() => {
     const isSplitView = () => {
       // Method 1: screen.widthが全画面幅を返す場合（デスクトップ・一部iOS）
