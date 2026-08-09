@@ -218,10 +218,16 @@ export default async function StudentHomePage() {
             📊 テストの結果を見る
           </Link>
           <Link
+            href="/student/retake"
+            className="block w-full bg-amber-500 text-white py-3 rounded-2xl font-semibold text-center hover:bg-amber-600 active:bg-amber-700 transition"
+          >
+            🔄 テストを受け直す
+          </Link>
+          <Link
             href="/student/practice"
             className="block w-full bg-amber-50 border border-amber-200 text-amber-700 py-3 rounded-2xl font-semibold text-center hover:bg-amber-100 active:bg-amber-200 transition"
           >
-            🔄 練習の結果を見る
+            練習の結果を見る
           </Link>
           <Link
             href="/student/ranking"
