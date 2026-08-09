@@ -117,13 +117,19 @@ export default function RetakeClient({
                                 <p className="text-xs text-gray-400 mt-0.5">未受験</p>
                               )}
                             </div>
-                            <button
-                              onClick={() => startPractice(test.id)}
-                              disabled={starting !== null}
-                              className="shrink-0 bg-amber-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-amber-600 active:bg-amber-700 transition disabled:opacity-50 whitespace-nowrap"
-                            >
-                              {starting === test.id ? '準備中...' : '受け直す'}
-                            </button>
+                            {last ? (
+                              <span className="shrink-0 bg-gray-100 text-gray-400 px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap cursor-not-allowed">
+                                受験済み
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => startPractice(test.id)}
+                                disabled={starting !== null}
+                                className="shrink-0 bg-amber-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-amber-600 active:bg-amber-700 transition disabled:opacity-50 whitespace-nowrap"
+                              >
+                                {starting === test.id ? '準備中...' : '受け直す'}
+                              </button>
+                            )}
                           </div>
                         </div>
                       )
