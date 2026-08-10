@@ -3,7 +3,6 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { calcPoints, canSeeResult } from '@/lib/supabase/types'
-import PracticeButton from './PracticeButton'
 
 export default async function ResultPage({
   searchParams,
@@ -78,9 +77,9 @@ export default async function ResultPage({
   }
 
   const score = session.score ?? 0
-  const mode = test.mode as 50 | 300
+  const mode = test.mode
   const passed = test.pass_score !== null ? score >= test.pass_score : null
-  // 練習モードではpt表示なし
+  // 練習モードではpt表示なし（50問テストのみポイント対象）
   const pointsEarned = mode === 50 && !isPractice ? calcPoints(score) : null
 
   return (
@@ -234,7 +233,6 @@ export default async function ResultPage({
             >
               回答を確認する
             </Link>
-            <PracticeButton testId={test.id} />
             {!isPractice && (
               <Link
                 href="/student/ranking"
