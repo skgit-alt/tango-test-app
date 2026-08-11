@@ -1063,12 +1063,15 @@ export default function TestManagerClient({
                       (test.published_student_ids ?? []).includes(s.student_id)
                     const isLoading = publishingStudent === s.student_id
                     const isHighScore = test.mode === 300 && s.score !== null && s.score >= 285
+                    const isNearScore = test.mode === 300 && s.score !== null && s.score >= 280 && s.score < 285
                     return (
                       <div
                         key={s.id}
                         className={`flex items-center justify-between px-3 py-2 rounded-xl border ${
                           isHighScore
                             ? 'border-amber-400 bg-amber-50'
+                            : isNearScore
+                            ? 'border-yellow-300 bg-yellow-50'
                             : alreadyPublished
                             ? 'border-green-200 bg-green-50'
                             : 'border-gray-200 bg-gray-50'
@@ -1078,8 +1081,8 @@ export default function TestManagerClient({
                           <span className="text-gray-400 text-xs mr-1">{s.students?.class_name} {s.students?.seat_number}番</span>
                           <span className="font-medium text-gray-800">{s.students?.name ?? '-'}</span>
                           {s.score !== null && (
-                            <span className={`ml-2 text-xs font-semibold ${isHighScore ? 'text-amber-600' : 'text-gray-500'}`}>
-                              {isHighScore && '⭐ '}{s.score}点
+                            <span className={`ml-2 text-xs font-semibold ${isHighScore ? 'text-amber-600' : isNearScore ? 'text-yellow-600' : 'text-gray-500'}`}>
+                              {isHighScore ? '⭐ ' : isNearScore ? '△ ' : ''}{s.score}点
                             </span>
                           )}
                         </div>
