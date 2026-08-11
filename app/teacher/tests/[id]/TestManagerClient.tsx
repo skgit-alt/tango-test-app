@@ -1069,7 +1069,7 @@ export default function TestManagerClient({
                         key={s.id}
                         className={`flex items-center justify-between px-3 py-2 rounded-xl border ${
                           isHighScore
-                            ? 'border-amber-400 bg-amber-50'
+                            ? 'border-amber-500 bg-amber-200'
                             : isNearScore
                             ? 'border-yellow-300 bg-yellow-50'
                             : alreadyPublished
