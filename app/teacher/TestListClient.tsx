@@ -5,8 +5,6 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Test } from '@/lib/supabase/types'
 
-const SHOW_LIMIT = 10
-
 // ─── ステータス表示 ───────────────────────────────────────────────────────────
 
 const statusLabel: Record<string, string> = {
@@ -130,9 +128,7 @@ function TestColumn({
   onToggle: (id: string) => void
   onToggleAll: (ids: string[], selectAll: boolean) => void
 }) {
-  const [showAll, setShowAll] = useState(false)
-  const visible = showAll ? tests : tests.slice(0, SHOW_LIMIT)
-  const remaining = tests.length - SHOW_LIMIT
+  const visible = tests
 
   const allSelected = tests.length > 0 && tests.every((t) => selectedIds.has(t.id))
   const someSelected = tests.some((t) => selectedIds.has(t.id))
@@ -195,23 +191,6 @@ function TestColumn({
           </div>
         )}
 
-        {/* さらに見る / 折りたたむ */}
-        {!showAll && remaining > 0 && (
-          <button
-            onClick={() => setShowAll(true)}
-            className="w-full py-2.5 text-xs font-semibold text-gray-500 hover:bg-gray-50 border-t border-gray-100 transition shrink-0"
-          >
-            さらに見る（残り{remaining}件） ∨
-          </button>
-        )}
-        {showAll && tests.length > SHOW_LIMIT && (
-          <button
-            onClick={() => setShowAll(false)}
-            className="w-full py-2.5 text-xs font-semibold text-gray-500 hover:bg-gray-50 border-t border-gray-100 transition shrink-0"
-          >
-            折りたたむ ∧
-          </button>
-        )}
       </div>
     </div>
   )
