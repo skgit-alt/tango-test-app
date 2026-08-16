@@ -427,6 +427,7 @@ export default function NewTestPage() {
   }
 
   // ─── Excel（600問）処理 ────────────────────────────────────────────────────
+  // 列: No. | 問題 | 選択肢１〜４ | 選択肢５(任意) | 正答 | 配点 | 単語番号(無視)
 
   const processXlsx600 = async (file: File) => {
     setFileName(file.name)
@@ -445,14 +446,15 @@ export default function NewTestPage() {
         .filter((row): row is unknown[] => Array.isArray(row) && row.length >= 8)
         .map((row, i) => {
           const c5 = row[6] as string | null
+          const trim = (v: unknown) => String(v ?? '').trim()
           return {
             order_num: i + 1,
-            question_text: String(row[1] ?? ''),
-            choice1: String(row[2] ?? ''),
-            choice2: String(row[3] ?? ''),
-            choice3: String(row[4] ?? ''),
-            choice4: String(row[5] ?? ''),
-            choice5: (c5 === null || String(c5).trim() === 'None' || String(c5).trim() === '') ? null : String(c5),
+            question_text: trim(row[1]),
+            choice1: trim(row[2]),
+            choice2: trim(row[3]),
+            choice3: trim(row[4]),
+            choice4: trim(row[5]),
+            choice5: (c5 === null || trim(c5) === 'None' || trim(c5) === '') ? null : trim(c5),
             correct_answer: Number(row[7] ?? 1),
             points: Number(row[8] ?? 1),
           }
