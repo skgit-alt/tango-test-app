@@ -16,6 +16,7 @@ const MODE_CONFIG = [
   { mode: 50,  label: '50問テスト',  emoji: '⚡', labelClass: 'text-purple-700 bg-purple-100' },
   { mode: 20,  label: '20問テスト',  emoji: '📄', labelClass: 'text-orange-700 bg-orange-100' },
   { mode: 300, label: '300問テスト', emoji: '📋', labelClass: 'text-teal-700   bg-teal-100'   },
+  { mode: 600, label: '600問テスト', emoji: '📘', labelClass: 'text-blue-700   bg-blue-100'   },
 ]
 
 export default function RetakeClient({

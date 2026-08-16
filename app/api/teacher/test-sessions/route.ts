@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
         .from('students')
         .select('id, name, class_name, seat_number, test_name')
       let filtered = allDb ?? []
-      if (testInfo.mode === 50) {
+      if (testInfo.mode === 50 || testInfo.mode === 600) {
         filtered = filtered.filter((s) => /^[A-Za-z]/.test(s.class_name))
       } else if (testInfo.mode !== 300) {
         filtered = filtered.filter((s) => /^\d/.test(s.class_name))

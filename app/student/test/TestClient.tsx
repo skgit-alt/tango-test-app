@@ -50,9 +50,9 @@ export default function TestClient({
   const deviceTokenRef = useRef<string>('')
   const topRef = useRef<HTMLDivElement>(null)
 
-  const totalPages = test.mode === 300 ? 3 : 1
+  const totalPages = test.mode === 600 ? 6 : test.mode === 300 ? 3 : 1
 
-  const pageQuestions = test.mode === 300
+  const pageQuestions = (test.mode === 300 || test.mode === 600)
     ? questions.slice((currentPage - 1) * QUESTIONS_PER_PAGE, currentPage * QUESTIONS_PER_PAGE)
     : questions
 
@@ -324,7 +324,7 @@ export default function TestClient({
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="text-sm text-gray-500">
-            {test.mode === 300 && <span className="font-medium">{currentPage} / {totalPages} ページ</span>}
+            {(test.mode === 300 || test.mode === 600) && <span className="font-medium">{currentPage} / {totalPages} ページ</span>}
           </div>
           <div className={`text-2xl font-bold tabular-nums ${timerColor}`}>{formatTime(timeLeft)}</div>
           <div className="flex items-center gap-3 text-sm text-gray-500">
@@ -357,7 +357,7 @@ export default function TestClient({
           {displayQuestions.map((q, pageIndex) => {
             const globalIndex = showFlaggedOnly
               ? questions.findIndex((item) => item.id === q.id)
-              : test.mode === 300
+              : (test.mode === 300 || test.mode === 600)
                 ? (currentPage - 1) * QUESTIONS_PER_PAGE + pageIndex
                 : pageIndex
             const validChoices = [
@@ -436,8 +436,8 @@ export default function TestClient({
                   {submitting ? '送信中...' : '送信する'}
                 </button>
               </div>
-            ) : test.mode === 300 ? (
-              /* 300問モード（通常） */
+            ) : (test.mode === 300 || test.mode === 600) ? (
+              /* 300問・600問モード（通常） */
               <div className="flex gap-2">
                 {currentPage > 1 && (
                   <button onClick={() => handlePageChange(currentPage - 1)} className="flex-1 bg-white border border-gray-300 text-gray-700 py-4 rounded-2xl font-semibold hover:bg-gray-50 active:bg-gray-200 active:scale-95 transition-all">← 前のページ</button>

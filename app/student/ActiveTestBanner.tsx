@@ -24,7 +24,8 @@ type ActiveTest = {
 
 function cardColor(mode: number): string {
   if (mode === 50) return 'bg-violet-600'
-  if (mode === 300) return 'bg-blue-600'
+  if (mode === 300) return 'bg-teal-600'
+  if (mode === 600) return 'bg-blue-600'
   return 'bg-orange-500'
 }
 
