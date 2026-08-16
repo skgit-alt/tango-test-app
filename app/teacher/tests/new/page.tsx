@@ -652,13 +652,13 @@ export default function NewTestPage() {
               onClick={() => switchTab('xlsx')}
               className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${tab === 'xlsx' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
             >
-              📊 Excel（300問 / 50問）
+              📊 Excel（300問）
             </button>
             <button
               onClick={() => switchTab('rtf')}
               className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${tab === 'rtf' ? 'bg-violet-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
             >
-              📄 RTF（Ⅱ類50問テスト）
+              📄 Ⅱ類50問テスト
             </button>
             <button
               onClick={() => switchTab('docx')}
@@ -670,7 +670,7 @@ export default function NewTestPage() {
               onClick={() => switchTab('xlsx600')}
               className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${tab === 'xlsx600' ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
             >
-              📘 600問テスト
+              📘 Excel（600問）
             </button>
           </div>
 
