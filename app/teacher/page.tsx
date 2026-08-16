@@ -7,46 +7,16 @@ import TestListClient from './TestListClient'
 
 export default async function TeacherPage() {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
   const admin = createAdminClient()
 
-  // ロール取得（先生は作成ボタンを非表示）
-  const { data: adminRec } = await admin
-    .from('admins')
-    .select('role')
-    .eq('email', user?.email ?? '')
-    .maybeSingle()
-  const isAdmin = adminRec?.role === 'admin'
+  const [{ data: tests }, { data: practiceSessions }] = await Promise.all([
+    supabase.from('tests').select('*').order('created_at', { ascending: false }),
+    admin.from('sessions').select('test_id').eq('is_practice', true).eq('is_submitted', true),
+  ])
 
-  const { data: tests } = await supabase
-    .from('tests')
-    .select('*')
-    .order('created_at', { ascending: false })
-
-  // 各テストの不正行為最新時刻を取得（2ステップで確実にマッピング）
-  const { data: allSessions } = await admin
-    .from('sessions')
-    .select('id, test_id')
-    .neq('is_practice', true)   // 練習セッションの不正ログは除外
-
-  const { data: cheatData } = await admin
-    .from('cheat_logs')
-    .select('session_id, occurred_at')
-
-  // session_id → test_id のマップを作成
-  const sessionTestMap: Record<string, string> = {}
-  for (const s of allSessions ?? []) {
-    if (s.id && s.test_id) sessionTestMap[s.id] = s.test_id
-  }
-
-  // テストIDごとに最新の不正行為発生時刻を集計
-  const cheatLatestMap: Record<string, string> = {}
-  for (const log of cheatData ?? []) {
-    const testId = sessionTestMap[log.session_id]
-    if (!testId) continue
-    if (!cheatLatestMap[testId] || log.occurred_at > cheatLatestMap[testId]) {
-      cheatLatestMap[testId] = log.occurred_at
-    }
+  const retakeCounts: Record<string, number> = {}
+  for (const s of practiceSessions ?? []) {
+    retakeCounts[s.test_id] = (retakeCounts[s.test_id] ?? 0) + 1
   }
 
   return (
@@ -55,18 +25,16 @@ export default async function TeacherPage() {
         <h1 className="text-2xl font-bold text-gray-800">テスト一覧</h1>
         <div className="flex items-center gap-2 flex-wrap">
           <DownloadButtons />
-          {isAdmin && (
-            <Link
-              href="/teacher/tests/new"
-              className="bg-blue-600 text-white px-4 py-2 rounded-xl font-medium hover:bg-blue-700 transition text-sm"
-            >
-              + 新しいテストを作成
-            </Link>
-          )}
+          <Link
+            href="/teacher/tests/new"
+            className="bg-blue-600 text-white px-4 py-2 rounded-xl font-medium hover:bg-blue-700 transition text-sm"
+          >
+            + 新しいテストを作成
+          </Link>
         </div>
       </div>
 
-      <TestListClient tests={(tests ?? []) as Test[]} cheatLatestMap={cheatLatestMap} />
+      <TestListClient tests={(tests ?? []) as Test[]} retakeCounts={retakeCounts} />
     </div>
   )
 }

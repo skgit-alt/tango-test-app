@@ -61,14 +61,14 @@ function TestCard({
   test,
   config,
   selected,
-  hasUnconfirmedCheat,
   onToggle,
+  retakeCount,
 }: {
   test: Test
   config: ColumnConfig
   selected: boolean
-  hasUnconfirmedCheat: boolean
   onToggle: () => void
+  retakeCount: number
 }) {
   return (
     <div className={`flex items-start gap-2 px-3 py-2.5 transition ${selected ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
@@ -81,14 +81,9 @@ function TestCard({
       />
       <Link href={`/teacher/tests/${test.id}`} className="flex-1 min-w-0 group">
         <div className="flex items-start justify-between gap-1">
-          <div className="flex items-start gap-1.5 min-w-0">
-            {hasUnconfirmedCheat && (
-              <span className="w-2 h-2 rounded-full bg-red-500 shrink-0 mt-1.5" title="未確認の不正行為あり" />
-            )}
-            <p className="text-sm font-semibold text-gray-800 leading-snug line-clamp-2 group-hover:text-blue-600 transition">
-              {test.title}
-            </p>
-          </div>
+          <p className="text-sm font-semibold text-gray-800 leading-snug line-clamp-2 group-hover:text-blue-600 transition">
+            {test.title}
+          </p>
           <svg className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-400 shrink-0 mt-0.5 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
@@ -100,6 +95,11 @@ function TestCard({
           {test.round_number != null && (
             <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${config.roundBadge}`}>
               第{test.round_number}回
+            </span>
+          )}
+          {retakeCount > 0 && (
+            <span className="text-xs px-1.5 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">
+              🔄 {retakeCount}件
             </span>
           )}
           <span className="text-xs text-gray-400">
@@ -117,16 +117,16 @@ function TestColumn({
   config,
   tests,
   selectedIds,
-  cheatLatestMap,
   onToggle,
   onToggleAll,
+  retakeCounts,
 }: {
   config: ColumnConfig
   tests: Test[]
   selectedIds: Set<string>
-  cheatLatestMap: Record<string, string>
   onToggle: (id: string) => void
   onToggleAll: (ids: string[], selectAll: boolean) => void
+  retakeCounts: Record<string, number>
 }) {
   const visible = tests
 
@@ -172,22 +172,16 @@ function TestColumn({
           </div>
         ) : (
           <div className="overflow-y-auto max-h-[65vh] divide-y divide-gray-100">
-            {visible.map((test) => {
-              const latestCheat = cheatLatestMap[test.id]
-              const hasUnconfirmedCheat = latestCheat != null && (
-                test.cheats_confirmed_at == null || latestCheat > test.cheats_confirmed_at
-              )
-              return (
-                <TestCard
-                  key={test.id}
-                  test={test}
-                  config={config}
-                  selected={selectedIds.has(test.id)}
-                  hasUnconfirmedCheat={hasUnconfirmedCheat}
-                  onToggle={() => onToggle(test.id)}
-                />
-              )
-            })}
+            {visible.map((test) => (
+              <TestCard
+                key={test.id}
+                test={test}
+                config={config}
+                selected={selectedIds.has(test.id)}
+                onToggle={() => onToggle(test.id)}
+                retakeCount={retakeCounts[test.id] ?? 0}
+              />
+            ))}
           </div>
         )}
 
@@ -198,13 +192,7 @@ function TestColumn({
 
 // ─── メインコンポーネント ─────────────────────────────────────────────────────
 
-export default function TestListClient({
-  tests: initialTests,
-  cheatLatestMap,
-}: {
-  tests: Test[]
-  cheatLatestMap: Record<string, string>
-}) {
+export default function TestListClient({ tests: initialTests, retakeCounts }: { tests: Test[]; retakeCounts: Record<string, number> }) {
   const router = useRouter()
 
   const [tests, setTests] = useState<Test[]>(initialTests)
@@ -304,9 +292,9 @@ export default function TestListClient({
             config={col}
             tests={grouped[col.key]}
             selectedIds={selectedIds}
-            cheatLatestMap={cheatLatestMap}
             onToggle={toggleSelect}
             onToggleAll={toggleColumnAll}
+            retakeCounts={retakeCounts}
           />
         ))}
       </div>

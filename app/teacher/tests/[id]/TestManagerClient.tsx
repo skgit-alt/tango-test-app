@@ -9,6 +9,14 @@ interface SessionWithStudent extends Session {
   students: Pick<Student, 'name' | 'class_name' | 'seat_number' | 'test_name'> | null
 }
 
+interface PracticeSession {
+  id: string
+  student_id: string
+  score: number | null
+  submitted_at: string | null
+  students: Pick<Student, 'name' | 'class_name' | 'seat_number'> | null
+}
+
 interface StudentInfo {
   id: string
   name: string
@@ -72,6 +80,7 @@ export default function TestManagerClient({
   const [sessions, setSessions] = useState<SessionWithStudent[]>([])
   const [allStudents, setAllStudents] = useState<StudentInfo[]>([])
   const [cheatLogs, setCheatLogs] = useState<CheatLogWithStudent[]>([])
+  const [practiceSessions, setPracticeSessions] = useState<PracticeSession[]>([])
   const [loading, setLoading] = useState(false)
   const [actionError, setActionError] = useState('')
   const [showPreview, setShowPreview] = useState(false)
@@ -146,6 +155,7 @@ export default function TestManagerClient({
       if (data.sessions) setSessions(data.sessions as SessionWithStudent[])
       if (data.cheatLogs) setCheatLogs(data.cheatLogs as CheatLogWithStudent[])
       if (data.allStudents) setAllStudents(data.allStudents as StudentInfo[])
+      if (data.practiceSessions) setPracticeSessions(data.practiceSessions as PracticeSession[])
     }
   }, [test.id])
 
@@ -1167,6 +1177,46 @@ export default function TestManagerClient({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* 受け直し状況 */}
+      {practiceSessions.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h2 className="font-semibold text-gray-800">
+              受け直し状況
+              <span className="ml-2 text-xs text-gray-400 font-normal">{practiceSessions.length}件</span>
+            </h2>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {practiceSessions.map((s) => {
+              const isHighScore = test.mode === 300 && s.score !== null && s.score >= 285
+              const isNearScore = test.mode === 300 && s.score !== null && s.score >= 280 && s.score < 285
+              return (
+                <div key={s.id} className="flex items-center justify-between px-5 py-3">
+                  <div className="text-sm">
+                    <span className="text-gray-400 text-xs mr-1">
+                      {s.students?.class_name} {s.students?.seat_number}番
+                    </span>
+                    <span className="font-medium text-gray-800">{s.students?.name ?? '-'}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-gray-400">
+                    <span>
+                      {s.submitted_at
+                        ? new Date(s.submitted_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })
+                        : '-'}
+                    </span>
+                    {s.score !== null && (
+                      <span className={`font-semibold ${isHighScore ? 'text-amber-600' : isNearScore ? 'text-yellow-600' : 'text-gray-700'}`}>
+                        {isHighScore ? '⭐ ' : isNearScore ? '△ ' : ''}{s.score}点
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
