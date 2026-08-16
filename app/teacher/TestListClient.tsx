@@ -5,6 +5,18 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Test } from '@/lib/supabase/types'
 
+// ─── 実施日表示（opened_at → タイトル先頭の日付 → created_at の優先順）────────
+
+function getDisplayDate(test: Test): string {
+  if (test.opened_at) {
+    return new Date(test.opened_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })
+  }
+  // タイトル先頭の "M.D" または "MM.DD" 形式を解析
+  const m = test.title.match(/^(\d{1,2})\.(\d{1,2})/)
+  if (m) return `${parseInt(m[1])}/${parseInt(m[2])}`
+  return new Date(test.created_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })
+}
+
 // ─── ステータス表示 ───────────────────────────────────────────────────────────
 
 const statusLabel: Record<string, string> = {
@@ -122,7 +134,7 @@ function TestCard({
             </span>
           )}
           <span className="text-xs text-gray-400">
-            {new Date(test.opened_at ?? test.created_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
+            {getDisplayDate(test)}
           </span>
         </div>
       </Link>
