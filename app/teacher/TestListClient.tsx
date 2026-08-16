@@ -47,18 +47,18 @@ const COLUMNS: ColumnConfig[] = [
     roundBadge: 'bg-orange-100 text-orange-700',
   },
   {
-    key: '600',
-    label: '600問テスト',
-    emoji: '📘',
-    headerBg: 'bg-blue-600',
-    roundBadge: 'bg-blue-100 text-blue-700',
-  },
-  {
     key: '300',
     label: '300問テスト',
     emoji: '📗',
     headerBg: 'bg-teal-600',
     roundBadge: 'bg-teal-100 text-teal-700',
+  },
+  {
+    key: '600',
+    label: '600問テスト',
+    emoji: '📘',
+    headerBg: 'bg-blue-600',
+    roundBadge: 'bg-blue-100 text-blue-700',
   },
 ]
 
