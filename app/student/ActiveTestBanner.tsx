@@ -141,7 +141,7 @@ export default function ActiveTestBanner({
   const activeTests = tests.filter((t) => ['waiting', 'open'].includes(t.status))
   const tests50 = activeTests.filter((t) => t.mode === 50)
   const tests300 = activeTests.filter((t) => t.mode === 300)
-  const testsOther = activeTests.filter((t) => t.mode !== 50 && t.mode !== 300)
+  const testsOther = activeTests.filter((t) => t.mode !== 50 && t.mode !== 300 && t.mode !== 600)
 
   if (activeTests.length === 0) return null
 
