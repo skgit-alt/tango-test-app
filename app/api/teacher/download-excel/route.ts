@@ -148,7 +148,7 @@ export async function GET(req: NextRequest) {
       return row
     })
 
-    return NextResponse.json({ header, rows, sheetName: '50問テスト推移' })
+    return NextResponse.json({ header, rows, sheetName: 'Ⅱ類50問テスト推移' })
 
   } else {
     // 20問：点数のみ1列構成
@@ -173,6 +173,6 @@ export async function GET(req: NextRequest) {
       return row
     })
 
-    return NextResponse.json({ header, rows, sheetName: '20問テスト推移' })
+    return NextResponse.json({ header, rows, sheetName: 'Ⅰ類20問テスト推移' })
   }
 }

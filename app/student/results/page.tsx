@@ -145,7 +145,7 @@ export default async function ResultsPage() {
             {/* 50問テストの結果 */}
             {sessions50.length > 0 && (
               <div>
-                <h2 className="text-sm font-bold text-gray-500 mb-3 px-1">⚡ 50問テスト</h2>
+                <h2 className="text-sm font-bold text-gray-500 mb-3 px-1">⚡ Ⅱ類50問テスト</h2>
                 <div className="space-y-2">
                   {sessions50.map((s) => {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -179,7 +179,7 @@ export default async function ResultsPage() {
             {/* 20問テストの結果 */}
             {sessions20.length > 0 && (
               <div>
-                <h2 className="text-sm font-bold text-gray-500 mb-3 px-1">📝 20問テスト</h2>
+                <h2 className="text-sm font-bold text-gray-500 mb-3 px-1">📝 Ⅰ類20問テスト</h2>
                 <div className="space-y-2">
                   {sessions20.map((s) => {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any

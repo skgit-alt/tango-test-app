@@ -656,7 +656,7 @@ export default function NewTestPage() {
               onClick={() => switchTab('rtf')}
               className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${tab === 'rtf' ? 'bg-violet-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
             >
-              📄 RTF（50問テスト）
+              📄 RTF（Ⅱ類50問テスト）
             </button>
             <button
               onClick={() => switchTab('docx')}

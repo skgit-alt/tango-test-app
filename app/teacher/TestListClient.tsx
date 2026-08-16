@@ -34,14 +34,14 @@ interface ColumnConfig {
 const COLUMNS: ColumnConfig[] = [
   {
     key: '50',
-    label: '50問テスト',
+    label: 'Ⅱ類50問テスト',
     emoji: '⚡',
     headerBg: 'bg-violet-600',
     roundBadge: 'bg-violet-100 text-violet-700',
   },
   {
     key: 'other',
-    label: '20問テスト',
+    label: 'Ⅰ類20問テスト',
     emoji: '📄',
     headerBg: 'bg-orange-500',
     roundBadge: 'bg-orange-100 text-orange-700',

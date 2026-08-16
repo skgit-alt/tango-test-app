@@ -839,7 +839,7 @@ export default function PointsPage() {
 
     const wb = XLSX.utils.book_new()
     const ws = XLSX.utils.json_to_sheet(rows)
-    const sheetName = activeTab === 50 ? '50問ポイントランキング' : '20問スコアランキング'
+    const sheetName = activeTab === 50 ? 'Ⅱ類50問ポイントランキング' : 'Ⅰ類20問スコアランキング'
     XLSX.utils.book_append_sheet(wb, ws, sheetName)
     XLSX.writeFile(wb, `${sheetName}_${settings?.label ?? ''}.xlsx`)
   }
@@ -880,7 +880,7 @@ export default function PointsPage() {
               : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
           }`}
         >
-          ⚡ 50問ポイントランキング
+          ⚡ Ⅱ類50問ポイントランキング
         </button>
         <button
           onClick={() => setActiveTab(20)}
@@ -890,7 +890,7 @@ export default function PointsPage() {
               : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
           }`}
         >
-          📄 20問スコアランキング
+          📄 Ⅰ類20問スコアランキング
         </button>
         {isAdmin && (
           <button
