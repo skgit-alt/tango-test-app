@@ -13,7 +13,7 @@ export async function GET() {
   const [{ data: tests }, { data: student }] = await Promise.all([
     admin
       .from('tests')
-      .select('id, title, mode, status, open_classes, published_classes, published_student_ids, scheduled_at, scheduled_class_starts')
+      .select('id, title, mode, status, open_classes, published_classes, published_student_ids, scheduled_at, scheduled_class_starts, book_type')
       .in('status', ['waiting', 'open'])
       .order('created_at', { ascending: false }),
     admin.from('students').select('class_name').eq('id', user.id).maybeSingle(),

@@ -27,7 +27,7 @@ export default async function StudentHomePage() {
   // 配信中テストを全件取得（RLSバイパス）
   const { data: activeTests } = await admin
     .from('tests')
-    .select('id, title, mode, status, open_classes, published_classes, published_student_ids')
+    .select('id, title, mode, status, open_classes, published_classes, published_student_ids, book_type')
     .in('status', ['waiting', 'open'])
     .order('created_at', { ascending: false })
 

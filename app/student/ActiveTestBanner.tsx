@@ -18,14 +18,16 @@ type ActiveTest = {
   open_classes: string[] | null
   published_classes?: string[] | null
   published_student_ids?: string[] | null
+  book_type?: string | null
   mySession?: MySession
   _canSeeResult?: boolean
 }
 
-function cardColor(mode: number): string {
+function cardColor(mode: number, bookType?: string | null): string {
   if (mode === 50) return 'bg-violet-600'
-  if (mode === 300) return 'bg-teal-600'
-  if (mode === 600) return 'bg-blue-600'
+  if (mode === 300 || mode === 600) {
+    return bookType === '1200' ? 'bg-yellow-500' : 'bg-blue-600'
+  }
   return 'bg-orange-500'
 }
 
@@ -33,7 +35,7 @@ function TestCard({ test, studentClass }: { test: ActiveTest; studentClass: stri
   const session = test.mySession ?? null
   const submitted = session?.is_submitted ?? false
   const canSee = test._canSeeResult ?? false
-  const bgColor = cardColor(test.mode)
+  const bgColor = cardColor(test.mode, test.book_type)
 
   // ボタンの内容を決定
   let button: React.ReactNode
