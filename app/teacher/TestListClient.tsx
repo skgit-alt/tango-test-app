@@ -122,7 +122,7 @@ function TestCard({
             </span>
           )}
           <span className="text-xs text-gray-400">
-            {new Date(test.created_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
+            {new Date(test.opened_at ?? test.created_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
           </span>
         </div>
       </Link>
