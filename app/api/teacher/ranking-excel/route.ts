@@ -1,21 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { calcPointsFromRules, DEFAULT_POINT_RULES, ruleLabel, type PointRule } from '@/lib/supabase/types'
+import { calcPoints } from '@/lib/supabase/types'
 import { NextResponse } from 'next/server'
 import ExcelJS from 'exceljs'
-import { createCanvas, GlobalFonts } from '@napi-rs/canvas'
-import path from 'path'
-
-// プロジェクト内のフォントを登録
-let fontLoaded = false
-function ensureFont() {
-  if (fontLoaded) return
-  fontLoaded = true
-  GlobalFonts.registerFromPath(
-    path.join(process.cwd(), 'public', 'fonts', 'NotoSansJP-VariableFont_wght.ttf'),
-    'JpFont'
-  )
-}
 
 // ─── スタイル定数 ──────────────────────────────────────────────────────────────
 const NAVY:    ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E5FA3' } }
@@ -45,21 +32,22 @@ const center: Partial<ExcelJS.Alignment> = { horizontal: 'center', vertical: 'mi
 const left:   Partial<ExcelJS.Alignment> = { horizontal: 'left',   vertical: 'middle' }
 const white = (bold = false, size = 12): Partial<ExcelJS.Font> => ({ bold, size, color: { argb: 'FFFFFFFF' } })
 const dark  = (bold = false, size = 12): Partial<ExcelJS.Font> => ({ bold, size, color: { argb: 'FF1A1A1A' } })
+const green = (bold = false, size = 12): Partial<ExcelJS.Font> => ({ bold, size, color: { argb: 'FF1A5E24' } })
 
 // ─── GET ──────────────────────────────────────────────────────────────────────
 export async function GET() {
-  ensureFont()
-
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const admin = createAdminClient()
 
+  // ランキング設定（50問のみ id=1）
   const { data: settings } = await admin
     .from('ranking_settings').select('*').eq('id', 1).maybeSingle()
   if (!settings) return NextResponse.json({ error: '集計期間が未設定です' }, { status: 404 })
 
+  // 対象テスト（50問モード）
   const { data: targetTests } = await admin
     .from('tests').select('id, round_number')
     .eq('mode', 50)
@@ -87,8 +75,7 @@ export async function GET() {
       const st = (Array.isArray(s.students) ? s.students[0] : s.students) as { name: string; class_name: string; seat_number: number; test_name: string } | null
       if (!st || !/^[A-Za-z]/.test(st.class_name ?? '')) continue
       const round = testRoundMap[s.test_id]; if (!round) continue
-      const rules = (settings.point_rules ?? DEFAULT_POINT_RULES) as PointRule[]
-      const value = calcPointsFromRules(s.score, rules)
+      const value = calcPoints(s.score)
       if (!grouped[s.student_id]) grouped[s.student_id] = { name: st.name ?? '', class_name: st.class_name ?? '', seat_number: st.seat_number ?? 0, test_name: st.test_name ?? '', roundValues: {}, total: 0 }
       const ex = grouped[s.student_id].roundValues[String(round)] ?? 0
       if (value > ex) { grouped[s.student_id].total += value - ex; grouped[s.student_id].roundValues[String(round)] = value }
@@ -96,11 +83,10 @@ export async function GET() {
   }
   const sorted = Object.entries(grouped).map(([sid, v]) => ({ student_id: sid, ...v })).sort((a, b) => b.total - a.total)
   const ranking: { rank: number; student_id: string; class_name: string; test_name: string; roundValues: Record<string, number>; total: number }[] = []
-  const maxRankExcel = settings.max_rank ?? 30
   let rankNum = 1
   for (let i = 0; i < sorted.length; i++) {
     if (i > 0 && sorted[i].total < sorted[i - 1].total) rankNum = i + 1
-    if (rankNum > maxRankExcel) break
+    if (rankNum > 30) break
     ranking.push({ ...sorted[i], rank: rankNum })
   }
 
@@ -133,6 +119,7 @@ export async function GET() {
     }
   }
 
+  // 実データがある最大の回数（第◇回まで）
   const latestRound = classAverages.length > 0
     ? Math.max(...classAverages.map(ca => ca.round))
     : settings.from_round
@@ -141,7 +128,7 @@ export async function GET() {
 
   // ─── Excel生成 ────────────────────────────────────────────────────────────────
   const title  = `月曜放課後英単語50問テスト第${settings.from_round}回～${settings.to_round}回 結果（第${latestRound}回まで）`
-  const totalCols = 3 + rounds.length + 1
+  const totalCols = 3 + rounds.length + 1   // 順位・クラス・テストネーム＋各回＋合計
 
   const wb = new ExcelJS.Workbook()
   wb.creator = 'tango-test-app'
@@ -153,18 +140,19 @@ export async function GET() {
     margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
   }
 
+  // 列幅 — A4縦に収まるよう余裕ある幅に設定
   const roundColW = Math.max(10, Math.floor(52 / Math.max(rounds.length, 1)))
   ws.columns = [
-    { width: 8 },
-    { width: 10 },
-    { width: 24 },
+    { width: 8 },          // A: 順位
+    { width: 10 },         // B: クラス
+    { width: 24 },         // C: テストネーム
     ...rounds.map(() => ({ width: roundColW })),
-    { width: 10 },
+    { width: 10 },         // last: 合計
   ]
 
-  const LC = totalCols
+  const LC = totalCols  // last column index (1-based)
 
-  // ══ タイトル ══
+  // ══ Row 1: タイトル ══
   const r1 = ws.addRow([title]); r1.height = 44
   ws.mergeCells(1, 1, 1, LC)
   sc(r1.getCell(1), {
@@ -173,7 +161,7 @@ export async function GET() {
     align: center,
   })
 
-  // ══ 副題 ══
+  // ══ Row 2: 副題 ══
   const r2 = ws.addRow(['英単語ターゲット1900']); r2.height = 26
   ws.mergeCells(2, 1, 2, LC)
   sc(r2.getCell(1), {
@@ -182,17 +170,19 @@ export async function GET() {
     align: center,
   })
 
-  // ══ クラス別平均点 ══
+  // ══ Row 3: クラス別平均点 セクションヘッダー ══
   const r3 = ws.addRow(['クラス別平均点']); r3.height = 32
   ws.mergeCells(3, 1, 3, LC)
   sc(r3.getCell(1), { font: white(true, 13), fill: NAVY, align: center })
 
+  // ══ Row 4: クラス別平均点 列ヘッダー ══
   const r4 = ws.addRow([]); r4.height = 28
   ws.mergeCells(4, 1, 4, 3)
   sc(r4.getCell(1), { v: 'クラス', font: dark(true, 12), fill: BLUE_H, align: center, border: bm() })
   rounds.forEach((rnd, i) => sc(r4.getCell(4 + i), { v: `第${rnd}回点`, font: dark(true, 12), fill: BLUE_H, align: center, border: bm() }))
   sc(r4.getCell(LC), { fill: BLUE_H, border: bm() })
 
+  // ══ クラスデータ行 ══
   for (const cls of allClasses) {
     const dr = ws.addRow([]); dr.height = 28
     const rn = dr.number
@@ -206,92 +196,86 @@ export async function GET() {
     sc(dr.getCell(LC), { border: b() })
   }
 
+  // ══ 空行 ══
   ws.addRow([]).height = 12
 
-  // ══ ポイント早見表 ══
+  // ══ ポイント早見表（ExcelJSセル）══
   const ptSecRow = ws.addRow([]); ptSecRow.height = 32
   ws.mergeCells(ptSecRow.number, 1, ptSecRow.number, LC)
   sc(ptSecRow.getCell(1), { v: 'ポイント早見表', font: white(true, 13), fill: GREEN, align: center })
 
-  const ptRules = ((settings.point_rules ?? DEFAULT_POINT_RULES) as PointRule[])
-    .slice()
-    .sort((a, b) => b.min - a.min)
-  const PT_ITEMS = ptRules.map((r) => ({
-    score: ruleLabel(r),
-    pt: `${r.points}p`,
-  }))
-  const N = PT_ITEMS.length
-  const PT_W = 1800
-  const scoreH = 80
-  const ptH = 130
-  const PT_H = scoreH + ptH
-  const cw = PT_W / N
+  const PT_ITEMS = [
+    { score: '100点',    pt: '10p' },
+    { score: '98〜96点', pt: '7p'  },
+    { score: '94〜92点', pt: '6p'  },
+    { score: '90〜88点', pt: '5p'  },
+    { score: '86〜84点', pt: '4p'  },
+    { score: '82〜80点', pt: '3p'  },
+    { score: '78〜76点', pt: '2p'  },
+    { score: '74〜72点', pt: '1p'  },
+  ]
+  const PT_N = PT_ITEMS.length  // 8列
 
-  const ptCanvas = createCanvas(PT_W, PT_H)
-  const ctx = ptCanvas.getContext('2d')
-
-  ctx.fillStyle = '#ffffff'
-  ctx.fillRect(0, 0, PT_W, PT_H)
-
-  for (let i = 0; i < N; i++) {
-    const x = i * cw
-    // 点数行（薄緑）
-    ctx.fillStyle = '#C8E6C9'
-    ctx.fillRect(x, 0, cw, scoreH)
-    // ポイント行（白）
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(x, scoreH, cw, ptH)
-    // 点数ラベル
-    ctx.fillStyle = '#1B5E20'
-    ctx.font = `bold ${Math.round(cw * 0.15)}px JpFont`
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(PT_ITEMS[i].score, x + cw / 2, scoreH / 2)
-    // ポイント値
-    ctx.fillStyle = '#1B5E20'
-    ctx.font = `bold ${Math.round(ptH * 0.55)}px JpFont`
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(PT_ITEMS[i].pt, x + cw / 2, scoreH + ptH / 2)
+  // LC列をPT_N個のグループに均等分割（余りは後ろのグループに1列ずつ追加）
+  const ptBase = Math.floor(LC / PT_N)
+  const ptRem  = LC % PT_N
+  const ptStarts: number[] = []
+  const ptEnds:   number[] = []
+  let ptCol = 1
+  for (let i = 0; i < PT_N; i++) {
+    const span = ptBase + (i >= PT_N - ptRem ? 1 : 0)
+    ptStarts.push(ptCol)
+    ptEnds.push(ptCol + span - 1)
+    ptCol += span
   }
-  // 縦仕切り線
-  ctx.strokeStyle = '#4CAF50'
-  ctx.lineWidth = 2
-  for (let i = 1; i < N; i++) {
-    ctx.beginPath(); ctx.moveTo(i * cw, 0); ctx.lineTo(i * cw, PT_H); ctx.stroke()
+
+  const ptGreen: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC8E6C9' } }
+  const ptWhite: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } }
+  const ptBorderTop    = (): Partial<ExcelJS.Borders> => ({ top: MED, left: MED, bottom: THIN, right: MED })
+  const ptBorderBottom = (): Partial<ExcelJS.Borders> => ({ top: THIN, left: MED, bottom: MED, right: MED })
+
+  // 点数ラベル行
+  const ptScoreRow = ws.addRow([]); ptScoreRow.height = 32
+  for (let i = 0; i < PT_N; i++) {
+    const cs = ptStarts[i], ce = ptEnds[i], rn = ptScoreRow.number
+    if (cs < ce) ws.mergeCells(rn, cs, rn, ce)
+    sc(ptScoreRow.getCell(cs), {
+      v: PT_ITEMS[i].score,
+      font: { bold: true, size: 11, color: { argb: 'FF1B5E20' } },
+      fill: ptGreen,
+      align: { horizontal: 'center', vertical: 'middle' },
+      border: ptBorderTop(),
+    })
   }
-  // 横境界線
-  ctx.strokeStyle = '#388E3C'
-  ctx.lineWidth = 3
-  ctx.beginPath(); ctx.moveTo(0, scoreH); ctx.lineTo(PT_W, scoreH); ctx.stroke()
-  // 外枠
-  ctx.strokeStyle = '#2E7D32'
-  ctx.lineWidth = 4
-  ctx.strokeRect(2, 2, PT_W - 4, PT_H - 4)
 
-  const ptPngBuf = ptCanvas.toBuffer('image/png')
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const ptImgId = wb.addImage({ buffer: Buffer.from(ptPngBuf) as any, extension: 'png' })
-  const ptRow1 = ws.addRow([]); ptRow1.height = 48
-  const ptRow2 = ws.addRow([]); ptRow2.height = 56
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ws.addImage(ptImgId, {
-    tl: { col: 0, row: ptRow1.number - 1 } as any,
-    br: { col: LC, row: ptRow2.number }    as any,
-    editAs: 'oneCell',
-  })
+  // ポイント値行
+  const ptValueRow = ws.addRow([]); ptValueRow.height = 40
+  for (let i = 0; i < PT_N; i++) {
+    const cs = ptStarts[i], ce = ptEnds[i], rn = ptValueRow.number
+    if (cs < ce) ws.mergeCells(rn, cs, rn, ce)
+    sc(ptValueRow.getCell(cs), {
+      v: PT_ITEMS[i].pt,
+      font: { bold: true, size: 16, color: { argb: 'FF1B5E20' } },
+      fill: ptWhite,
+      align: { horizontal: 'center', vertical: 'middle' },
+      border: ptBorderBottom(),
+    })
+  }
 
+  // ══ 空行 ══
   ws.addRow([]).height = 12
 
-  // ══ 個人ランキング ══
-  const rSec = ws.addRow([`個人ランキング（上位${maxRankExcel}名）`]); rSec.height = 32
+  // ══ 個人ランキング セクションヘッダー ══
+  const rSec = ws.addRow(['個人ランキング（上位30名）']); rSec.height = 32
   ws.mergeCells(rSec.number, 1, rSec.number, LC)
   sc(rSec.getCell(1), { font: white(true, 13), fill: NAVY, align: center })
 
+  // ══ ランキング列ヘッダー ══
   const rHead = ws.addRow([]); rHead.height = 28
   const rankLabels = ['順位', 'クラス', 'テストネーム', ...rounds.map(r => `第${r}回`), '合計']
   rankLabels.forEach((lbl, i) => sc(rHead.getCell(i + 1), { v: lbl, font: white(true, 12), fill: NAVY, align: center, border: bm() }))
 
+  // ══ ランキングデータ ══
   for (const r of ranking) {
     const dr = ws.addRow([]); dr.height = 20
     const fill = r.rank === 1 ? GOLD : r.rank === 2 ? SILVER : r.rank === 3 ? BRONZE : dr.number % 2 === 0 ? EVEN : undefined

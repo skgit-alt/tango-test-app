@@ -4,9 +4,39 @@ import { useState } from 'react'
 import * as XLSX from 'xlsx'
 
 export default function DownloadButtons() {
+  const [loading600, setLoading600] = useState(false)
   const [loading300, setLoading300] = useState(false)
   const [loading50, setLoading50] = useState(false)
   const [loading20, setLoading20] = useState(false)
+
+  const download600 = async () => {
+    setLoading600(true)
+    try {
+      const res = await fetch('/api/teacher/download-excel?mode=600')
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: 'ダウンロードに失敗しました' }))
+        alert(error ?? 'ダウンロードに失敗しました')
+        return
+      }
+      const { header, rows, sheetName } = await res.json()
+
+      const wb = XLSX.utils.book_new()
+      const ws = XLSX.utils.aoa_to_sheet([header, ...rows])
+      ws['!cols'] = [
+        { wch: 8 },
+        { wch: 6 },
+        { wch: 14 },
+        ...(header.slice(3).map(() => ({ wch: 16 }))),
+      ]
+      XLSX.utils.book_append_sheet(wb, ws, sheetName)
+      XLSX.writeFile(wb, '600問テスト成績推移.xlsx')
+    } catch (err) {
+      console.error(err)
+      alert('ダウンロードに失敗しました')
+    } finally {
+      setLoading600(false)
+    }
+  }
 
   const download300 = async () => {
     setLoading300(true)
@@ -100,6 +130,13 @@ export default function DownloadButtons() {
 
   return (
     <div className="flex flex-wrap gap-2">
+      <button
+        onClick={download600}
+        disabled={loading600}
+        className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50"
+      >
+        {loading600 ? '生成中...' : '📘 600問テスト推移 (A〜D組)'}
+      </button>
       <button
         onClick={download300}
         disabled={loading300}

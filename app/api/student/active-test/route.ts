@@ -76,8 +76,8 @@ export async function GET() {
     .filter((test) => {
       // ── モード別クラスフィルター ──────────────────────────────────────────
       if (!isOtherClass) {
-        if (test.mode === 50 && !isAlphaClass) return false   // 50問 → A～D組のみ
-        if (test.mode !== 50 && test.mode !== 300 && !isNumericClass) return false // 20問 → 1～6組のみ
+        if ((test.mode === 50 || test.mode === 600) && !isAlphaClass) return false   // 50問・600問 → A～D組のみ
+        if (test.mode !== 50 && test.mode !== 300 && test.mode !== 600 && !isNumericClass) return false // 20問 → 1～6組のみ
       }
 
       // ── 表示可否：openまたはopen_classesに自クラスが含まれるテストのみ表示 ──

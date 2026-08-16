@@ -448,8 +448,8 @@ export default function NewTestPage() {
           }
         })
 
-      if (parsed.length !== 50 && parsed.length !== 300) {
-        setError(`問題数が${parsed.length}問です。50問または300問のExcelファイルをアップロードしてください。`)
+      if (parsed.length !== 50 && parsed.length !== 300 && parsed.length !== 600) {
+        setError(`問題数が${parsed.length}問です。50問・300問・600問のExcelファイルをアップロードしてください。`)
         setQuestions([])
         return
       }
@@ -555,12 +555,13 @@ export default function NewTestPage() {
     setError('')
 
     try {
-      const mode = questions.length === 300 ? 300 : questions.length === 50 ? 50 : questions.length
-      const time_limit = mode === 300 ? 1020
+      const mode = questions.length === 600 ? 600 : questions.length === 300 ? 300 : questions.length === 50 ? 50 : questions.length
+      const time_limit = mode === 600 ? 2100
+        : mode === 300 ? 1020
         : mode === 50 ? 185
         : (parseInt(customTimeLimitMin) || 0) * 60 + (parseInt(customTimeLimitSec) || 0) || 120
-      const pass_score = mode === 300 ? 285 : null
-      const roundNum = mode !== 300 && roundNumber.trim() !== '' ? parseInt(roundNumber) : null
+      const pass_score = mode === 600 ? 570 : mode === 300 ? 285 : null
+      const roundNum = mode !== 300 && mode !== 600 && roundNumber.trim() !== '' ? parseInt(roundNumber) : null
 
       const { data: test, error: testError } = await supabase
         .from('tests')
@@ -586,7 +587,7 @@ export default function NewTestPage() {
     }
   }
 
-  const mode = questions.length === 300 ? 300 : questions.length === 50 ? 50 : null
+  const mode = questions.length === 600 ? 600 : questions.length === 300 ? 300 : questions.length === 50 ? 50 : null
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -621,7 +622,7 @@ export default function NewTestPage() {
               onClick={() => { setTab('xlsx'); setQuestions([]); setFileName(''); setError(''); setPreview(false) }}
               className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${tab === 'xlsx' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
             >
-              📊 Excel（300問 / 50問）
+              📊 Excel（600問 / 300問 / 50問）
             </button>
             <button
               onClick={() => { setTab('rtf'); setQuestions([]); setFileName(''); setError(''); setPreview(false) }}
@@ -680,7 +681,7 @@ export default function NewTestPage() {
           <input ref={docxRef} type="file" accept=".docx" onChange={async (e) => { const f = e.target.files?.[0]; if (f) await processDocx(f) }} className="hidden" />
         </div>
 
-        {/* 300問以外: 第何回 */}
+        {/* 300問・600問以外: 第何回 */}
         {(mode === 50 || (mode === null && questions.length > 0)) && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -727,9 +728,10 @@ export default function NewTestPage() {
           <div className="bg-blue-50 rounded-xl p-4 space-y-1 text-sm">
             <p className="font-medium text-blue-800">自動設定内容</p>
             <p className="text-blue-700">問題数: <strong>{questions.length}問</strong></p>
+            {mode === 600 && <><p className="text-blue-700">制限時間: <strong>2100秒（35分）</strong></p><p className="text-blue-700">合格点: <strong>570点</strong></p></>}
             {mode === 300 && <><p className="text-blue-700">制限時間: <strong>1020秒（17分）</strong></p><p className="text-blue-700">合格点: <strong>285点</strong></p></>}
             {mode === 50 && <p className="text-blue-700">制限時間: <strong>185秒（3分5秒）</strong></p>}
-            {mode !== 50 && mode !== 300 && (
+            {mode !== 50 && mode !== 300 && mode !== 600 && (
               <p className="text-blue-700">制限時間: <strong>{(parseInt(customTimeLimitMin)||0)}分{(parseInt(customTimeLimitSec)||0)}秒</strong>（上で変更可）</p>
             )}
           </div>

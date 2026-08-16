@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { calcPoints, canSeeResult } from '@/lib/supabase/types'
-import { Chart300, Chart50 } from './ScoreChart'
+import { Chart300, Chart50, Chart600 } from './ScoreChart'
 import ActiveTestBanner from './ActiveTestBanner'
 import RequestNameChangeButton from './RequestNameChangeButton'
 import MyRankBadge from './MyRankBadge'
@@ -56,8 +56,8 @@ export default async function StudentHomePage() {
     .filter((t) => {
       // モード別クラスフィルター
       if (!isOtherClass) {
-        if (t.mode === 50 && !isAlphaClass) return false
-        if (t.mode !== 50 && t.mode !== 300 && !isNumericClass) return false
+        if ((t.mode === 50 || t.mode === 600) && !isAlphaClass) return false
+        if (t.mode !== 50 && t.mode !== 300 && t.mode !== 600 && !isNumericClass) return false
       }
       // openなら常に表示
       if (t.status === 'open') return true
@@ -96,6 +96,7 @@ export default async function StudentHomePage() {
   const publishedSessions = (pastSessions ?? []).filter(
     (s) => (s.tests as any)?.status === 'published'
   )
+  const sessions600 = publishedSessions.filter((s) => (s.tests as any)?.mode === 600)
   const sessions300 = publishedSessions.filter((s) => (s.tests as any)?.mode === 300)
   const sessions50 = publishedSessions
     .filter((s) => (s.tests as any)?.mode === 50)
@@ -191,6 +192,9 @@ export default async function StudentHomePage() {
         </div>
 
         {/* グラフ（2件以上あれば表示） */}
+        {sessions600.length >= 2 && (
+          <Chart600 sessions={sessions600 as any} />
+        )}
         {sessions300.length >= 2 && (
           <Chart300 sessions={sessions300 as any} />
         )}

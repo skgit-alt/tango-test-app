@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  serverExternalPackages: ['@napi-rs/canvas'],
+  serverExternalPackages: [],
 }
 
 export default withPWA({

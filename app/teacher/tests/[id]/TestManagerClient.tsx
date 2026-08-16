@@ -105,9 +105,9 @@ export default function TestManagerClient({
     const isNumeric = /^\d/.test(cls)
     const isAlpha = /^[A-Za-z]/.test(cls)
     if (!isNumeric && !isAlpha) return true   // 実験用クラス等 → 常に表示
-    if (test.mode === 50) return isAlpha       // 50問 → A～D組のみ
-    if (test.mode === 300) return true         // 300問 → 全クラス
-    return isNumeric                           // 20問 → 1～6組のみ
+    if (test.mode === 50 || test.mode === 600) return isAlpha  // 50問・600問 → A～D組のみ
+    if (test.mode === 300) return true                         // 300問 → 全クラス
+    return isNumeric                                           // 20問 → 1～6組のみ
   })
   // テスト名編集
   const [editingTitle, setEditingTitle] = useState(false)
@@ -1134,8 +1134,8 @@ export default function TestManagerClient({
                       (test.published_classes ?? []).includes(s.students?.class_name ?? '') ||
                       (test.published_student_ids ?? []).includes(s.student_id)
                     const isLoading = publishingStudent === s.student_id
-                    const isHighScore = test.mode === 300 && s.score !== null && s.score >= 285
-                    const isNearScore = test.mode === 300 && s.score !== null && s.score >= 280 && s.score < 285
+                    const isHighScore = (test.mode === 300 && s.score !== null && s.score >= 285) || (test.mode === 600 && s.score !== null && s.score >= 570)
+                    const isNearScore = (test.mode === 300 && s.score !== null && s.score >= 280 && s.score < 285) || (test.mode === 600 && s.score !== null && s.score >= 560 && s.score < 570)
                     return (
                       <div
                         key={s.id}
@@ -1191,8 +1191,8 @@ export default function TestManagerClient({
           </div>
           <div className="divide-y divide-gray-100">
             {practiceSessions.map((s) => {
-              const isHighScore = test.mode === 300 && s.score !== null && s.score >= 285
-              const isNearScore = test.mode === 300 && s.score !== null && s.score >= 280 && s.score < 285
+              const isHighScore = (test.mode === 300 && s.score !== null && s.score >= 285) || (test.mode === 600 && s.score !== null && s.score >= 570)
+              const isNearScore = (test.mode === 300 && s.score !== null && s.score >= 280 && s.score < 285) || (test.mode === 600 && s.score !== null && s.score >= 560 && s.score < 570)
               return (
                 <div key={s.id} className="flex items-center justify-between px-5 py-3">
                   <div className="text-sm">
@@ -1445,7 +1445,7 @@ export default function TestManagerClient({
                 <input
                   type="number"
                   min={0}
-                  max={test.mode === 300 ? 300 : test.mode === 50 ? 100 : test.mode}
+                  max={test.mode === 600 ? 600 : test.mode === 300 ? 300 : test.mode === 50 ? 100 : test.mode}
                   value={editScore}
                   onChange={(e) => setEditScore(e.target.value)}
                   className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400"

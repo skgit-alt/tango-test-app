@@ -47,6 +47,13 @@ const COLUMNS: ColumnConfig[] = [
     roundBadge: 'bg-orange-100 text-orange-700',
   },
   {
+    key: '600',
+    label: '600問テスト',
+    emoji: '📘',
+    headerBg: 'bg-blue-600',
+    roundBadge: 'bg-blue-100 text-blue-700',
+  },
+  {
     key: '300',
     label: '300問テスト',
     emoji: '📗',
@@ -248,13 +255,15 @@ export default function TestListClient({ tests: initialTests, retakeCounts }: { 
   }
 
   const tests50    = tests.filter((t) => t.mode === 50)
-  const testsOther = tests.filter((t) => t.mode !== 50 && t.mode !== 300)
+  const testsOther = tests.filter((t) => t.mode !== 50 && t.mode !== 300 && t.mode !== 600)
   const tests300   = tests.filter((t) => t.mode === 300)
+  const tests600   = tests.filter((t) => t.mode === 600)
 
   const grouped: Record<string, Test[]> = {
     '50': tests50,
     'other': testsOther,
     '300': tests300,
+    '600': tests600,
   }
 
   if (tests.length === 0) {
@@ -285,7 +294,7 @@ export default function TestListClient({ tests: initialTests, retakeCounts }: { 
       )}
 
       {/* 3列カラムレイアウト */}
-      <div className="grid grid-cols-3 gap-4 items-start">
+      <div className="grid grid-cols-4 gap-4 items-start">
         {COLUMNS.map((col) => (
           <TestColumn
             key={col.key}

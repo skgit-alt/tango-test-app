@@ -30,8 +30,8 @@ export default async function RetakePage() {
 
   // クラスに応じてフィルタリング（既存のフィルタと同じルール）
   const filteredTests = (publishedTests ?? []).filter((t) => {
-    if (t.mode === 50 && !isAlphaClass) return false
-    if (t.mode !== 50 && t.mode !== 300 && !isNumericClass) return false
+    if ((t.mode === 50 || t.mode === 600) && !isAlphaClass) return false
+    if (t.mode !== 50 && t.mode !== 300 && t.mode !== 600 && !isNumericClass) return false
     return true
   })
 

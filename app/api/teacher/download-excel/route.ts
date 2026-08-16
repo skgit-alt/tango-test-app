@@ -8,9 +8,9 @@ export async function GET(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const mode = req.nextUrl.searchParams.get('mode') // '50', '20', or '300'
-  if (mode !== '50' && mode !== '20' && mode !== '300') {
-    return NextResponse.json({ error: 'mode must be 50, 20, or 300' }, { status: 400 })
+  const mode = req.nextUrl.searchParams.get('mode') // '50', '20', '300', or '600'
+  if (mode !== '50' && mode !== '20' && mode !== '300' && mode !== '600') {
+    return NextResponse.json({ error: 'mode must be 50, 20, 300, or 600' }, { status: 400 })
   }
 
   const admin = createAdminClient()
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   // 300問: 全生徒
   const students = (allStudents ?? []).filter((s) => {
     const c = s.class_name ?? ''
-    if (mode === '50') return /^[A-Za-z]/.test(c)
+    if (mode === '50' || mode === '600') return /^[A-Za-z]/.test(c)
     if (mode === '20') return /^\d/.test(c)
     return true // 300問は全員
   })
@@ -42,9 +42,11 @@ export async function GET(req: NextRequest) {
 
   if (mode === '50') {
     testsQuery = testsQuery.eq('mode', 50)
+  } else if (mode === '600') {
+    testsQuery = testsQuery.eq('mode', 600)
   } else if (mode === '20') {
-    // 20問テストは mode が 50 でも 300 でもないもの
-    testsQuery = testsQuery.neq('mode', 50).neq('mode', 300)
+    // 20問テストは mode が 50 でも 300 でも 600 でもないもの
+    testsQuery = testsQuery.neq('mode', 50).neq('mode', 300).neq('mode', 600)
   } else {
     testsQuery = testsQuery.eq('mode', 300)
   }
@@ -77,7 +79,28 @@ export async function GET(req: NextRequest) {
   }
 
   // Excelデータを構築
-  if (mode === '300') {
+  if (mode === '600') {
+    const header = ['クラス', '番号', '名前', ...tests.map((t) => {
+      const date = t.opened_at ?? t.created_at
+      return `${t.title}\n(${new Date(date).toLocaleDateString('ja-JP')})`
+    })]
+
+    const rows = students.map((student) => {
+      const row: (string | number | null)[] = [
+        student.class_name,
+        student.seat_number,
+        student.name,
+      ]
+      for (const test of tests) {
+        const score = scoreMap.get(`${student.id}__${test.id}`)
+        row.push(score !== undefined ? score : null)
+      }
+      return row
+    })
+
+    return NextResponse.json({ header, rows, sheetName: '600問テスト推移' })
+
+  } else if (mode === '300') {
     const header = ['クラス', '番号', '名前', ...tests.map((t) => {
       const date = t.opened_at ?? t.created_at
       return `${t.title}\n(${new Date(date).toLocaleDateString('ja-JP')})`

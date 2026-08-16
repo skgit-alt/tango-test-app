@@ -65,6 +65,46 @@ export function Chart300({ sessions }: { sessions: Session300[] }) {
   )
 }
 
+// 600問グラフ
+export function Chart600({ sessions }: { sessions: Session300[] }) {
+  if (sessions.length === 0) return null
+
+  const data = [...sessions].reverse().map((s) => ({
+    label: formatDate(s.submitted_at),
+    title: (s.tests as any).title,
+    点数: s.score ?? 0,
+  }))
+
+  const passScore = (sessions[0].tests as any).pass_score as number | null
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 p-5">
+      <h3 className="text-sm font-bold text-gray-600 mb-4">📘 600問テスト 点数推移</h3>
+      <ResponsiveContainer width="100%" height={220}>
+        <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+          <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+          <YAxis domain={[0, 600]} tick={{ fontSize: 11 }} width={36} />
+          <Tooltip
+            formatter={(value) => [`${value}点`, '点数']}
+            labelFormatter={(label, payload) => payload?.[0]?.payload?.title ?? label}
+          />
+          {passScore !== null && (
+            <ReferenceLine y={passScore} stroke="#ef4444" strokeDasharray="4 4"
+              label={{ value: `合格点${passScore}`, position: 'insideTopRight', fontSize: 10, fill: '#ef4444' }} />
+          )}
+          <Line
+            type="monotone" dataKey="点数"
+            stroke="#2563eb" strokeWidth={2}
+            dot={{ r: 4, fill: '#2563eb' }}
+            activeDot={{ r: 6 }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
 // 50問グラフ（点数＋ポイントの2軸折れ線）
 export function Chart50({ sessions }: { sessions: Session50[] }) {
   if (sessions.length === 0) return null
