@@ -62,11 +62,13 @@ function TestCard({
   config,
   selected,
   onToggle,
+  retakeCount,
 }: {
   test: Test
   config: ColumnConfig
   selected: boolean
   onToggle: () => void
+  retakeCount: number
 }) {
   return (
     <div className={`flex items-start gap-2 px-3 py-2.5 transition ${selected ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
@@ -95,6 +97,11 @@ function TestCard({
               第{test.round_number}回
             </span>
           )}
+          {retakeCount > 0 && (
+            <span className="text-xs px-1.5 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">
+              🔄 {retakeCount}件
+            </span>
+          )}
           <span className="text-xs text-gray-400">
             {new Date(test.created_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
           </span>
@@ -112,12 +119,14 @@ function TestColumn({
   selectedIds,
   onToggle,
   onToggleAll,
+  retakeCounts,
 }: {
   config: ColumnConfig
   tests: Test[]
   selectedIds: Set<string>
   onToggle: (id: string) => void
   onToggleAll: (ids: string[], selectAll: boolean) => void
+  retakeCounts: Record<string, number>
 }) {
   const visible = tests
 
@@ -170,6 +179,7 @@ function TestColumn({
                 config={config}
                 selected={selectedIds.has(test.id)}
                 onToggle={() => onToggle(test.id)}
+                retakeCount={retakeCounts[test.id] ?? 0}
               />
             ))}
           </div>
@@ -182,7 +192,7 @@ function TestColumn({
 
 // ─── メインコンポーネント ─────────────────────────────────────────────────────
 
-export default function TestListClient({ tests: initialTests }: { tests: Test[] }) {
+export default function TestListClient({ tests: initialTests, retakeCounts }: { tests: Test[]; retakeCounts: Record<string, number> }) {
   const router = useRouter()
 
   const [tests, setTests] = useState<Test[]>(initialTests)
@@ -284,6 +294,7 @@ export default function TestListClient({ tests: initialTests }: { tests: Test[] 
             selectedIds={selectedIds}
             onToggle={toggleSelect}
             onToggleAll={toggleColumnAll}
+            retakeCounts={retakeCounts}
           />
         ))}
       </div>

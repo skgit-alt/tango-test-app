@@ -79,5 +79,14 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  return NextResponse.json({ sessions: sessions ?? [], cheatLogs: cheatLogs ?? [], allStudents })
+  // 受け直しセッション（練習・提出済み）
+  const { data: practiceSessions } = await admin
+    .from('sessions')
+    .select('id, student_id, score, submitted_at, students(name, class_name, seat_number)')
+    .eq('test_id', testId)
+    .eq('is_practice', true)
+    .eq('is_submitted', true)
+    .order('submitted_at', { ascending: false })
+
+  return NextResponse.json({ sessions: sessions ?? [], cheatLogs: cheatLogs ?? [], allStudents, practiceSessions: practiceSessions ?? [] })
 }

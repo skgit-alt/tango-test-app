@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { Test } from '@/lib/supabase/types'
 import Link from 'next/link'
 import DownloadButtons from './DownloadButtons'
@@ -6,10 +7,17 @@ import TestListClient from './TestListClient'
 
 export default async function TeacherPage() {
   const supabase = await createClient()
-  const { data: tests } = await supabase
-    .from('tests')
-    .select('*')
-    .order('created_at', { ascending: false })
+  const admin = createAdminClient()
+
+  const [{ data: tests }, { data: practiceSessions }] = await Promise.all([
+    supabase.from('tests').select('*').order('created_at', { ascending: false }),
+    admin.from('sessions').select('test_id').eq('is_practice', true).eq('is_submitted', true),
+  ])
+
+  const retakeCounts: Record<string, number> = {}
+  for (const s of practiceSessions ?? []) {
+    retakeCounts[s.test_id] = (retakeCounts[s.test_id] ?? 0) + 1
+  }
 
   return (
     <div>
@@ -26,7 +34,7 @@ export default async function TeacherPage() {
         </div>
       </div>
 
-      <TestListClient tests={(tests ?? []) as Test[]} />
+      <TestListClient tests={(tests ?? []) as Test[]} retakeCounts={retakeCounts} />
     </div>
   )
 }
