@@ -38,6 +38,7 @@ export interface Test {
   teacher_message: string | null
   scheduled_class_starts: Record<string, string> | null
   cheats_confirmed_at: string | null
+  book_type: '1200' | '1900' | null
 }
 
 /** 生徒がテスト結果を閲覧できるか判定 */

@@ -380,6 +380,7 @@ export default function NewTestPage() {
   const [error, setError] = useState('')
   const [preview, setPreview] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const [bookType, setBookType] = useState<'1200' | '1900' | null>(null)
 
   // ─── Excel（300問 / 50問）処理 ─────────────────────────────────────────────
 
@@ -567,6 +568,7 @@ export default function NewTestPage() {
     setFileName('')
     setError('')
     setPreview(false)
+    setBookType(null)
   }
 
   // ─── テスト作成 ───────────────────────────────────────────────────────────
@@ -575,24 +577,31 @@ export default function NewTestPage() {
     if (!title.trim()) { setError('タイトルを入力してください'); return }
     if (questions.length === 0) { setError('ファイルをアップロードしてください'); return }
 
+    const mode = questions.length === 600 ? 600
+      : questions.length === 300 ? 300
+      : questions.length === 50 ? 50
+      : questions.length
+
+    if ((mode === 300 || mode === 600) && !bookType) {
+      setError('ターゲット1200・1900のどちらかを選択してください')
+      return
+    }
+
     setLoading(true)
     setError('')
 
     try {
-      const mode = questions.length === 600 ? 600
-        : questions.length === 300 ? 300
-        : questions.length === 50 ? 50
-        : questions.length
       const time_limit = mode === 600 ? 2100
         : mode === 300 ? 1020
         : mode === 50 ? 185
         : (parseInt(customTimeLimitMin) || 0) * 60 + (parseInt(customTimeLimitSec) || 0) || 120
       const pass_score = mode === 600 ? 570 : mode === 300 ? 285 : null
       const roundNum = mode !== 300 && mode !== 600 && roundNumber.trim() !== '' ? parseInt(roundNumber) : null
+      const book_type = (mode === 300 || mode === 600) ? bookType : null
 
       const { data: test, error: testError } = await supabase
         .from('tests')
-        .insert({ title: title.trim(), mode, status: 'waiting', time_limit, pass_score, round_number: roundNum })
+        .insert({ title: title.trim(), mode, status: 'waiting', time_limit, pass_score, round_number: roundNum, book_type })
         .select()
         .single()
 
@@ -734,6 +743,31 @@ export default function NewTestPage() {
           <input ref={xlsx600Ref} type="file" accept=".xlsx" onChange={async (e) => { const f = e.target.files?.[0]; if (f) await processXlsx600(f) }} className="hidden" />
         </div>
 
+        {/* 300問・600問: 参考書選択 */}
+        {(mode === 300 || mode === 600) && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              参考書を選択してください <span className="text-red-500">*</span>
+            </label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setBookType('1200')}
+                className={`flex-1 py-3 rounded-xl font-bold text-sm border-2 transition ${bookType === '1200' ? 'bg-yellow-400 border-yellow-500 text-yellow-900' : 'bg-yellow-50 border-yellow-200 text-yellow-700 hover:bg-yellow-100'}`}
+              >
+                📗 ターゲット1200
+              </button>
+              <button
+                type="button"
+                onClick={() => setBookType('1900')}
+                className={`flex-1 py-3 rounded-xl font-bold text-sm border-2 transition ${bookType === '1900' ? 'bg-blue-500 border-blue-600 text-white' : 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'}`}
+              >
+                📘 ターゲット1900
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 300問・600問以外: 第何回 */}
         {(mode === 50 || (mode === null && questions.length > 0)) && (
           <div>
@@ -822,7 +856,7 @@ export default function NewTestPage() {
 
         <button
           onClick={handleSubmit}
-          disabled={loading || !title.trim() || questions.length === 0}
+          disabled={loading || !title.trim() || questions.length === 0 || ((mode === 300 || mode === 600) && !bookType)}
           className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? '作成中...' : 'テストを作成する'}

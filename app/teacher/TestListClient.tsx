@@ -77,8 +77,15 @@ function TestCard({
   onToggle: () => void
   retakeCount: number
 }) {
+  const isBookType = (test.mode === 300 || test.mode === 600) && test.book_type
+  const cardBg = isBookType && test.book_type === '1200'
+    ? (selected ? 'bg-yellow-100' : 'bg-yellow-50 hover:bg-yellow-100')
+    : isBookType && test.book_type === '1900'
+    ? (selected ? 'bg-blue-100' : 'bg-blue-50 hover:bg-blue-100')
+    : (selected ? 'bg-red-50' : 'hover:bg-gray-50')
+
   return (
-    <div className={`flex items-start gap-2 px-3 py-2.5 transition ${selected ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
+    <div className={`flex items-start gap-2 px-3 py-2.5 transition ${cardBg}`}>
       <input
         type="checkbox"
         checked={selected}
@@ -99,6 +106,11 @@ function TestCard({
           <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${statusColor[test.status]}`}>
             {statusLabel[test.status]}
           </span>
+          {test.book_type && (
+            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${test.book_type === '1200' ? 'bg-yellow-200 text-yellow-800' : 'bg-blue-200 text-blue-800'}`}>
+              📚 {test.book_type}
+            </span>
+          )}
           {test.round_number != null && (
             <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${config.roundBadge}`}>
               第{test.round_number}回
