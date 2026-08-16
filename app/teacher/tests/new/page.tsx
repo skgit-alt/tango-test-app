@@ -386,6 +386,7 @@ export default function NewTestPage() {
 
   const processXlsx = async (file: File) => {
     setFileName(file.name)
+    setTitle(file.name.replace(/\.[^.]+$/, ''))
     setError('')
     try {
       const arrayBuffer = await file.arrayBuffer()
@@ -432,6 +433,7 @@ export default function NewTestPage() {
 
   const processXlsx600 = async (file: File) => {
     setFileName(file.name)
+    setTitle(file.name.replace(/\.[^.]+$/, ''))
     setError('')
     try {
       const arrayBuffer = await file.arrayBuffer()
@@ -492,7 +494,7 @@ export default function NewTestPage() {
         setError('問題が読み取れませんでした。Wordファイルの形式を確認してください。')
         return
       }
-      if (parsedTitle) setTitle(parsedTitle)
+      setTitle(parsedTitle || file.name.replace(/\.[^.]+$/, ''))
       setQuestions(parsed)
       setPreview(true)
     } catch (err) {
@@ -516,7 +518,7 @@ export default function NewTestPage() {
         return
       }
 
-      if (parsedTitle) setTitle(parsedTitle)
+      setTitle(parsedTitle || file.name.replace(/\.[^.]+$/, ''))
       setQuestions(parsed)
       setPreview(true)
     } catch (err) {
