@@ -131,20 +131,6 @@ export default function DownloadButtons() {
   return (
     <div className="flex flex-wrap gap-2">
       <button
-        onClick={download600}
-        disabled={loading600}
-        className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50"
-      >
-        {loading600 ? '生成中...' : '📘 600問テスト推移 (A〜D組)'}
-      </button>
-      <button
-        onClick={download300}
-        disabled={loading300}
-        className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50"
-      >
-        {loading300 ? '生成中...' : '📊 300問テスト推移'}
-      </button>
-      <button
         onClick={download50}
         disabled={loading50}
         className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50"
@@ -157,6 +143,20 @@ export default function DownloadButtons() {
         className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50"
       >
         {loading20 ? '生成中...' : '📊 20問テスト推移 (1〜6組)'}
+      </button>
+      <button
+        onClick={download300}
+        disabled={loading300}
+        className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50"
+      >
+        {loading300 ? '生成中...' : '📊 300問テスト推移'}
+      </button>
+      <button
+        onClick={download600}
+        disabled={loading600}
+        className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50"
+      >
+        {loading600 ? '生成中...' : '📘 600問テスト推移 (A〜D組)'}
       </button>
     </div>
   )
