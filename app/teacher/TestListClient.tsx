@@ -79,9 +79,9 @@ function TestCard({
 }) {
   const isBookType = (test.mode === 300 || test.mode === 600) && test.book_type
   const cardBg = isBookType && test.book_type === '1200'
-    ? (selected ? 'bg-yellow-100' : 'bg-yellow-50 hover:bg-yellow-100')
+    ? (selected ? 'bg-yellow-300' : 'bg-yellow-200 hover:bg-yellow-300')
     : isBookType && test.book_type === '1900'
-    ? (selected ? 'bg-blue-100' : 'bg-blue-50 hover:bg-blue-100')
+    ? (selected ? 'bg-blue-300' : 'bg-blue-200 hover:bg-blue-300')
     : (selected ? 'bg-red-50' : 'hover:bg-gray-50')
 
   return (
