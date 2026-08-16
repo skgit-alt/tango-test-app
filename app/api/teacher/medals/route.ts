@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     .not('round_number', 'is', null)
 
   if (!targetTests || targetTests.length === 0) {
-    return NextResponse.json({ error: 'この期間に50問テストが見つかりません' }, { status: 404 })
+    return NextResponse.json({ error: 'この期間にⅡ類50問テストが見つかりません' }, { status: 404 })
   }
 
   const testIds = targetTests.map((t: { id: string }) => t.id)
