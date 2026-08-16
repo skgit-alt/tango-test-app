@@ -99,7 +99,7 @@ export default function MonitorClient({ tests: initialTests, classes }: { tests:
               <div>
                 <h2 className="text-lg font-semibold text-gray-800">{test.title}</h2>
                 <p className="text-sm text-gray-500">
-                  {test.mode === 600 ? '600問モード・35分' : test.mode === 300 ? '300問モード・17分' : '50問モード・3分'}
+                  {test.mode === 600 ? '600問モード・35分' : test.mode === 300 ? '300問モード・17分' : test.mode === 50 ? 'Ⅱ類50問モード・3分' : 'Ⅰ類20問モード'}
                 </p>
               </div>
 

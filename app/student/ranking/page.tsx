@@ -284,7 +284,7 @@ export default async function RankingPage() {
           <section>
             {showBoth && (
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                📄 20問スコアランキング
+                📄 Ⅰ類20問スコアランキング
               </h2>
             )}
             <RankingView

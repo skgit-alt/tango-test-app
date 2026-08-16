@@ -118,7 +118,7 @@ export function Chart50({ sessions }: { sessions: Session50[] }) {
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-5">
-      <h3 className="text-sm font-bold text-gray-600 mb-4">⚡ 50問テスト 点数・ポイント推移</h3>
+      <h3 className="text-sm font-bold text-gray-600 mb-4">⚡ Ⅱ類50問テスト 点数・ポイント推移</h3>
       <ResponsiveContainer width="100%" height={220}>
         <LineChart data={data} margin={{ top: 8, right: 40, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />

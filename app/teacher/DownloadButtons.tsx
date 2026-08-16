@@ -89,7 +89,7 @@ export default function DownloadButtons() {
         ...Array.from({ length: testCount }).flatMap(() => [{ wch: 20 }, { wch: 10 }]),
       ]
       XLSX.utils.book_append_sheet(wb, ws, sheetName)
-      XLSX.writeFile(wb, '50問テスト成績推移.xlsx')
+      XLSX.writeFile(wb, 'Ⅱ類50問テスト成績推移.xlsx')
     } catch (err) {
       console.error(err)
       alert('ダウンロードに失敗しました')
@@ -119,7 +119,7 @@ export default function DownloadButtons() {
         ...(header.slice(3).map(() => ({ wch: 16 }))),
       ]
       XLSX.utils.book_append_sheet(wb, ws, sheetName)
-      XLSX.writeFile(wb, '20問テスト成績推移.xlsx')
+      XLSX.writeFile(wb, 'Ⅰ類20問テスト成績推移.xlsx')
     } catch (err) {
       console.error(err)
       alert('ダウンロードに失敗しました')
@@ -135,14 +135,14 @@ export default function DownloadButtons() {
         disabled={loading50}
         className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50"
       >
-        {loading50 ? '生成中...' : '📊 50問テスト推移 (A〜D組)'}
+        {loading50 ? '生成中...' : '📊 Ⅱ類50問テスト推移 (A〜D組)'}
       </button>
       <button
         onClick={download20}
         disabled={loading20}
         className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition disabled:opacity-50"
       >
-        {loading20 ? '生成中...' : '📊 20問テスト推移 (1〜6組)'}
+        {loading20 ? '生成中...' : '📊 Ⅰ類20問テスト推移 (1〜6組)'}
       </button>
       <button
         onClick={download300}

@@ -151,7 +151,7 @@ export default function ActiveTestBanner({
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-3">
-            <p className="text-xs font-bold text-gray-500 px-1">⚡ 50問テスト</p>
+            <p className="text-xs font-bold text-gray-500 px-1">⚡ Ⅱ類50問テスト</p>
             {tests50.map((test) => (
               <TestCard key={test.id} test={test} studentClass={studentClass} />
             ))}
