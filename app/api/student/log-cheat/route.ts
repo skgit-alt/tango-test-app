@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { sessionId, eventType } = await req.json()
+  const { sessionId, eventType, durationSeconds } = await req.json()
   if (!sessionId || !eventType) {
     return NextResponse.json({ error: 'sessionId and eventType required' }, { status: 400 })
   }
@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
       session_id: sessionId,
       event_type: eventType,
       occurred_at: new Date().toISOString(),
+      duration_seconds: typeof durationSeconds === 'number' ? durationSeconds : null,
     })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

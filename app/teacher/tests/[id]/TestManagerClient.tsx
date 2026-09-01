@@ -1679,6 +1679,7 @@ export default function TestManagerClient({
                   <th className="px-4 py-3 text-left">クラス</th>
                   <th className="px-4 py-3 text-left">名前</th>
                   <th className="px-4 py-3 text-left">イベント</th>
+                  <th className="px-4 py-3 text-left">時間</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -1697,6 +1698,9 @@ export default function TestManagerClient({
                       <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-xs font-medium">
                         {cheatEventLabel[log.event_type] ?? log.event_type}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 text-sm">
+                      {log.duration_seconds != null ? `${log.duration_seconds}秒` : '-'}
                     </td>
                   </tr>
                 ))}

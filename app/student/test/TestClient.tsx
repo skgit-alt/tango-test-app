@@ -10,6 +10,7 @@ interface CheatWarning {
   visible: boolean
   count: number
   eventType: string
+  durationSeconds: number | null
 }
 
 export default function TestClient({
@@ -44,12 +45,18 @@ export default function TestClient({
     visible: false,
     count: 0,
     eventType: '',
+    durationSeconds: null,
   })
   const [contentHidden, setContentHidden] = useState(false)
   const [deviceBlocked, setDeviceBlocked] = useState(false)
   const [splitViewBlocked, setSplitViewBlocked] = useState(false)
+  const [splitViewSeconds, setSplitViewSeconds] = useState(0)
   const cheatCountRef = useRef(0)
   const lastLeaveCheatRef = useRef<number>(0)
+  const cheatDepartureTimeRef = useRef<number | null>(null)
+  const cheatPendingTypeRef = useRef<string>('')
+  const splitViewStartRef = useRef<number | null>(null)
+  const splitViewTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const submittingRef = useRef(false)
   const deviceTokenRef = useRef<string>('')
   const topRef = useRef<HTMLDivElement>(null)
@@ -214,25 +221,42 @@ export default function TestClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const logCheat = useCallback(async (eventType: 'tab_leave' | 'app_switch' | 'split_view') => {
+  const logCheat = useCallback((eventType: 'tab_leave' | 'app_switch') => {
     if (submittingRef.current) return
-    // tab_leave・app_switch の重複発火防止（3秒以内は無視）
-    if (eventType !== 'split_view') {
-      const now = Date.now()
-      if (now - lastLeaveCheatRef.current < 3000) return
-      lastLeaveCheatRef.current = now
-    }
+    // 重複発火防止（3秒以内は無視）
+    const now = Date.now()
+    if (now - lastLeaveCheatRef.current < 3000) return
+    lastLeaveCheatRef.current = now
+    cheatDepartureTimeRef.current = now
+    cheatPendingTypeRef.current = eventType
     cheatCountRef.current += 1
-    setCheatWarning({ visible: true, count: cheatCountRef.current, eventType })
+    setCheatWarning({ visible: true, count: cheatCountRef.current, eventType, durationSeconds: null })
     setContentHidden(true)
-    try {
-      await fetch('/api/student/log-cheat', {
+    // API呼び出しは復帰時（handleReturn）で行う
+  }, [])
+
+  // 復帰時に離脱時間を計算してAPIに記録
+  useEffect(() => {
+    const handleReturn = () => {
+      if (!cheatDepartureTimeRef.current || !cheatPendingTypeRef.current) return
+      const duration = Math.round((Date.now() - cheatDepartureTimeRef.current) / 1000)
+      const eventType = cheatPendingTypeRef.current
+      cheatDepartureTimeRef.current = null
+      cheatPendingTypeRef.current = ''
+      setCheatWarning(prev => ({ ...prev, durationSeconds: duration }))
+      fetch('/api/student/log-cheat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: session.id, eventType }),
-      })
-    } catch (e) {
-      console.error('[logCheat] failed:', e)
+        body: JSON.stringify({ sessionId: session.id, eventType, durationSeconds: duration }),
+      }).catch(e => console.error('[logCheat return] failed:', e))
+    }
+    const onVisibleChange = () => { if (document.visibilityState === 'visible') handleReturn() }
+    const onFocus = () => { if (!document.hidden) handleReturn() }
+    document.addEventListener('visibilitychange', onVisibleChange)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibleChange)
+      window.removeEventListener('focus', onFocus)
     }
   }, [session.id])
 
@@ -280,23 +304,44 @@ export default function TestClient({
         : window.matchMedia('(orientation: landscape)').matches
       return window.innerWidth < (isLandscape ? 1000 : 700)
     }
+    const startSplitViewTracking = () => {
+      cheatCountRef.current += 1
+      splitViewStartRef.current = Date.now()
+      setSplitViewSeconds(0)
+      if (splitViewTimerRef.current) clearInterval(splitViewTimerRef.current)
+      splitViewTimerRef.current = setInterval(() => setSplitViewSeconds(s => s + 1), 1000)
+    }
+
+    const endSplitViewTracking = () => {
+      if (splitViewTimerRef.current) { clearInterval(splitViewTimerRef.current); splitViewTimerRef.current = null }
+      const duration = splitViewStartRef.current ? Math.round((Date.now() - splitViewStartRef.current) / 1000) : null
+      splitViewStartRef.current = null
+      setSplitViewSeconds(0)
+      fetch('/api/student/log-cheat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session.id, eventType: 'split_view', durationSeconds: duration }),
+      }).catch(e => console.error('[logCheat split_view] failed:', e))
+    }
+
     let prevInSplitView = isSplitView()
 
     // 初期チェック（テスト開始前から画面分割していた場合）
     if (prevInSplitView) {
       setSplitViewBlocked(true)
-      logCheat('split_view')
+      startSplitViewTracking()
     }
 
     const check = () => {
       const nowSplit = isSplitView()
       if (nowSplit && !prevInSplitView) {
-        // 分割に入った → ブロック＋記録
+        // 分割に入った → ブロック＋記録開始
         setSplitViewBlocked(true)
-        logCheat('split_view')
+        startSplitViewTracking()
       } else if (!nowSplit && prevInSplitView) {
-        // 分割を解除した → ブロック解除
+        // 分割を解除した → ブロック解除＋時間記録
         setSplitViewBlocked(false)
+        endSplitViewTracking()
       }
       prevInSplitView = nowSplit
     }
@@ -307,8 +352,10 @@ export default function TestClient({
     return () => {
       window.removeEventListener('resize', check)
       clearInterval(interval)
+      if (splitViewTimerRef.current) { clearInterval(splitViewTimerRef.current); splitViewTimerRef.current = null }
     }
-  }, [logCheat])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.id])
 
   const saveCurrentPage = useCallback(async (page: number) => {
     try {
@@ -389,6 +436,7 @@ export default function TestClient({
           <div className="bg-white rounded-2xl p-8 max-w-sm w-full text-center space-y-4 shadow-2xl">
             <div className="text-5xl">🚫</div>
             <h2 className="text-xl font-bold text-red-700">画面分割が検出されました</h2>
+            <p className="text-3xl font-bold text-red-600">{splitViewSeconds}秒 分割中</p>
             <p className="text-gray-600 text-sm leading-relaxed">
               テスト中は画面分割できません。<br />
               画面分割を解除するとテストに戻れます。
@@ -488,6 +536,9 @@ export default function TestClient({
               <h2 className="text-lg font-bold text-red-700">不正行為が検出されました</h2>
               <p className="text-sm text-gray-600 mt-2">{cheatEventLabel[cheatWarning.eventType]} が検知されました。この行動は記録されています。</p>
               <p className="text-sm text-red-600 font-medium mt-2">検出回数: {cheatWarning.count}回</p>
+              {cheatWarning.durationSeconds !== null && (
+                <p className="text-sm text-orange-600 font-medium">{cheatWarning.durationSeconds}秒 離脱していました</p>
+              )}
             </div>
             <button onClick={handleDismissWarning} className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 transition">テストに戻る</button>
           </div>

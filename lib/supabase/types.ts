@@ -105,6 +105,7 @@ export interface CheatLog {
   session_id: string
   event_type: CheatEventType
   occurred_at: string
+  duration_seconds: number | null
 }
 
 export interface Point {
