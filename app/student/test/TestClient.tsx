@@ -49,6 +49,7 @@ export default function TestClient({
   const [deviceBlocked, setDeviceBlocked] = useState(false)
   const [splitViewBlocked, setSplitViewBlocked] = useState(false)
   const cheatCountRef = useRef(0)
+  const lastLeaveCheatRef = useRef<number>(0)
   const submittingRef = useRef(false)
   const deviceTokenRef = useRef<string>('')
   const topRef = useRef<HTMLDivElement>(null)
@@ -215,6 +216,12 @@ export default function TestClient({
 
   const logCheat = useCallback(async (eventType: 'tab_leave' | 'app_switch' | 'split_view') => {
     if (submittingRef.current) return
+    // tab_leave・app_switch の重複発火防止（3秒以内は無視）
+    if (eventType !== 'split_view') {
+      const now = Date.now()
+      if (now - lastLeaveCheatRef.current < 3000) return
+      lastLeaveCheatRef.current = now
+    }
     cheatCountRef.current += 1
     setCheatWarning({ visible: true, count: cheatCountRef.current, eventType })
     setContentHidden(true)
@@ -384,8 +391,13 @@ export default function TestClient({
             <h2 className="text-xl font-bold text-red-700">画面分割が検出されました</h2>
             <p className="text-gray-600 text-sm leading-relaxed">
               テスト中は画面分割できません。<br />
-              分割を解除すると自動的に再開されます。
+              画面分割を解除するとテストに戻れます。
             </p>
+            <div className="bg-gray-50 rounded-xl p-3 text-left text-xs text-gray-500 space-y-1">
+              <p className="font-medium text-gray-600">解除方法（iPad）</p>
+              <p>・画面の境界線を端まで引っ張る</p>
+              <p>・または上部の「…」をタップして「フルスクリーン」を選ぶ</p>
+            </div>
             <p className="text-xs text-gray-400">この行動は記録されています</p>
           </div>
         </div>
