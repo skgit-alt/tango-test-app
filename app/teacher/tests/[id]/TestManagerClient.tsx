@@ -146,6 +146,8 @@ export default function TestManagerClient({
 
   // 不正行為ログセクションへのref
   const cheatLogRef = useRef<HTMLDivElement>(null)
+  // 未提出者セクションへのref
+  const notSubmittedRef = useRef<HTMLDivElement>(null)
 
   const fetchData = useCallback(async () => {
     // admin権限APIでRLSをバイパスしてセッション・生徒一覧取得
@@ -566,6 +568,7 @@ export default function TestManagerClient({
 
   const submittedCount = sessions.filter((s) => s.is_submitted).length
   const startedCount = sessions.filter((s) => s.started_at).length
+  const notSubmittedSessions = sessions.filter((s) => s.started_at && !s.is_submitted && !s.is_absent)
 
   // 不正行為が全て確認済みかどうか
   const latestCheatAt = cheatLogs.length > 0
@@ -827,7 +830,7 @@ export default function TestManagerClient({
       )}
 
       {/* 統計カード */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-4">
         {[
           { label: '総問題数', value: questions.length, color: 'text-gray-800' },
           { label: '接続済み', value: sessions.length, color: 'text-blue-600' },
@@ -839,6 +842,21 @@ export default function TestManagerClient({
             <p className="text-sm text-gray-500 mt-1">{card.label}</p>
           </div>
         ))}
+        {/* 未提出タイル */}
+        {notSubmittedSessions.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-200 p-4 text-center">
+            <p className="text-3xl font-bold text-gray-300">0</p>
+            <p className="text-sm text-gray-400 mt-1">未提出なし</p>
+          </div>
+        ) : (
+          <button
+            onClick={() => notSubmittedRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            className="bg-orange-50 border border-orange-300 rounded-2xl p-4 text-center hover:bg-orange-100 transition cursor-pointer"
+          >
+            <p className="text-3xl font-bold text-orange-600">{notSubmittedSessions.length}</p>
+            <p className="text-sm text-orange-500 mt-1">未提出</p>
+          </button>
+        )}
         {/* 不正行為タイル（常に表示） */}
         {cheatLogs.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-200 p-4 text-center">
@@ -1216,6 +1234,29 @@ export default function TestManagerClient({
                 </div>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {/* 未提出者一覧 */}
+      {notSubmittedSessions.length > 0 && (
+        <div ref={notSubmittedRef} className="bg-orange-50 border border-orange-300 rounded-2xl p-5 space-y-3">
+          <h2 className="font-semibold text-orange-800">
+            未提出者 ({notSubmittedSessions.length}名)
+            <span className="ml-2 text-xs font-normal text-orange-600">開始済みだが未提出</span>
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {notSubmittedSessions
+              .sort((a, b) => {
+                const ak = `${a.students?.class_name ?? ''}${String(a.students?.seat_number ?? 0).padStart(3, '0')}`
+                const bk = `${b.students?.class_name ?? ''}${String(b.students?.seat_number ?? 0).padStart(3, '0')}`
+                return ak.localeCompare(bk)
+              })
+              .map((s) => (
+                <span key={s.id} className="bg-white border border-orange-200 rounded-lg px-3 py-1.5 text-sm text-orange-900 font-medium">
+                  {s.students?.class_name} {s.students?.seat_number}番 {s.students?.name}
+                </span>
+              ))}
           </div>
         </div>
       )}
