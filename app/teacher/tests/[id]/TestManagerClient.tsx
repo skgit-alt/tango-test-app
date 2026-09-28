@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -481,9 +481,9 @@ export default function TestManagerClient({
     if (!confirm('テストを待機状態に戻しますか？\n開始済みのクラスもリセットされます。\n※すでに開始した生徒のセッションはそのまま残ります。')) return
     setLoading(true)
     setActionError('')
-    const ok = await updateTest({ status: 'waiting', open_classes: null, opened_at: null })
+    const ok = await updateTest({ status: 'waiting', open_classes: null, opened_at: null, published_at: null, published_classes: null, published_student_ids: null })
     if (!ok) setActionError('待機状態への変更に失敗しました')
-    else setTest((prev) => ({ ...prev, status: 'waiting', open_classes: null, opened_at: null }))
+    else setTest((prev) => ({ ...prev, status: 'waiting', open_classes: null, opened_at: null, published_at: null, published_classes: null, published_student_ids: null }))
     setLoading(false)
   }
 
