@@ -324,24 +324,28 @@ export default function TestListClient({ tests: initialTests, retakeCounts }: { 
     <div className="space-y-4">
       {/* 削除バー（選択時のみ表示） */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 flex-wrap">
-          <button
-            onClick={handleDeleteResultsOnly}
-            disabled={deleting || deletingResults}
-            className="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition disabled:opacity-50"
-          >
-            {deletingResults ? '削除中...' : `選択した ${selectedIds.size} 件の答案データを削除`}
-          </button>
-          <button
-            onClick={handleDeleteSelected}
-            disabled={deleting || deletingResults}
-            className="bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-600 transition disabled:opacity-50"
-          >
-            {deleting ? '削除中...' : `選択した ${selectedIds.size} 件を完全に削除`}
-          </button>
-          <span className="text-sm text-gray-500">
-            チェックを外すには各列の「全選択」を再度クリック
-          </span>
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex flex-wrap gap-6 items-start">
+          <div className="flex flex-col gap-1">
+            <button
+              onClick={handleDeleteResultsOnly}
+              disabled={deleting || deletingResults}
+              className="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition disabled:opacity-50"
+            >
+              {deletingResults ? '削除中...' : `選択した ${selectedIds.size} 件の答案データを削除`}
+            </button>
+            <p className="text-xs text-gray-500">点数・テスト・問題は残る。生徒の選択肢データのみ削除（容量節約）</p>
+          </div>
+          <div className="flex flex-col gap-1">
+            <button
+              onClick={handleDeleteSelected}
+              disabled={deleting || deletingResults}
+              className="bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-600 transition disabled:opacity-50"
+            >
+              {deleting ? '削除中...' : `選択した ${selectedIds.size} 件を完全に削除`}
+            </button>
+            <p className="text-xs text-gray-500">テスト・問題・点数・答案をすべて削除。一覧からも消える。</p>
+          </div>
+          <p className="text-xs text-gray-400 self-end">チェックを外すには各列の「全選択」を再度クリック</p>
         </div>
       )}
 
