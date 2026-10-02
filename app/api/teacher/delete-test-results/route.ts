@@ -34,9 +34,12 @@ export async function POST(req: NextRequest) {
   }
 
   const sessionIds = sessions.map((s) => s.id)
-  await admin.from('answers').delete().in('session_id', sessionIds)
+  // answers と cheat_logs のみ削除。sessions（点数・提出状況）は残す。
+  const { count } = await admin
+    .from('answers')
+    .delete({ count: 'exact' })
+    .in('session_id', sessionIds)
   await admin.from('cheat_logs').delete().in('session_id', sessionIds)
-  await admin.from('sessions').delete().in('id', sessionIds)
 
-  return NextResponse.json({ deleted: sessions.length })
+  return NextResponse.json({ deleted: count ?? 0 })
 }

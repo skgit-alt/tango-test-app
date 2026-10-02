@@ -271,7 +271,7 @@ export default function TestListClient({ tests: initialTests, retakeCounts }: { 
     if (selectedIds.size === 0) return
     const names = tests.filter((t) => selectedIds.has(t.id)).map((t) => `・${t.title}`).join('\n')
     const confirmed = confirm(
-      `以下の ${selectedIds.size} 件のテストの「回答データ（セッション・答案）」を削除しますか？\nテスト自体と問題は残ります。この操作は元に戻せません。\n\n${names}`
+      `以下の ${selectedIds.size} 件のテストの「答案データ（どの選択肢を選んだか）」を削除しますか？\n点数・提出状況は残ります。テスト自体と問題も残ります。この操作は元に戻せません。\n\n${names}`
     )
     if (!confirmed) return
 
@@ -288,7 +288,7 @@ export default function TestListClient({ tests: initialTests, retakeCounts }: { 
         throw new Error(r.error ?? '削除に失敗しました')
       }
       const { deleted } = await res.json()
-      alert(`${deleted} 件のセッションデータを削除しました。`)
+      alert(`${deleted} 件の答案データを削除しました。点数・提出状況は残っています。`)
       setSelectedIds(new Set())
       router.refresh()
     } catch (err) {
@@ -330,7 +330,7 @@ export default function TestListClient({ tests: initialTests, retakeCounts }: { 
             disabled={deleting || deletingResults}
             className="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition disabled:opacity-50"
           >
-            {deletingResults ? '削除中...' : `選択した ${selectedIds.size} 件の結果のみ削除`}
+            {deletingResults ? '削除中...' : `選択した ${selectedIds.size} 件の答案データを削除`}
           </button>
           <button
             onClick={handleDeleteSelected}
