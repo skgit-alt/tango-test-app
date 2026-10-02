@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/auto-start",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-old-answers",
+      "schedule": "0 2 * * *"
     }
   ]
 }

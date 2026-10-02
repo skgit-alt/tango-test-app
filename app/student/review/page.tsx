@@ -99,12 +99,55 @@ export default async function ReviewPage({
 
   const backUrl = sessionId ? `/student/result?sessionId=${sessionId}` : '/student/result'
 
+  // 答え合わせの期限を計算（提出日 + 30日）
+  const submittedAt = session.submitted_at ? new Date(session.submitted_at) : null
+  const expiryDate = submittedAt
+    ? new Date(submittedAt.getTime() + 30 * 24 * 60 * 60 * 1000)
+    : null
+  const daysLeft = expiryDate
+    ? Math.ceil((expiryDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+    : null
+  const expiryLabel = expiryDate
+    ? expiryDate.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })
+    : null
+
+  // 期限切れ かつ 答案なし → 削除済みとして専用メッセージ表示
+  if (daysLeft !== null && daysLeft <= 0 && answers.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-blue-50 p-4">
+        <div className="bg-white rounded-2xl shadow p-8 text-center max-w-sm w-full space-y-3">
+          <div className="text-4xl">📅</div>
+          <p className="text-gray-700 font-medium">見直し期間が終了しました</p>
+          <p className="text-sm text-gray-500">
+            答え合わせのデータは提出から30日後に自動削除されます。<br />
+            点数は引き続き結果ページで確認できます。
+          </p>
+          <Link href={backUrl} className="text-blue-600 text-sm hover:underline">結果に戻る</Link>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <ReviewClient
-      answers={answers}
-      testTitle={test.title}
-      score={session.score ?? 0}
-      backUrl={backUrl}
-    />
+    <div>
+      {/* 期限バナー */}
+      {expiryLabel && (
+        <div className={`mx-4 mt-4 rounded-xl px-4 py-3 text-sm text-center ${
+          daysLeft !== null && daysLeft <= 7
+            ? 'bg-orange-50 border border-orange-200 text-orange-700'
+            : 'bg-blue-50 border border-blue-200 text-blue-700'
+        }`}>
+          {daysLeft !== null && daysLeft <= 7
+            ? `⚠️ この答え合わせは ${expiryLabel}（あと${Math.max(daysLeft, 0)}日）で見られなくなります`
+            : `📅 この答え合わせは ${expiryLabel} まで見られます`}
+        </div>
+      )}
+      <ReviewClient
+        answers={answers}
+        testTitle={test.title}
+        score={session.score ?? 0}
+        backUrl={backUrl}
+      />
+    </div>
   )
 }
