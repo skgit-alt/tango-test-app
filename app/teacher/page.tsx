@@ -4,6 +4,7 @@ import { Test } from '@/lib/supabase/types'
 import Link from 'next/link'
 import DownloadButtons from './DownloadButtons'
 import TestListClient from './TestListClient'
+import DbUsageBar from './DbUsageBar'
 
 export default async function TeacherPage() {
   const supabase = await createClient()
@@ -17,6 +18,14 @@ export default async function TeacherPage() {
   const retakeCounts: Record<string, number> = {}
   for (const s of practiceSessions ?? []) {
     retakeCounts[s.test_id] = (retakeCounts[s.test_id] ?? 0) + 1
+  }
+
+  let dbSizeBytes: number | null = null
+  try {
+    const { data, error } = await admin.rpc('get_db_size_bytes')
+    if (!error && data != null) dbSizeBytes = Number(data)
+  } catch {
+    // SQL関数が未作成の場合はスルー
   }
 
   return (
@@ -34,6 +43,7 @@ export default async function TeacherPage() {
         </div>
       </div>
 
+      <DbUsageBar sizeBytes={dbSizeBytes} />
       <TestListClient tests={(tests ?? []) as Test[]} retakeCounts={retakeCounts} />
     </div>
   )

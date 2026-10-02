@@ -172,7 +172,7 @@ export default function TestClient({
       } catch (e) {
         console.error('[heartbeat] error:', e)
       }
-    }, 30000)
+    }, 60000)
 
     return () => clearInterval(heartbeat)
   }, [session.id])

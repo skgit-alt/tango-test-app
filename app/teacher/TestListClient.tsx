@@ -217,6 +217,7 @@ export default function TestListClient({ tests: initialTests, retakeCounts }: { 
   const [tests, setTests] = useState<Test[]>(initialTests)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
+  const [deletingResults, setDeletingResults] = useState(false)
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -266,6 +267,38 @@ export default function TestListClient({ tests: initialTests, retakeCounts }: { 
     }
   }
 
+  const handleDeleteResultsOnly = async () => {
+    if (selectedIds.size === 0) return
+    const names = tests.filter((t) => selectedIds.has(t.id)).map((t) => `・${t.title}`).join('\n')
+    const confirmed = confirm(
+      `以下の ${selectedIds.size} 件のテストの「回答データ（セッション・答案）」を削除しますか？\nテスト自体と問題は残ります。この操作は元に戻せません。\n\n${names}`
+    )
+    if (!confirmed) return
+
+    setDeletingResults(true)
+    try {
+      const ids = Array.from(selectedIds)
+      const res = await fetch('/api/teacher/delete-test-results', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ testIds: ids }),
+      })
+      if (!res.ok) {
+        const r = await res.json()
+        throw new Error(r.error ?? '削除に失敗しました')
+      }
+      const { deleted } = await res.json()
+      alert(`${deleted} 件のセッションデータを削除しました。`)
+      setSelectedIds(new Set())
+      router.refresh()
+    } catch (err) {
+      console.error(err)
+      alert('削除に失敗しました')
+    } finally {
+      setDeletingResults(false)
+    }
+  }
+
   const tests50    = tests.filter((t) => t.mode === 50)
   const testsOther = tests.filter((t) => t.mode !== 50 && t.mode !== 300 && t.mode !== 600)
   const tests300   = tests.filter((t) => t.mode === 300)
@@ -291,13 +324,20 @@ export default function TestListClient({ tests: initialTests, retakeCounts }: { 
     <div className="space-y-4">
       {/* 削除バー（選択時のみ表示） */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={handleDeleteResultsOnly}
+            disabled={deleting || deletingResults}
+            className="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition disabled:opacity-50"
+          >
+            {deletingResults ? '削除中...' : `選択した ${selectedIds.size} 件の結果のみ削除`}
+          </button>
           <button
             onClick={handleDeleteSelected}
-            disabled={deleting}
+            disabled={deleting || deletingResults}
             className="bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-600 transition disabled:opacity-50"
           >
-            {deleting ? '削除中...' : `選択した ${selectedIds.size} 件を削除`}
+            {deleting ? '削除中...' : `選択した ${selectedIds.size} 件を完全に削除`}
           </button>
           <span className="text-sm text-gray-500">
             チェックを外すには各列の「全選択」を再度クリック
