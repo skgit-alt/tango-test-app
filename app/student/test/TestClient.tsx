@@ -51,12 +51,14 @@ export default function TestClient({
   const [deviceBlocked, setDeviceBlocked] = useState(false)
   const [splitViewBlocked, setSplitViewBlocked] = useState(false)
   const [splitViewSeconds, setSplitViewSeconds] = useState(0)
+  const [cheatLiveSeconds, setCheatLiveSeconds] = useState(0)
   const cheatCountRef = useRef(0)
   const lastLeaveCheatRef = useRef<number>(0)
   const cheatDepartureTimeRef = useRef<number | null>(null)
   const cheatPendingTypeRef = useRef<string>('')
   const splitViewStartRef = useRef<number | null>(null)
   const splitViewTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const cheatLiveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const submittingRef = useRef(false)
   const deviceTokenRef = useRef<string>('')
   const topRef = useRef<HTMLDivElement>(null)
@@ -223,13 +225,17 @@ export default function TestClient({
 
   const logCheat = useCallback((eventType: 'tab_leave' | 'app_switch') => {
     if (submittingRef.current) return
-    // 重複発火防止（3秒以内は無視）
+    // 重複発火防止（1秒以内は無視）
     const now = Date.now()
-    if (now - lastLeaveCheatRef.current < 3000) return
+    if (now - lastLeaveCheatRef.current < 1000) return
     lastLeaveCheatRef.current = now
     cheatDepartureTimeRef.current = now
     cheatPendingTypeRef.current = eventType
     cheatCountRef.current += 1
+    // ライブ秒数カウンター開始
+    setCheatLiveSeconds(0)
+    if (cheatLiveTimerRef.current) clearInterval(cheatLiveTimerRef.current)
+    cheatLiveTimerRef.current = setInterval(() => setCheatLiveSeconds(s => s + 1), 1000)
     setCheatWarning({ visible: true, count: cheatCountRef.current, eventType, durationSeconds: null })
     setContentHidden(true)
     // API呼び出しは復帰時（handleReturn）で行う
@@ -239,6 +245,10 @@ export default function TestClient({
   useEffect(() => {
     const handleReturn = () => {
       if (!cheatDepartureTimeRef.current || !cheatPendingTypeRef.current) return
+      // ライブカウンター停止
+      if (cheatLiveTimerRef.current) { clearInterval(cheatLiveTimerRef.current); cheatLiveTimerRef.current = null }
+      // クールダウンリセット（戻ってきたらすぐ次の離脱も検知できるように）
+      lastLeaveCheatRef.current = 0
       const duration = Math.round((Date.now() - cheatDepartureTimeRef.current) / 1000)
       const eventType = cheatPendingTypeRef.current
       cheatDepartureTimeRef.current = null
@@ -536,9 +546,11 @@ export default function TestClient({
               <h2 className="text-lg font-bold text-red-700">不正行為が検出されました</h2>
               <p className="text-sm text-gray-600 mt-2">{cheatEventLabel[cheatWarning.eventType]} が検知されました。この行動は記録されています。</p>
               <p className="text-sm text-red-600 font-medium mt-2">検出回数: {cheatWarning.count}回</p>
-              {cheatWarning.durationSeconds !== null && (
-                <p className="text-sm text-orange-600 font-medium">{cheatWarning.durationSeconds}秒 離脱していました</p>
-              )}
+              <p className="text-sm text-orange-600 font-medium">
+                {cheatWarning.durationSeconds !== null
+                  ? `${cheatWarning.durationSeconds}秒 離脱していました`
+                  : `${cheatLiveSeconds}秒 離脱中...`}
+              </p>
             </div>
             <button onClick={handleDismissWarning} className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 transition">テストに戻る</button>
           </div>
