@@ -775,8 +775,8 @@ export default function NewTestPage() {
       const buffer = await file.arrayBuffer()
       const { title: parsedTitle, questions: parsed } = parseRtfTarget1000(buffer)
 
-      if (parsed.length !== 50) {
-        setError(`問題数が${parsed.length}問です（A・B・C・Dセクション計50問を期待）。英熟語ターゲット1000のRTFファイルをアップロードしてください。`)
+      if (parsed.length !== 40 && parsed.length !== 45 && parsed.length !== 50) {
+        setError(`問題数が${parsed.length}問です（A+B=40問 / A+B+C=45問 / A+B+C+D=50問 のいずれかを期待）。英熟語ターゲット1000のRTFファイルをアップロードしてください。`)
         setQuestions([])
         return
       }

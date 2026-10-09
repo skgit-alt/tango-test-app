@@ -62,6 +62,7 @@ export default function TestClient({
   const splitViewTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const cheatLiveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const submittingRef = useRef(false)
+  const currentSectionLabelRef = useRef<string | null>(null)
   const deviceTokenRef = useRef<string>('')
   const topRef = useRef<HTMLDivElement>(null)
   const answersRef = useRef(answers)
@@ -71,10 +72,38 @@ export default function TestClient({
   const RETRY_DELAYS = [1000, 2000, 3000]
   const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
-  const totalPages = test.mode === 600 ? 6 : test.mode === 300 ? 3 : 1
+  type SectionPage = { label: 'A' | 'B' | 'C' | 'D'; start: number; end: number }
+  const sectionPages: SectionPage[] | null =
+    test.mode === 55 ? [
+      { label: 'A', start: 0, end: 20 },
+      { label: 'B', start: 20, end: 40 },
+      { label: 'C', start: 40, end: 45 },
+      { label: 'D', start: 45, end: 50 },
+    ] :
+    test.mode === 45 ? [
+      { label: 'A', start: 0, end: 20 },
+      { label: 'B', start: 20, end: 40 },
+      { label: 'C', start: 40, end: 45 },
+    ] :
+    test.mode === 40 ? [
+      { label: 'A', start: 0, end: 20 },
+      { label: 'B', start: 20, end: 40 },
+    ] :
+    null
+
+  const currentSection = sectionPages ? sectionPages[currentPage - 1] : null
+  const currentSectionLabel = currentSection?.label ?? null
+
+  const totalPages =
+    test.mode === 600 ? 6 :
+    test.mode === 300 ? 3 :
+    sectionPages ? sectionPages.length :
+    1
 
   const pageQuestions = (test.mode === 300 || test.mode === 600)
     ? questions.slice((currentPage - 1) * QUESTIONS_PER_PAGE, currentPage * QUESTIONS_PER_PAGE)
+    : sectionPages && currentSection
+    ? questions.slice(currentSection.start, currentSection.end)
     : questions
 
   // ★絞り込み時は全問題から flagged のものだけを表示
@@ -224,6 +253,7 @@ export default function TestClient({
   }, [questions, session.id, isPractice])
 
   useEffect(() => { submitTestRef.current = submitTest }, [submitTest])
+  useEffect(() => { currentSectionLabelRef.current = currentSectionLabel }, [currentSectionLabel])
 
   useEffect(() => {
     if (timeLeft <= 0) { submitTestRef.current(); return }
@@ -306,19 +336,13 @@ export default function TestClient({
     return () => window.removeEventListener('blur', fn)
   }, [logCheat])
 
-  // Section D の空所補充がある場合は入力欄が存在するのでキーボード検知不正判定をスキップ
-  const hasFillIn = questions.some(q => {
-    if (!q.word_slots) return false
-    try { const ws = JSON.parse(q.word_slots); return 'blanks' in ws } catch { return false }
-  })
-
-  // Slide Over等でキーボードが出たことを検知（テスト画面に入力欄はないので外部キーボードと判断）
+  // Slide Over等でキーボードが出たことを検知（Dページのみスキップ）
   useEffect(() => {
-    if (hasFillIn) return  // Section D の入力欄がある場合はスキップ
     const vv = window.visualViewport
     if (!vv) return
     let prevKeyboardShowing = false
     const onResize = () => {
+      if (currentSectionLabelRef.current === 'D') return
       const keyboardShowing = window.innerHeight - vv.height > 150
       if (keyboardShowing && !prevKeyboardShowing) logCheat('app_switch')
       prevKeyboardShowing = keyboardShowing
@@ -625,6 +649,7 @@ export default function TestClient({
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="text-sm text-gray-500">
             {(test.mode === 300 || test.mode === 600) && <span className="font-medium">{currentPage} / {totalPages} ページ</span>}
+            {currentSectionLabel && <span className="font-medium">セクション {currentSectionLabel}</span>}
           </div>
           <div className={`text-2xl font-bold tabular-nums ${timerColor}`}>{formatTime(timeLeft)}</div>
           <div className="flex items-center gap-3 text-sm text-gray-500">
@@ -659,6 +684,8 @@ export default function TestClient({
               ? questions.findIndex((item) => item.id === q.id)
               : (test.mode === 300 || test.mode === 600)
                 ? (currentPage - 1) * QUESTIONS_PER_PAGE + pageIndex
+                : currentSection
+                ? currentSection.start + pageIndex
                 : pageIndex
             const isFlagged = flagged.has(q.id)
 
@@ -876,8 +903,46 @@ export default function TestClient({
                   </>
                 )}
               </div>
+            ) : sectionPages ? (
+              /* 英熟語1000 セクション別ページ */
+              <div className="flex gap-2">
+                {currentPage > 1 && (
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    className="flex-1 bg-white border border-gray-300 text-gray-700 py-4 rounded-2xl font-semibold hover:bg-gray-50 active:bg-gray-200 active:scale-95 transition-all"
+                  >
+                    ← セクション {sectionPages[currentPage - 2].label}
+                  </button>
+                )}
+                {currentPage < totalPages ? (
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-semibold hover:bg-blue-700 active:bg-blue-800 active:scale-95 transition-all shadow-md"
+                  >
+                    セクション {sectionPages[currentPage].label} →
+                  </button>
+                ) : (
+                  <>
+                    {flaggedCount > 0 && (
+                      <button
+                        onClick={() => { setShowFlaggedOnly(true); window.scrollTo({ top: 0, behavior: 'instant' }) }}
+                        className="bg-yellow-400 text-white px-4 py-4 rounded-2xl font-bold hover:bg-yellow-500 active:scale-95 transition-all shadow-md whitespace-nowrap text-sm"
+                      >
+                        ★ {flaggedCount}問確認
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setShowSubmitConfirm(true)}
+                      disabled={submitting}
+                      className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-bold text-lg hover:bg-green-700 transition disabled:opacity-50 shadow-md"
+                    >
+                      {submitting ? '送信中...' : '回答を送信する'}
+                    </button>
+                  </>
+                )}
+              </div>
             ) : (
-              /* 50問モード（通常） */
+              /* 通常モード */
               <div className="flex gap-2">
                 {flaggedCount > 0 && (
                   <button
