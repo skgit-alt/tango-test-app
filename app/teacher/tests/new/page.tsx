@@ -352,6 +352,133 @@ function parseRtfToQuestions(buffer: ArrayBuffer): { title: string; questions: Q
   return { title, questions }
 }
 
+// ─── 英熟語ターゲット1000 RTFパーサー（A+Bのみ、C=並べ替えはスキップ） ──────────
+
+function parseRtfTarget1000(buffer: ArrayBuffer): { title: string; questions: QuestionRow[] } {
+  const text = rtfToPlainText(buffer)
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+
+  let title = ''
+  let inAnswerKey = false
+  let section: 'A' | 'B' | 'C' | null = null
+  const answers: Record<number, number> = {}
+  let sectionACount = 0
+
+  type RawQ = {
+    num: number
+    section: 'A' | 'B'
+    questionText: string
+    englishLine: string
+    choices: string[]
+  }
+  const rawQs: RawQ[] = []
+
+  const extractAnswers = (line: string) => {
+    const re = /\((\d+)\)\s*([①②③④⑤\d])/g
+    let m: RegExpExecArray | null
+    while ((m = re.exec(line)) !== null) {
+      const num = parseInt(m[1])
+      const ch = m[2]
+      const idx = '①②③④⑤'.indexOf(ch)
+      answers[num] = idx >= 0 ? idx + 1 : parseInt(ch)
+    }
+  }
+
+  for (const line of lines) {
+    if (!title) {
+      title = line.replace(/\s+/g, ' ').trim()
+      continue
+    }
+
+    if (inAnswerKey) {
+      extractAnswers(line)
+      continue
+    }
+
+    if (line.includes('【A】')) {
+      sectionACount++
+      if (sectionACount >= 2) { inAnswerKey = true; continue }
+      section = 'A'; continue
+    }
+    if (line.includes('【B】')) { section = 'B'; continue }
+    if (line.includes('【C】')) { section = 'C'; continue }
+    if (!section) continue
+
+    if (section === 'C') continue
+
+    const last = rawQs[rawQs.length - 1]
+
+    if (section === 'A') {
+      const qM = line.match(/^\((\d+)\)\s+([A-Za-z].*)$/)
+      if (qM) {
+        const rest = qM[2]
+        const idx1 = rest.indexOf('①')
+        if (idx1 >= 0) {
+          const questionText = rest.slice(0, idx1).trim()
+          const choices = parseChoices(rest.slice(idx1))
+          rawQs.push({ num: parseInt(qM[1]), section: 'A', questionText, englishLine: '', choices })
+        } else {
+          rawQs.push({ num: parseInt(qM[1]), section: 'A', questionText: rest.trim(), englishLine: '', choices: [] })
+        }
+        continue
+      }
+      if (line.includes('①') && last?.section === 'A' && last.choices.length === 0) {
+        last.choices = parseChoices(line)
+      }
+    }
+
+    if (section === 'B') {
+      const qM = line.match(/^\((\d+)\)\s+(.+)$/)
+      if (qM
+        && /[぀-鿿]/.test(qM[2])
+        && !line.includes('①')
+        && !/\(\s{2,}\)/.test(line)
+      ) {
+        rawQs.push({ num: parseInt(qM[1]), section: 'B', questionText: qM[2].trim(), englishLine: '', choices: [] })
+        continue
+      }
+      if (/\(\s{2,}\)/.test(line) && last?.section === 'B' && !last.englishLine) {
+        last.englishLine = line.trim().replace(/\(\s{2,}\)/g, '(     )')
+        continue
+      }
+      if (line.includes('①') && last?.section === 'B') {
+        last.choices = parseChoices(line)
+      }
+    }
+  }
+
+  const questions: QuestionRow[] = rawQs.map(rq => {
+    const ans = answers[rq.num] ?? 1
+    if (rq.section === 'A') {
+      return {
+        order_num: rq.num,
+        question_text: rq.questionText,
+        choice1: rq.choices[0] ?? '',
+        choice2: rq.choices[1] ?? '',
+        choice3: rq.choices[2] ?? '',
+        choice4: rq.choices[3] ?? '',
+        choice5: null,
+        correct_answer: ans,
+        points: 2,
+      }
+    }
+    const qText = rq.englishLine ? `${rq.questionText}\n${rq.englishLine}` : rq.questionText
+    return {
+      order_num: rq.num,
+      question_text: qText,
+      choice1: rq.choices[0] ?? '',
+      choice2: rq.choices[1] ?? '',
+      choice3: rq.choices[2] ?? '',
+      choice4: rq.choices[3] ?? '',
+      choice5: null,
+      correct_answer: ans,
+      points: 2,
+    }
+  })
+
+  return { title, questions }
+}
+
 // ─── メインコンポーネント ────────────────────────────────────────────────────
 
 export default function NewTestPage() {
@@ -368,8 +495,9 @@ export default function NewTestPage() {
   const rtfRef = useRef<HTMLInputElement>(null)
   const docxRef = useRef<HTMLInputElement>(null)
   const xlsx600Ref = useRef<HTMLInputElement>(null)
+  const rtf1000Ref = useRef<HTMLInputElement>(null)
 
-  const [tab, setTab] = useState<'xlsx' | 'rtf' | 'docx' | 'xlsx600'>('xlsx')
+  const [tab, setTab] = useState<'xlsx' | 'rtf' | 'docx' | 'xlsx600' | 'rtf1000'>('xlsx')
   const [customTimeLimitMin, setCustomTimeLimitMin] = useState('2')
   const [customTimeLimitSec, setCustomTimeLimitSec] = useState('0')
   const [title, setTitle] = useState('')
@@ -527,6 +655,30 @@ export default function NewTestPage() {
     }
   }
 
+  // ─── 英熟語ターゲット1000 RTF処理 ───────────────────────────────────────────
+
+  const processRtf1000 = async (file: File) => {
+    setFileName(file.name)
+    setError('')
+    try {
+      const buffer = await file.arrayBuffer()
+      const { title: parsedTitle, questions: parsed } = parseRtfTarget1000(buffer)
+
+      if (parsed.length !== 40) {
+        setError(`問題数が${parsed.length}問です（A・Bセクション計40問を期待）。英熟語ターゲット1000のRTFファイルをアップロードしてください。`)
+        setQuestions([])
+        return
+      }
+
+      setTitle(parsedTitle || file.name.replace(/\.[^.]+$/, ''))
+      setQuestions(parsed)
+      setPreview(true)
+    } catch (err) {
+      console.error(err)
+      setError('RTFファイルの読み込みに失敗しました。')
+    }
+  }
+
   // ─── ファイル入力ハンドラ ─────────────────────────────────────────────────
 
   const handleXlsxChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -556,6 +708,9 @@ export default function NewTestPage() {
     } else if (tab === 'rtf') {
       if (!file.name.toLowerCase().endsWith('.rtf')) { setError('.rtf ファイルをドロップしてください'); return }
       await processRtf(file)
+    } else if (tab === 'rtf1000') {
+      if (!file.name.toLowerCase().endsWith('.rtf')) { setError('.rtf ファイルをドロップしてください'); return }
+      await processRtf1000(file)
     } else {
       if (!file.name.toLowerCase().endsWith('.docx')) { setError('.docx ファイルをドロップしてください'); return }
       await processDocx(file)
@@ -596,6 +751,7 @@ export default function NewTestPage() {
       const time_limit = mode === 600 ? 2100
         : mode === 300 ? 1020
         : mode === 50 ? 185
+        : mode === 40 ? 900
         : (parseInt(customTimeLimitMin) || 0) * 60 + (parseInt(customTimeLimitSec) || 0) || 120
       const pass_score = mode === 600 ? 570 : mode === 300 ? 285 : null
       const roundNum = mode !== 300 && mode !== 600 && roundNumber.trim() !== '' ? parseInt(roundNumber) : null
@@ -628,6 +784,7 @@ export default function NewTestPage() {
   const mode = questions.length === 600 ? 600
     : questions.length === 300 ? 300
     : questions.length === 50 ? 50
+    : questions.length === 40 ? 40
     : null
 
   return (
@@ -683,6 +840,12 @@ export default function NewTestPage() {
             >
               📘 Excel（600問）
             </button>
+            <button
+              onClick={() => switchTab('rtf1000')}
+              className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${tab === 'rtf1000' ? 'bg-pink-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              📚 英熟語1000テスト
+            </button>
           </div>
 
           {tab === 'xlsx' && (
@@ -705,12 +868,18 @@ export default function NewTestPage() {
               600問テスト用Excelファイル（A〜D組対象・35分・合格570点）
             </p>
           )}
+          {tab === 'rtf1000' && (
+            <p className="text-xs text-gray-400 mb-3">
+              英熟語ターゲット1000テスト用RTFファイル。【A】英熟語→日本語（Q1〜35）・【B】日本語＋英文穴埋め（Q36〜40）を自動取得。【C】並べ替え（Q41〜65）は非対応。
+            </p>
+          )}
 
           <div
             onClick={() => {
               if (tab === 'xlsx') xlsxRef.current?.click()
               else if (tab === 'rtf') rtfRef.current?.click()
               else if (tab === 'docx') docxRef.current?.click()
+              else if (tab === 'rtf1000') rtf1000Ref.current?.click()
               else xlsx600Ref.current?.click()
             }}
             onDragOver={handleDragOver}
@@ -723,7 +892,7 @@ export default function NewTestPage() {
             }`}
           >
             <div className="text-3xl mb-2">
-              {dragging ? '📂' : tab === 'rtf' ? '📄' : tab === 'docx' ? '📝' : tab === 'xlsx600' ? '📘' : '📊'}
+              {dragging ? '📂' : tab === 'rtf' ? '📄' : tab === 'rtf1000' ? '📚' : tab === 'docx' ? '📝' : tab === 'xlsx600' ? '📘' : '📊'}
             </div>
             {fileName ? (
               <p className="text-gray-700 font-medium">{fileName}</p>
@@ -733,7 +902,7 @@ export default function NewTestPage() {
               <p className="text-gray-400">
                 クリックまたは
                 {tab === 'docx' ? 'Wordファイル（.docx）'
-                  : tab === 'rtf' ? 'RTFファイル'
+                  : tab === 'rtf' || tab === 'rtf1000' ? 'RTFファイル'
                   : 'Excelファイル'}
                 をドラッグ&ドロップ
               </p>
@@ -743,6 +912,7 @@ export default function NewTestPage() {
           <input ref={rtfRef} type="file" accept=".rtf" onChange={handleRtfChange} className="hidden" />
           <input ref={docxRef} type="file" accept=".docx" onChange={async (e) => { const f = e.target.files?.[0]; if (f) await processDocx(f) }} className="hidden" />
           <input ref={xlsx600Ref} type="file" accept=".xlsx" onChange={async (e) => { const f = e.target.files?.[0]; if (f) await processXlsx600(f) }} className="hidden" />
+          <input ref={rtf1000Ref} type="file" accept=".rtf" onChange={async (e) => { const f = e.target.files?.[0]; if (f) await processRtf1000(f) }} className="hidden" />
         </div>
 
         {/* 300問・600問: 参考書選択 */}
@@ -771,7 +941,7 @@ export default function NewTestPage() {
         )}
 
         {/* 300問・600問以外: 第何回 */}
-        {(mode === 50 || (mode === null && questions.length > 0)) && (
+        {(mode === 50 || mode === 40 || (mode === null && questions.length > 0)) && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               第何回目のテストか <span className="text-gray-400 text-xs font-normal">（ランキング用）</span>
@@ -820,7 +990,8 @@ export default function NewTestPage() {
             {mode === 600 && <><p className="text-blue-700">制限時間: <strong>2100秒（35分）</strong></p><p className="text-blue-700">合格点: <strong>570点</strong></p></>}
             {mode === 300 && <><p className="text-blue-700">制限時間: <strong>1020秒（17分）</strong></p><p className="text-blue-700">合格点: <strong>285点</strong></p></>}
             {mode === 50 && <p className="text-blue-700">制限時間: <strong>185秒（3分5秒）</strong></p>}
-            {mode !== 50 && mode !== 300 && mode !== 600 && (
+            {mode === 40 && <p className="text-blue-700">制限時間: <strong>900秒（15分）</strong></p>}
+            {mode !== 50 && mode !== 40 && mode !== 300 && mode !== 600 && (
               <p className="text-blue-700">制限時間: <strong>{(parseInt(customTimeLimitMin)||0)}分{(parseInt(customTimeLimitSec)||0)}秒</strong>（上で変更可）</p>
             )}
           </div>
