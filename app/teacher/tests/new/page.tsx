@@ -94,6 +94,7 @@ interface QuestionRow {
   choice5: string | null
   correct_answer: number
   points: number
+  word_slots?: string
 }
 
 // ─── RTFパーサー ────────────────────────────────────────────────────────────
@@ -352,7 +353,7 @@ function parseRtfToQuestions(buffer: ArrayBuffer): { title: string; questions: Q
   return { title, questions }
 }
 
-// ─── 英熟語ターゲット1000 RTFパーサー（A+Bのみ、C=並べ替えはスキップ） ──────────
+// ─── 英熟語ターゲット1000 RTFパーサー（A+B+C対応、45問） ──────────────────────
 
 function parseRtfTarget1000(buffer: ArrayBuffer): { title: string; questions: QuestionRow[] } {
   const text = rtfToPlainText(buffer)
@@ -360,13 +361,15 @@ function parseRtfTarget1000(buffer: ArrayBuffer): { title: string; questions: Qu
 
   let title = ''
   let inAnswerKey = false
+  let answerKeySection: 'AB' | 'C' | 'D' = 'AB'
   let section: 'A' | 'B' | 'C' | null = null
-  const answers: Record<number, number> = {}
+  const answersAB: Record<number, number> = {}
+  const answersC: Record<number, string> = {}
   let sectionACount = 0
 
   type RawQ = {
     num: number
-    section: 'A' | 'B'
+    section: 'A' | 'B' | 'C'
     questionText: string
     englishLine: string
     choices: string[]
@@ -380,7 +383,7 @@ function parseRtfTarget1000(buffer: ArrayBuffer): { title: string; questions: Qu
       const num = parseInt(m[1])
       const ch = m[2]
       const idx = '①②③④⑤'.indexOf(ch)
-      answers[num] = idx >= 0 ? idx + 1 : parseInt(ch)
+      answersAB[num] = idx >= 0 ? idx + 1 : parseInt(ch)
     }
   }
 
@@ -391,7 +394,18 @@ function parseRtfTarget1000(buffer: ArrayBuffer): { title: string; questions: Qu
     }
 
     if (inAnswerKey) {
-      extractAnswers(line)
+      if (line.includes('【C】')) { answerKeySection = 'C'; continue }
+      if (line.includes('【D】')) { answerKeySection = 'D'; continue }
+      if (answerKeySection === 'C') {
+        // Format: "(41) Full correct sentence. p.16.3"
+        const m = line.match(/^\((\d+)\)\s+(.+)$/)
+        if (m) {
+          const sentence = m[2].replace(/\s+p\.\d+.*$/, '').trim()
+          answersC[parseInt(m[1])] = sentence
+        }
+      } else if (answerKeySection !== 'D') {
+        extractAnswers(line)
+      }
       continue
     }
 
@@ -403,8 +417,6 @@ function parseRtfTarget1000(buffer: ArrayBuffer): { title: string; questions: Qu
     if (line.includes('【B】')) { section = 'B'; continue }
     if (line.includes('【C】')) { section = 'C'; continue }
     if (!section) continue
-
-    if (section === 'C') continue
 
     const last = rawQs[rawQs.length - 1]
 
@@ -445,10 +457,24 @@ function parseRtfTarget1000(buffer: ArrayBuffer): { title: string; questions: Qu
         last.choices = parseChoices(line)
       }
     }
+
+    if (section === 'C') {
+      // Japanese hint line: (N) Japanese text
+      const qM = line.match(/^\((\d+)\)\s+(.+)$/)
+      if (qM && /[぀-鿿]/.test(qM[2])) {
+        rawQs.push({ num: parseInt(qM[1]), section: 'C', questionText: qM[2].trim(), englishLine: '', choices: [] })
+        continue
+      }
+      // English scramble line: contains ／ (fullwidth slash U+FF0F from Shift-JIS 0x81 0x5E)
+      if (last?.section === 'C' && !last.englishLine && line.includes('／')) {
+        last.englishLine = line.trim()
+      }
+    }
   }
 
   const questions: QuestionRow[] = rawQs.map(rq => {
-    const ans = answers[rq.num] ?? 1
+    const ans = answersAB[rq.num] ?? 1
+
     if (rq.section === 'A') {
       return {
         order_num: rq.num,
@@ -462,17 +488,61 @@ function parseRtfTarget1000(buffer: ArrayBuffer): { title: string; questions: Qu
         points: 2,
       }
     }
-    const qText = rq.englishLine ? `${rq.questionText}\n${rq.englishLine}` : rq.questionText
+
+    if (rq.section === 'B') {
+      const qText = rq.englishLine ? `${rq.questionText}\n${rq.englishLine}` : rq.questionText
+      return {
+        order_num: rq.num,
+        question_text: qText,
+        choice1: rq.choices[0] ?? '',
+        choice2: rq.choices[1] ?? '',
+        choice3: rq.choices[2] ?? '',
+        choice4: rq.choices[3] ?? '',
+        choice5: null,
+        correct_answer: ans,
+        points: 2,
+      }
+    }
+
+    // Section C: word arrangement (整序問題)
+    const engLine = rq.englishLine || ''
+    const parenStart = engLine.indexOf('(')
+    const parenEnd = engLine.lastIndexOf(')')
+    let prefix = ''
+    let words: string[] = []
+    let suffix = ''
+    if (parenStart >= 0 && parenEnd > parenStart) {
+      prefix = engLine.slice(0, parenStart)
+      const inner = engLine.slice(parenStart + 1, parenEnd)
+      words = inner.split('／').map(w => w.trim()).filter(w => w.length > 0)
+      suffix = engLine.slice(parenEnd + 1)
+    }
+
+    // Derive the answer portion from the full correct sentence
+    const fullSentence = answersC[rq.num] ?? ''
+    let answer = ''
+    if (fullSentence) {
+      const trimmedPrefix = prefix.trimEnd()
+      const afterPrefix = fullSentence.startsWith(trimmedPrefix)
+        ? fullSentence.slice(trimmedPrefix.length).trimStart()
+        : fullSentence
+      const trimmedSuffix = suffix.trimStart()
+      answer = trimmedSuffix && afterPrefix.endsWith(trimmedSuffix)
+        ? afterPrefix.slice(0, afterPrefix.length - trimmedSuffix.length).trimEnd()
+        : afterPrefix
+    }
+
     return {
       order_num: rq.num,
-      question_text: qText,
-      choice1: rq.choices[0] ?? '',
-      choice2: rq.choices[1] ?? '',
-      choice3: rq.choices[2] ?? '',
-      choice4: rq.choices[3] ?? '',
+      question_text: rq.questionText,
+      choice1: '',
+      choice2: '',
+      choice3: '',
+      choice4: '',
       choice5: null,
-      correct_answer: ans,
+      correct_answer: 1,
       points: 2,
+      word_slots: JSON.stringify({ words, prefix, suffix, answer }),
     }
   })
 
@@ -664,8 +734,8 @@ export default function NewTestPage() {
       const buffer = await file.arrayBuffer()
       const { title: parsedTitle, questions: parsed } = parseRtfTarget1000(buffer)
 
-      if (parsed.length !== 40) {
-        setError(`問題数が${parsed.length}問です（A・Bセクション計40問を期待）。英熟語ターゲット1000のRTFファイルをアップロードしてください。`)
+      if (parsed.length !== 45) {
+        setError(`問題数が${parsed.length}問です（A・B・Cセクション計45問を期待）。英熟語ターゲット1000のRTFファイルをアップロードしてください。`)
         setQuestions([])
         return
       }
@@ -751,6 +821,7 @@ export default function NewTestPage() {
       const time_limit = mode === 600 ? 2100
         : mode === 300 ? 1020
         : mode === 50 ? 185
+        : mode === 45 ? 1020
         : mode === 40 ? 900
         : (parseInt(customTimeLimitMin) || 0) * 60 + (parseInt(customTimeLimitSec) || 0) || 120
       const pass_score = mode === 600 ? 570 : mode === 300 ? 285 : null
@@ -784,6 +855,7 @@ export default function NewTestPage() {
   const mode = questions.length === 600 ? 600
     : questions.length === 300 ? 300
     : questions.length === 50 ? 50
+    : questions.length === 45 ? 45
     : questions.length === 40 ? 40
     : null
 
@@ -870,7 +942,7 @@ export default function NewTestPage() {
           )}
           {tab === 'rtf1000' && (
             <p className="text-xs text-gray-400 mb-3">
-              英熟語ターゲット1000テスト用RTFファイル。【A】英熟語→日本語（Q1〜35）・【B】日本語＋英文穴埋め（Q36〜40）を自動取得。【C】並べ替え（Q41〜65）は非対応。
+              英熟語ターゲット1000テスト用RTFファイル。【A】英熟語→日本語（Q1〜20）・【B】日本語＋英文穴埋め（Q21〜40）・【C】並べ替え（Q41〜45）を自動取得。計45問。
             </p>
           )}
 
@@ -941,7 +1013,7 @@ export default function NewTestPage() {
         )}
 
         {/* 300問・600問以外: 第何回 */}
-        {(mode === 50 || mode === 40 || (mode === null && questions.length > 0)) && (
+        {(mode === 50 || mode === 40 || mode === 45 || (mode === null && questions.length > 0)) && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               第何回目のテストか <span className="text-gray-400 text-xs font-normal">（ランキング用）</span>
@@ -990,8 +1062,9 @@ export default function NewTestPage() {
             {mode === 600 && <><p className="text-blue-700">制限時間: <strong>2100秒（35分）</strong></p><p className="text-blue-700">合格点: <strong>570点</strong></p></>}
             {mode === 300 && <><p className="text-blue-700">制限時間: <strong>1020秒（17分）</strong></p><p className="text-blue-700">合格点: <strong>285点</strong></p></>}
             {mode === 50 && <p className="text-blue-700">制限時間: <strong>185秒（3分5秒）</strong></p>}
+            {mode === 45 && <p className="text-blue-700">制限時間: <strong>1020秒（17分）</strong></p>}
             {mode === 40 && <p className="text-blue-700">制限時間: <strong>900秒（15分）</strong></p>}
-            {mode !== 50 && mode !== 40 && mode !== 300 && mode !== 600 && (
+            {mode !== 50 && mode !== 45 && mode !== 40 && mode !== 300 && mode !== 600 && (
               <p className="text-blue-700">制限時間: <strong>{(parseInt(customTimeLimitMin)||0)}分{(parseInt(customTimeLimitSec)||0)}秒</strong>（上で変更可）</p>
             )}
           </div>

@@ -75,6 +75,7 @@ export interface Question {
   choice5: string | null
   correct_answer: number
   points: number
+  word_slots: string | null
 }
 
 export interface Session {

@@ -307,10 +307,10 @@ export default function TestListClient({ tests: initialTests, retakeCounts }: { 
   }
 
   const tests50    = tests.filter((t) => t.mode === 50)
-  const testsOther = tests.filter((t) => t.mode !== 50 && t.mode !== 300 && t.mode !== 600 && t.mode !== 40)
+  const testsOther = tests.filter((t) => t.mode !== 50 && t.mode !== 300 && t.mode !== 600 && t.mode !== 40 && t.mode !== 45)
   const tests300   = tests.filter((t) => t.mode === 300)
   const tests600   = tests.filter((t) => t.mode === 600)
-  const tests40    = tests.filter((t) => t.mode === 40)
+  const tests40    = tests.filter((t) => t.mode === 40 || t.mode === 45)
 
   const grouped: Record<string, Test[]> = {
     '50': tests50,

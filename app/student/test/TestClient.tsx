@@ -29,6 +29,7 @@ export default function TestClient({
   const router = useRouter()
 
   const [answers, setAnswers] = useState<Record<string, number | null>>(initialAnswers)
+  const [wordOrders, setWordOrders] = useState<Record<string, number[]>>({})
   const [currentPage, setCurrentPage] = useState(session.current_page ?? 1)
   const [flagged, setFlagged] = useState<Set<string>>(new Set())
   const [showFlaggedOnly, setShowFlaggedOnly] = useState(false)
@@ -90,11 +91,19 @@ export default function TestClient({
     setSubmitError(null)
     setRetryCount(0)
 
-    const answersArray = questions.map((q) => ({
-      question_id: q.id,
-      selected_answer: answers[q.id] ?? null,
-      flagged: flagged.has(q.id),
-    }))
+    const answersArray = questions.map((q) => {
+      if (q.word_slots) {
+        try {
+          const ws = JSON.parse(q.word_slots) as { words: string[]; answer: string }
+          const order = wordOrders[q.id] ?? []
+          if (order.length !== ws.words.length) return { question_id: q.id, selected_answer: null as null, flagged: flagged.has(q.id) }
+          const arranged = order.map(i => ws.words[i]).join(' ')
+          const isCorrect = arranged.toLowerCase() === ws.answer.toLowerCase()
+          return { question_id: q.id, selected_answer: isCorrect ? 1 : 2, flagged: flagged.has(q.id) }
+        } catch { return { question_id: q.id, selected_answer: null as null, flagged: flagged.has(q.id) } }
+      }
+      return { question_id: q.id, selected_answer: answers[q.id] ?? null, flagged: flagged.has(q.id) }
+    })
 
     let lastError = '不明なエラー'
 
@@ -129,7 +138,7 @@ export default function TestClient({
     setRetryCount(0)
     submittingRef.current = false
     setSubmitError(lastError)
-  }, [answers, questions, session.id, router, flagged, isPractice])
+  }, [answers, wordOrders, questions, session.id, router, flagged, isPractice])
 
   // started_at が null（リセット後の受け直し）のときは開始時刻を今に設定
   useEffect(() => {
@@ -389,6 +398,16 @@ export default function TestClient({
     setAnswers((prev) => ({ ...prev, [questionId]: choice }))
   }
 
+  const addWord = (questionId: string, wordIdx: number) => {
+    setWordOrders(prev => ({ ...prev, [questionId]: [...(prev[questionId] ?? []), wordIdx] }))
+  }
+  const removeWord = (questionId: string, pos: number) => {
+    setWordOrders(prev => ({ ...prev, [questionId]: (prev[questionId] ?? []).filter((_, i) => i !== pos) }))
+  }
+  const clearWordOrder = (questionId: string) => {
+    setWordOrders(prev => ({ ...prev, [questionId]: [] }))
+  }
+
   const toggleFlag = (questionId: string) => {
     setFlagged((prev) => {
       const next = new Set(prev)
@@ -408,7 +427,18 @@ export default function TestClient({
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
   }
 
-  const answeredCount = questions.filter((q) => answers[q.id] != null).length
+  const answeredCount = questions.filter((q) => {
+    if (q.word_slots) {
+      try { const ws = JSON.parse(q.word_slots) as { words: string[] }; return (wordOrders[q.id]?.length ?? 0) === ws.words.length } catch { return false }
+    }
+    return answers[q.id] != null
+  }).length
+  const unansweredCount = questions.filter((q) => {
+    if (q.word_slots) {
+      try { const ws = JSON.parse(q.word_slots) as { words: string[] }; return (wordOrders[q.id]?.length ?? 0) < ws.words.length } catch { return true }
+    }
+    return answers[q.id] == null
+  }).length
   const flaggedCount = flagged.size
   const timerColor = timeLeft <= 30 ? 'text-red-600' : timeLeft <= 60 ? 'text-orange-500' : 'text-gray-800'
   const cheatEventLabel: Record<string, string> = { tab_leave: 'タブ離脱', app_switch: 'アプリ切替', split_view: '画面分割' }
@@ -514,9 +544,9 @@ export default function TestClient({
                 送信後は回答を変更できません。<br />
                 よろしければ「送信する」を押してください。
               </p>
-              {questions.filter((q) => answers[q.id] == null).length > 0 && (
+              {unansweredCount > 0 && (
                 <p className="text-sm text-orange-600 font-medium mt-2">
-                  ⚠️ 未回答: {questions.filter((q) => answers[q.id] == null).length}問
+                  ⚠️ 未回答: {unansweredCount}問
                 </p>
               )}
             </div>
@@ -596,6 +626,73 @@ export default function TestClient({
               : (test.mode === 300 || test.mode === 600)
                 ? (currentPage - 1) * QUESTIONS_PER_PAGE + pageIndex
                 : pageIndex
+            const isFlagged = flagged.has(q.id)
+
+            // Section C: 並べ替え問題
+            if (q.word_slots) {
+              let ws: { words: string[]; prefix: string; suffix: string } = { words: [], prefix: '', suffix: '' }
+              try { ws = JSON.parse(q.word_slots) } catch { /* ignore */ }
+              const order = wordOrders[q.id] ?? []
+              const placedSet = new Set(order)
+              const isComplete = order.length === ws.words.length
+              return (
+                <div key={q.id} className={`rounded-2xl border-2 p-5 transition-colors ${isFlagged ? 'bg-yellow-50 border-yellow-400' : 'bg-white border-gray-200'}`}>
+                  <div className="flex items-start gap-3 mb-3">
+                    <span className="bg-purple-600 text-white text-xs font-bold px-2 py-1 rounded-lg shrink-0 mt-0.5">{globalIndex + 1}</span>
+                    <div className="flex-1">
+                      <p className="text-gray-500 text-sm leading-relaxed">{q.question_text}</p>
+                    </div>
+                    <button onClick={() => toggleFlag(q.id)} className={`shrink-0 text-xl transition-colors ${isFlagged ? 'text-yellow-500' : 'text-gray-300 hover:text-yellow-400'}`} title="自信がない">★</button>
+                  </div>
+                  {/* 並べ替え中の文 */}
+                  <div className="bg-gray-50 rounded-xl p-3 mb-3 text-sm leading-loose min-h-[52px]">
+                    {ws.prefix && <span className="text-gray-700">{ws.prefix}</span>}
+                    <span className="inline-flex flex-wrap gap-1 align-bottom">
+                      {order.map((wordIdx, pos) => (
+                        <button key={pos} onClick={() => removeWord(q.id, pos)}
+                          className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-800 px-2 py-0.5 rounded-lg border border-blue-300 text-sm font-medium hover:bg-red-100 hover:text-red-700 hover:border-red-300 active:scale-95 transition-all">
+                          {ws.words[wordIdx]}<span className="text-xs opacity-60">×</span>
+                        </button>
+                      ))}
+                      {!isComplete && Array.from({ length: ws.words.length - order.length }).map((_, i) => (
+                        <span key={i} className="inline-block px-3 py-0.5 rounded-lg border-2 border-dashed border-gray-300 text-gray-300 text-xs">
+                          ___
+                        </span>
+                      ))}
+                    </span>
+                    {ws.suffix && <span className="text-gray-700">{ws.suffix}</span>}
+                  </div>
+                  {/* 単語バンク */}
+                  <div className="border-t border-gray-100 pt-3">
+                    <p className="text-xs text-gray-400 mb-2">タップして並べてください：</p>
+                    <div className="flex flex-wrap gap-2">
+                      {ws.words.map((word, idx) => {
+                        if (placedSet.has(idx)) return null
+                        return (
+                          <button key={idx} onClick={() => addWord(q.id, idx)}
+                            className="bg-white hover:bg-blue-50 active:bg-blue-100 active:scale-95 px-3 py-2 rounded-xl border-2 border-gray-300 hover:border-blue-400 text-sm font-medium text-gray-700 transition-all shadow-sm">
+                            {word}
+                          </button>
+                        )
+                      })}
+                      {isComplete && (
+                        <span className="text-xs text-green-600 font-medium flex items-center gap-1 px-1">
+                          ✓ 並べ替え完了
+                        </span>
+                      )}
+                    </div>
+                    {order.length > 0 && (
+                      <button onClick={() => clearWordOrder(q.id)}
+                        className="mt-2 text-xs text-gray-400 hover:text-red-500 transition">
+                        リセット
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            }
+
+            // 通常の選択問題（Section A / B）
             const validChoices = [
               { num: 1, text: q.choice1 },
               { num: 2, text: q.choice2 },
@@ -604,7 +701,6 @@ export default function TestClient({
               { num: 5, text: q.choice5 },
             ].filter((c) => c.text && c.text !== 'None' && c.text !== 'null')
             const selected = answers[q.id]
-            const isFlagged = flagged.has(q.id)
             return (
               <div key={q.id} className={`rounded-2xl border-2 p-5 transition-colors ${isFlagged ? 'bg-yellow-50 border-yellow-400' : 'bg-white border-gray-200'}`}>
                 <div className="flex items-start gap-3 mb-4">
