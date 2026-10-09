@@ -30,6 +30,7 @@ export default function TestClient({
 
   const [answers, setAnswers] = useState<Record<string, number | null>>(initialAnswers)
   const [wordOrders, setWordOrders] = useState<Record<string, number[]>>({})
+  const [fillInputs, setFillInputs] = useState<Record<string, string[]>>({})
   const [currentPage, setCurrentPage] = useState(session.current_page ?? 1)
   const [flagged, setFlagged] = useState<Set<string>>(new Set())
   const [showFlaggedOnly, setShowFlaggedOnly] = useState(false)
@@ -91,14 +92,26 @@ export default function TestClient({
     setSubmitError(null)
     setRetryCount(0)
 
+    const normalize = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ')
     const answersArray = questions.map((q) => {
       if (q.word_slots) {
         try {
-          const ws = JSON.parse(q.word_slots) as { words: string[]; answer: string }
+          const ws = JSON.parse(q.word_slots) as { words?: string[]; answer?: string; blanks?: string[]; sentence?: string }
+          if (ws.blanks) {
+            // Section D: fill-in-the-blank
+            const inputs = fillInputs[q.id] ?? []
+            const allFilled = inputs.length === ws.blanks.length && inputs.every(inp => inp.trim().length > 0)
+            if (!allFilled) return { question_id: q.id, selected_answer: null as null, flagged: flagged.has(q.id) }
+            const isCorrect = ws.blanks.every((b, i) => normalize(inputs[i] ?? '') === normalize(b))
+            return { question_id: q.id, selected_answer: isCorrect ? 1 : 2, flagged: flagged.has(q.id) }
+          }
+          // Section C: word arrangement
+          const words = ws.words ?? []
+          const answer = ws.answer ?? ''
           const order = wordOrders[q.id] ?? []
-          if (order.length !== ws.words.length) return { question_id: q.id, selected_answer: null as null, flagged: flagged.has(q.id) }
-          const arranged = order.map(i => ws.words[i]).join(' ')
-          const isCorrect = arranged.toLowerCase() === ws.answer.toLowerCase()
+          if (order.length !== words.length) return { question_id: q.id, selected_answer: null as null, flagged: flagged.has(q.id) }
+          const arranged = order.map(i => words[i]).join(' ')
+          const isCorrect = arranged.toLowerCase() === answer.toLowerCase()
           return { question_id: q.id, selected_answer: isCorrect ? 1 : 2, flagged: flagged.has(q.id) }
         } catch { return { question_id: q.id, selected_answer: null as null, flagged: flagged.has(q.id) } }
       }
@@ -138,7 +151,7 @@ export default function TestClient({
     setRetryCount(0)
     submittingRef.current = false
     setSubmitError(lastError)
-  }, [answers, wordOrders, questions, session.id, router, flagged, isPractice])
+  }, [answers, wordOrders, fillInputs, questions, session.id, router, flagged, isPractice])
 
   // started_at が null（リセット後の受け直し）のときは開始時刻を今に設定
   useEffect(() => {
@@ -293,8 +306,15 @@ export default function TestClient({
     return () => window.removeEventListener('blur', fn)
   }, [logCheat])
 
+  // Section D の空所補充がある場合は入力欄が存在するのでキーボード検知不正判定をスキップ
+  const hasFillIn = questions.some(q => {
+    if (!q.word_slots) return false
+    try { const ws = JSON.parse(q.word_slots); return 'blanks' in ws } catch { return false }
+  })
+
   // Slide Over等でキーボードが出たことを検知（テスト画面に入力欄はないので外部キーボードと判断）
   useEffect(() => {
+    if (hasFillIn) return  // Section D の入力欄がある場合はスキップ
     const vv = window.visualViewport
     if (!vv) return
     let prevKeyboardShowing = false
@@ -429,13 +449,27 @@ export default function TestClient({
 
   const answeredCount = questions.filter((q) => {
     if (q.word_slots) {
-      try { const ws = JSON.parse(q.word_slots) as { words: string[] }; return (wordOrders[q.id]?.length ?? 0) === ws.words.length } catch { return false }
+      try {
+        const ws = JSON.parse(q.word_slots) as { words?: string[]; blanks?: string[] }
+        if (ws.blanks) {
+          const inputs = fillInputs[q.id] ?? []
+          return inputs.length === ws.blanks.length && inputs.every(inp => inp.trim().length > 0)
+        }
+        return (wordOrders[q.id]?.length ?? 0) === (ws.words?.length ?? 0)
+      } catch { return false }
     }
     return answers[q.id] != null
   }).length
   const unansweredCount = questions.filter((q) => {
     if (q.word_slots) {
-      try { const ws = JSON.parse(q.word_slots) as { words: string[] }; return (wordOrders[q.id]?.length ?? 0) < ws.words.length } catch { return true }
+      try {
+        const ws = JSON.parse(q.word_slots) as { words?: string[]; blanks?: string[] }
+        if (ws.blanks) {
+          const inputs = fillInputs[q.id] ?? []
+          return !(inputs.length === ws.blanks.length && inputs.every(inp => inp.trim().length > 0))
+        }
+        return (wordOrders[q.id]?.length ?? 0) < (ws.words?.length ?? 0)
+      } catch { return true }
     }
     return answers[q.id] == null
   }).length
@@ -628,13 +662,65 @@ export default function TestClient({
                 : pageIndex
             const isFlagged = flagged.has(q.id)
 
-            // Section C: 並べ替え問題
+            // Section C / D: word_slots あり
             if (q.word_slots) {
-              let ws: { words: string[]; prefix: string; suffix: string } = { words: [], prefix: '', suffix: '' }
+              let ws: { words?: string[]; prefix?: string; suffix?: string; blanks?: string[]; sentence?: string } = {}
               try { ws = JSON.parse(q.word_slots) } catch { /* ignore */ }
+
+              // Section D: 空所補充（一つのカッコに一つの入力欄）
+              if (ws.blanks) {
+                const blanks = ws.blanks
+                const sentence = ws.sentence ?? ''
+                const parts = sentence.split('(     )')
+                const inputs = fillInputs[q.id] ?? new Array(blanks.length).fill('')
+                const allFilled = inputs.length === blanks.length && inputs.every(inp => inp.trim().length > 0)
+                return (
+                  <div key={q.id} className={`rounded-2xl border-2 p-5 transition-colors ${isFlagged ? 'bg-yellow-50 border-yellow-400' : 'bg-white border-gray-200'}`}>
+                    <div className="flex items-start gap-3 mb-3">
+                      <span className="bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-lg shrink-0 mt-0.5">{globalIndex + 1}</span>
+                      <div className="flex-1">
+                        <p className="text-gray-500 text-sm leading-relaxed">{q.question_text}</p>
+                      </div>
+                      <button onClick={() => toggleFlag(q.id)} className={`shrink-0 text-xl transition-colors ${isFlagged ? 'text-yellow-500' : 'text-gray-300 hover:text-yellow-400'}`} title="自信がない">★</button>
+                    </div>
+                    {/* 英文（カッコ部分を入力欄に置換） */}
+                    <div className="bg-gray-50 rounded-xl p-3 text-sm leading-loose">
+                      {parts.map((part, pi) => (
+                        <span key={pi}>
+                          <span className="text-gray-700">{part}</span>
+                          {pi < parts.length - 1 && (
+                            <input
+                              type="text"
+                              value={inputs[pi] ?? ''}
+                              onChange={(e) => {
+                                const val = e.target.value
+                                setFillInputs(prev => {
+                                  const prevInputs = prev[q.id] ?? new Array(blanks.length).fill('')
+                                  const next = [...prevInputs]
+                                  next[pi] = val
+                                  return { ...prev, [q.id]: next }
+                                })
+                              }}
+                              className="inline-block w-20 text-center border-b-2 border-blue-400 bg-blue-50/40 px-1 py-0.5 text-sm font-medium text-blue-800 focus:outline-none focus:border-blue-600 focus:bg-blue-50 transition mx-0.5 align-baseline rounded-t-sm"
+                            />
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                    {allFilled && (
+                      <p className="text-xs text-green-600 font-medium mt-2">✓ 記入完了</p>
+                    )}
+                  </div>
+                )
+              }
+
+              // Section C: 並べ替え問題
+              const words = ws.words ?? []
+              const prefix = ws.prefix ?? ''
+              const suffix = ws.suffix ?? ''
               const order = wordOrders[q.id] ?? []
               const placedSet = new Set(order)
-              const isComplete = order.length === ws.words.length
+              const isComplete = order.length === words.length
               return (
                 <div key={q.id} className={`rounded-2xl border-2 p-5 transition-colors ${isFlagged ? 'bg-yellow-50 border-yellow-400' : 'bg-white border-gray-200'}`}>
                   <div className="flex items-start gap-3 mb-3">
@@ -646,27 +732,27 @@ export default function TestClient({
                   </div>
                   {/* 並べ替え中の文 */}
                   <div className="bg-gray-50 rounded-xl p-3 mb-3 text-sm leading-loose min-h-[52px]">
-                    {ws.prefix && <span className="text-gray-700">{ws.prefix}</span>}
+                    {prefix && <span className="text-gray-700">{prefix}</span>}
                     <span className="inline-flex flex-wrap gap-1 align-bottom">
                       {order.map((wordIdx, pos) => (
                         <button key={pos} onClick={() => removeWord(q.id, pos)}
                           className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-800 px-2 py-0.5 rounded-lg border border-blue-300 text-sm font-medium hover:bg-red-100 hover:text-red-700 hover:border-red-300 active:scale-95 transition-all">
-                          {ws.words[wordIdx]}<span className="text-xs opacity-60">×</span>
+                          {words[wordIdx]}<span className="text-xs opacity-60">×</span>
                         </button>
                       ))}
-                      {!isComplete && Array.from({ length: ws.words.length - order.length }).map((_, i) => (
+                      {!isComplete && Array.from({ length: words.length - order.length }).map((_, i) => (
                         <span key={i} className="inline-block px-3 py-0.5 rounded-lg border-2 border-dashed border-gray-300 text-gray-300 text-xs">
                           ___
                         </span>
                       ))}
                     </span>
-                    {ws.suffix && <span className="text-gray-700">{ws.suffix}</span>}
+                    {suffix && <span className="text-gray-700">{suffix}</span>}
                   </div>
                   {/* 単語バンク */}
                   <div className="border-t border-gray-100 pt-3">
                     <p className="text-xs text-gray-400 mb-2">タップして並べてください：</p>
                     <div className="flex flex-wrap gap-2">
-                      {ws.words.map((word, idx) => {
+                      {words.map((word, idx) => {
                         if (placedSet.has(idx)) return null
                         return (
                           <button key={idx} onClick={() => addWord(q.id, idx)}

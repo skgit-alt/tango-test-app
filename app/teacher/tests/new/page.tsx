@@ -353,7 +353,7 @@ function parseRtfToQuestions(buffer: ArrayBuffer): { title: string; questions: Q
   return { title, questions }
 }
 
-// ─── 英熟語ターゲット1000 RTFパーサー（A+B+C対応、45問） ──────────────────────
+// ─── 英熟語ターゲット1000 RTFパーサー（A+B+C+D対応、50問） ──────────────────────
 
 function parseRtfTarget1000(buffer: ArrayBuffer): { title: string; questions: QuestionRow[] } {
   const text = rtfToPlainText(buffer)
@@ -362,14 +362,15 @@ function parseRtfTarget1000(buffer: ArrayBuffer): { title: string; questions: Qu
   let title = ''
   let inAnswerKey = false
   let answerKeySection: 'AB' | 'C' | 'D' = 'AB'
-  let section: 'A' | 'B' | 'C' | null = null
+  let section: 'A' | 'B' | 'C' | 'D' | null = null
   const answersAB: Record<number, number> = {}
   const answersC: Record<number, string> = {}
+  const answersD: Record<number, string> = {}
   let sectionACount = 0
 
   type RawQ = {
     num: number
-    section: 'A' | 'B' | 'C'
+    section: 'A' | 'B' | 'C' | 'D'
     questionText: string
     englishLine: string
     choices: string[]
@@ -387,6 +388,9 @@ function parseRtfTarget1000(buffer: ArrayBuffer): { title: string; questions: Qu
     }
   }
 
+  // Strip trailing page reference like "｢p.16・1｣" (non-ASCII chars from Shift-JIS page refs)
+  const stripPageRef = (s: string) => s.replace(/[^\x00-\x7F].*$/, '').trim()
+
   for (const line of lines) {
     if (!title) {
       title = line.replace(/\s+/g, ' ').trim()
@@ -397,13 +401,18 @@ function parseRtfTarget1000(buffer: ArrayBuffer): { title: string; questions: Qu
       if (line.includes('【C】')) { answerKeySection = 'C'; continue }
       if (line.includes('【D】')) { answerKeySection = 'D'; continue }
       if (answerKeySection === 'C') {
-        // Format: "(41) Full correct sentence. p.16.3"
+        // Format: "(41) Full correct sentence. ｢p.16.3｣"
         const m = line.match(/^\((\d+)\)\s+(.+)$/)
         if (m) {
-          const sentence = m[2].replace(/\s+p\.\d+.*$/, '').trim()
-          answersC[parseInt(m[1])] = sentence
+          answersC[parseInt(m[1])] = stripPageRef(m[2])
         }
-      } else if (answerKeySection !== 'D') {
+      } else if (answerKeySection === 'D') {
+        // Format: "(46) a piece of ｢p.16・1｣"
+        const m = line.match(/^\((\d+)\)\s+(.+)$/)
+        if (m) {
+          answersD[parseInt(m[1])] = stripPageRef(m[2])
+        }
+      } else {
         extractAnswers(line)
       }
       continue
@@ -416,6 +425,7 @@ function parseRtfTarget1000(buffer: ArrayBuffer): { title: string; questions: Qu
     }
     if (line.includes('【B】')) { section = 'B'; continue }
     if (line.includes('【C】')) { section = 'C'; continue }
+    if (line.includes('【D】')) { section = 'D'; continue }
     if (!section) continue
 
     const last = rawQs[rawQs.length - 1]
@@ -470,6 +480,19 @@ function parseRtfTarget1000(buffer: ArrayBuffer): { title: string; questions: Qu
         last.englishLine = line.trim()
       }
     }
+
+    if (section === 'D') {
+      // Japanese hint line: (N) Japanese text
+      const qM = line.match(/^\((\d+)\)\s+(.+)$/)
+      if (qM && /[぀-鿿]/.test(qM[2]) && !/\(\s{2,}\)/.test(line)) {
+        rawQs.push({ num: parseInt(qM[1]), section: 'D', questionText: qM[2].trim(), englishLine: '', choices: [] })
+        continue
+      }
+      // English sentence with blanks
+      if (/\(\s{2,}\)/.test(line) && last?.section === 'D' && !last.englishLine) {
+        last.englishLine = line.trim().replace(/\(\s{2,}\)/g, '(     )')
+      }
+    }
   }
 
   const questions: QuestionRow[] = rawQs.map(rq => {
@@ -501,6 +524,24 @@ function parseRtfTarget1000(buffer: ArrayBuffer): { title: string; questions: Qu
         choice5: null,
         correct_answer: ans,
         points: 2,
+      }
+    }
+
+    // Section D: fill-in-the-blank (空所補充)
+    if (rq.section === 'D') {
+      const answer = answersD[rq.num] ?? ''
+      const blanks = answer.split(' ').filter(w => w.length > 0)
+      return {
+        order_num: rq.num,
+        question_text: rq.questionText,
+        choice1: '',
+        choice2: '',
+        choice3: '',
+        choice4: '',
+        choice5: null,
+        correct_answer: 1,
+        points: 2,
+        word_slots: JSON.stringify({ sentence: rq.englishLine, blanks }),
       }
     }
 
@@ -734,8 +775,8 @@ export default function NewTestPage() {
       const buffer = await file.arrayBuffer()
       const { title: parsedTitle, questions: parsed } = parseRtfTarget1000(buffer)
 
-      if (parsed.length !== 45) {
-        setError(`問題数が${parsed.length}問です（A・B・Cセクション計45問を期待）。英熟語ターゲット1000のRTFファイルをアップロードしてください。`)
+      if (parsed.length !== 50) {
+        setError(`問題数が${parsed.length}問です（A・B・C・Dセクション計50問を期待）。英熟語ターゲット1000のRTFファイルをアップロードしてください。`)
         setQuestions([])
         return
       }
@@ -806,7 +847,8 @@ export default function NewTestPage() {
 
     const mode = questions.length === 600 ? 600
       : questions.length === 300 ? 300
-      : questions.length === 50 ? 50
+      : questions.length === 50 && tab !== 'rtf1000' ? 50
+      : questions.length === 50 && tab === 'rtf1000' ? 55
       : questions.length
 
     if ((mode === 300 || mode === 600) && !bookType) {
@@ -821,6 +863,7 @@ export default function NewTestPage() {
       const time_limit = mode === 600 ? 2100
         : mode === 300 ? 1020
         : mode === 50 ? 185
+        : mode === 55 ? 1200
         : mode === 45 ? 1020
         : mode === 40 ? 900
         : (parseInt(customTimeLimitMin) || 0) * 60 + (parseInt(customTimeLimitSec) || 0) || 120
@@ -854,6 +897,7 @@ export default function NewTestPage() {
 
   const mode = questions.length === 600 ? 600
     : questions.length === 300 ? 300
+    : questions.length === 50 && tab === 'rtf1000' ? 55
     : questions.length === 50 ? 50
     : questions.length === 45 ? 45
     : questions.length === 40 ? 40
@@ -942,7 +986,7 @@ export default function NewTestPage() {
           )}
           {tab === 'rtf1000' && (
             <p className="text-xs text-gray-400 mb-3">
-              英熟語ターゲット1000テスト用RTFファイル。【A】英熟語→日本語（Q1〜20）・【B】日本語＋英文穴埋め（Q21〜40）・【C】並べ替え（Q41〜45）を自動取得。計45問。
+              英熟語ターゲット1000テスト用RTFファイル。【A】英熟語→日本語（Q1〜20）・【B】日本語＋英文穴埋め（Q21〜40）・【C】並べ替え（Q41〜45）・【D】空所補充（Q46〜50）を自動取得。計50問。
             </p>
           )}
 
@@ -1013,7 +1057,7 @@ export default function NewTestPage() {
         )}
 
         {/* 300問・600問以外: 第何回 */}
-        {(mode === 50 || mode === 40 || mode === 45 || (mode === null && questions.length > 0)) && (
+        {(mode === 50 || mode === 40 || mode === 45 || mode === 55 || (mode === null && questions.length > 0)) && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               第何回目のテストか <span className="text-gray-400 text-xs font-normal">（ランキング用）</span>
@@ -1062,9 +1106,10 @@ export default function NewTestPage() {
             {mode === 600 && <><p className="text-blue-700">制限時間: <strong>2100秒（35分）</strong></p><p className="text-blue-700">合格点: <strong>570点</strong></p></>}
             {mode === 300 && <><p className="text-blue-700">制限時間: <strong>1020秒（17分）</strong></p><p className="text-blue-700">合格点: <strong>285点</strong></p></>}
             {mode === 50 && <p className="text-blue-700">制限時間: <strong>185秒（3分5秒）</strong></p>}
+            {mode === 55 && <p className="text-blue-700">制限時間: <strong>1200秒（20分）</strong></p>}
             {mode === 45 && <p className="text-blue-700">制限時間: <strong>1020秒（17分）</strong></p>}
             {mode === 40 && <p className="text-blue-700">制限時間: <strong>900秒（15分）</strong></p>}
-            {mode !== 50 && mode !== 45 && mode !== 40 && mode !== 300 && mode !== 600 && (
+            {mode !== 50 && mode !== 55 && mode !== 45 && mode !== 40 && mode !== 300 && mode !== 600 && (
               <p className="text-blue-700">制限時間: <strong>{(parseInt(customTimeLimitMin)||0)}分{(parseInt(customTimeLimitSec)||0)}秒</strong>（上で変更可）</p>
             )}
           </div>
