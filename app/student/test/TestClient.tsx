@@ -31,6 +31,8 @@ export default function TestClient({
   const [answers, setAnswers] = useState<Record<string, number | null>>(initialAnswers)
   const [wordOrders, setWordOrders] = useState<Record<string, number[]>>({})
   const [fillInputs, setFillInputs] = useState<Record<string, string[]>>({})
+  const [dragInfo, setDragInfo] = useState<{ qId: string; wordIdx: number; fromPos?: number; ghostX: number; ghostY: number } | null>(null)
+  const dragRef = useRef<{ qId: string; wordIdx: number; fromPos?: number; dropPos: number | null } | null>(null)
   const [currentPage, setCurrentPage] = useState(session.current_page ?? 1)
   const [flagged, setFlagged] = useState<Set<string>>(new Set())
   const [showFlaggedOnly, setShowFlaggedOnly] = useState(false)
@@ -452,6 +454,52 @@ export default function TestClient({
     setWordOrders(prev => ({ ...prev, [questionId]: [] }))
   }
 
+  const insertWordAtPos = useCallback((qId: string, wordIdx: number, insertPos: number, fromPos?: number) => {
+    setWordOrders(prev => {
+      const current = [...(prev[qId] ?? [])]
+      let pos = insertPos
+      if (fromPos !== undefined) {
+        current.splice(fromPos, 1)
+        if (pos > fromPos) pos--
+      }
+      current.splice(pos, 0, wordIdx)
+      return { ...prev, [qId]: current }
+    })
+  }, [])
+
+  const startWordDrag = useCallback((e: React.PointerEvent, qId: string, wordIdx: number, fromPos?: number) => {
+    e.preventDefault()
+    dragRef.current = { qId, wordIdx, fromPos, dropPos: fromPos ?? 0 }
+    setDragInfo({ qId, wordIdx, fromPos, ghostX: e.clientX, ghostY: e.clientY })
+
+    const onMove = (ev: PointerEvent) => {
+      setDragInfo(prev => prev ? { ...prev, ghostX: ev.clientX, ghostY: ev.clientY } : null)
+      // drop position detection via pointermove over data-gap elements
+      if (!dragRef.current) return
+      const chips = Array.from(document.querySelectorAll<HTMLElement>(`[data-wordchip-qid="${dragRef.current.qId}"]`))
+      if (chips.length === 0) { dragRef.current.dropPos = 0; return }
+      let newPos = chips.length
+      for (let i = 0; i < chips.length; i++) {
+        const rect = chips[i].getBoundingClientRect()
+        if (ev.clientY < rect.bottom + 10 && ev.clientY > rect.top - 10) {
+          if (ev.clientX < rect.left + rect.width / 2) { newPos = i; break }
+          else { newPos = i + 1 }
+        }
+      }
+      dragRef.current.dropPos = newPos
+    }
+    const onUp = () => {
+      const d = dragRef.current
+      if (d && d.dropPos !== null) insertWordAtPos(d.qId, d.wordIdx, d.dropPos, d.fromPos)
+      dragRef.current = null
+      setDragInfo(null)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }, [insertWordAtPos])
+
   const toggleFlag = (questionId: string) => {
     setFlagged((prev) => {
       const next = new Set(prev)
@@ -741,13 +789,14 @@ export default function TestClient({
                 )
               }
 
-              // Section C: 並べ替え問題
+              // Section C: 並べ替え問題（ドラッグ＆ドロップ）
               const words = ws.words ?? []
               const prefix = ws.prefix ?? ''
               const suffix = ws.suffix ?? ''
               const order = wordOrders[q.id] ?? []
               const placedSet = new Set(order)
               const isComplete = order.length === words.length
+              const isDraggingThis = dragInfo?.qId === q.id
               return (
                 <div key={q.id} className={`rounded-2xl border-2 p-5 transition-colors ${isFlagged ? 'bg-yellow-50 border-yellow-400' : 'bg-white border-gray-200'}`}>
                   <div className="flex items-start gap-3 mb-3">
@@ -757,46 +806,52 @@ export default function TestClient({
                     </div>
                     <button onClick={() => toggleFlag(q.id)} className={`shrink-0 text-xl transition-colors ${isFlagged ? 'text-yellow-500' : 'text-gray-300 hover:text-yellow-400'}`} title="自信がない">★</button>
                   </div>
-                  {/* 並べ替え中の文 */}
-                  <div className="bg-gray-50 rounded-xl p-3 mb-3 text-sm leading-loose min-h-[52px]">
-                    {prefix && <span className="text-gray-700">{prefix}</span>}
-                    <span className="inline-flex flex-wrap gap-1 align-bottom">
-                      {order.map((wordIdx, pos) => (
-                        <button key={pos} onClick={() => removeWord(q.id, pos)}
-                          className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-800 px-2 py-0.5 rounded-lg border border-blue-300 text-sm font-medium hover:bg-red-100 hover:text-red-700 hover:border-red-300 active:scale-95 transition-all">
-                          {words[wordIdx]}<span className="text-xs opacity-60">×</span>
-                        </button>
-                      ))}
-                      {!isComplete && Array.from({ length: words.length - order.length }).map((_, i) => (
-                        <span key={i} className="inline-block px-3 py-0.5 rounded-lg border-2 border-dashed border-gray-300 text-gray-300 text-xs">
-                          ___
-                        </span>
-                      ))}
-                    </span>
-                    {suffix && <span className="text-gray-700">{suffix}</span>}
+                  {/* 回答エリア */}
+                  <div className="bg-gray-50 rounded-xl p-3 mb-3 min-h-[56px] flex flex-wrap items-center gap-1.5">
+                    {prefix && <span className="text-gray-700 text-sm mr-0.5">{prefix}</span>}
+                    {order.length === 0 && !isDraggingThis && (
+                      <span className="text-gray-300 text-sm">ここに単語をドラッグしてください</span>
+                    )}
+                    {order.map((wordIdx, pos) => (
+                      <button
+                        key={pos}
+                        data-wordchip-qid={q.id}
+                        onPointerDown={(e) => startWordDrag(e, q.id, wordIdx, pos)}
+                        className={`px-2.5 py-1.5 rounded-lg border-2 text-sm font-medium cursor-grab active:cursor-grabbing select-none touch-none transition-all
+                          ${isDraggingThis && dragRef.current?.fromPos === pos
+                            ? 'opacity-30 border-dashed border-gray-300 bg-white text-gray-400'
+                            : 'bg-blue-100 text-blue-800 border-blue-300 hover:bg-blue-200'}`}
+                      >
+                        {words[wordIdx]}
+                      </button>
+                    ))}
+                    {Array.from({ length: words.length - order.length }).map((_, i) => (
+                      <span key={i} className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg border-2 border-dashed border-gray-300 text-gray-300 text-xs min-w-[40px]">
+                        __
+                      </span>
+                    ))}
+                    {suffix && <span className="text-gray-700 text-sm ml-0.5">{suffix}</span>}
                   </div>
                   {/* 単語バンク */}
                   <div className="border-t border-gray-100 pt-3">
-                    <p className="text-xs text-gray-400 mb-2">タップして並べてください：</p>
+                    <p className="text-xs text-gray-400 mb-2">単語をつかんで上の枠に並べてください：</p>
                     <div className="flex flex-wrap gap-2">
                       {words.map((word, idx) => {
                         if (placedSet.has(idx)) return null
                         return (
-                          <button key={idx} onClick={() => addWord(q.id, idx)}
-                            className="bg-white hover:bg-blue-50 active:bg-blue-100 active:scale-95 px-3 py-2 rounded-xl border-2 border-gray-300 hover:border-blue-400 text-sm font-medium text-gray-700 transition-all shadow-sm">
+                          <button key={idx}
+                            onPointerDown={(e) => startWordDrag(e, q.id, idx)}
+                            className="bg-white px-3 py-2 rounded-xl border-2 border-gray-300 text-sm font-medium text-gray-700 cursor-grab active:cursor-grabbing select-none touch-none hover:border-blue-400 hover:bg-blue-50 transition-all shadow-sm">
                             {word}
                           </button>
                         )
                       })}
                       {isComplete && (
-                        <span className="text-xs text-green-600 font-medium flex items-center gap-1 px-1">
-                          ✓ 並べ替え完了
-                        </span>
+                        <span className="text-xs text-green-600 font-medium flex items-center gap-1 px-1">✓ 並べ替え完了</span>
                       )}
                     </div>
                     {order.length > 0 && (
-                      <button onClick={() => clearWordOrder(q.id)}
-                        className="mt-2 text-xs text-gray-400 hover:text-red-500 transition">
+                      <button onClick={() => clearWordOrder(q.id)} className="mt-2 text-xs text-gray-400 hover:text-red-500 transition">
                         リセット
                       </button>
                     )}
@@ -959,6 +1014,21 @@ export default function TestClient({
           <div className="h-4" />
         </div>
       )}
+
+      {/* ドラッグ中のゴースト */}
+      {dragInfo && (() => {
+        const dq = questions.find(q => q.id === dragInfo.qId)
+        let ghostWord = '...'
+        if (dq?.word_slots) {
+          try { ghostWord = (JSON.parse(dq.word_slots) as { words?: string[] }).words?.[dragInfo.wordIdx] ?? '...' } catch { /* ignore */ }
+        }
+        return (
+          <div style={{ position: 'fixed', left: dragInfo.ghostX, top: dragInfo.ghostY, transform: 'translate(-50%, -50%)', zIndex: 9999, pointerEvents: 'none' }}
+            className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow-xl opacity-90 select-none">
+            {ghostWord}
+          </div>
+        )
+      })()}
     </div>
   )
 }

@@ -40,6 +40,7 @@ export default async function ResultsPage() {
   const sessions300 = visibleSessions.filter((s) => (s.tests as any)?.mode === 300)
   const sessions50 = visibleSessions.filter((s) => (s.tests as any)?.mode === 50)
   const sessions20 = visibleSessions.filter((s) => (s.tests as any)?.mode === 20)
+  const sessions1000 = visibleSessions.filter((s) => [40, 45, 55].includes((s.tests as any)?.mode))
 
   return (
     <div className="min-h-screen bg-blue-50">
@@ -205,6 +206,38 @@ export default async function ResultsPage() {
                                 {passed ? '合格' : '不合格'}
                               </p>
                             )}
+                          </div>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 英熟語1000テストの結果 */}
+            {sessions1000.length > 0 && (
+              <div>
+                <h2 className="text-sm font-bold text-gray-500 mb-3 px-1">📚 英熟語1000テスト</h2>
+                <div className="space-y-2">
+                  {sessions1000.map((s) => {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const test = s.tests as any
+                    return (
+                      <Link
+                        key={s.id}
+                        href={`/student/result?sessionId=${s.id}`}
+                        className="block bg-white rounded-2xl border border-gray-200 px-5 py-4 hover:bg-gray-50 active:bg-gray-100 transition"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <p className="font-semibold text-gray-800 text-sm">{test.title}</p>
+                            <p className="text-xs text-gray-400">
+                              {s.submitted_at ? new Date(s.submitted_at).toLocaleDateString('ja-JP') : ''}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-gray-800 text-lg">{s.score}点</p>
                           </div>
                         </div>
                       </Link>
