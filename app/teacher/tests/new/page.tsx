@@ -398,8 +398,17 @@ function parseRtfTarget1000(buffer: ArrayBuffer): { title: string; questions: Qu
     }
 
     if (inAnswerKey) {
-      if (line.includes('【C】')) { answerKeySection = 'C'; continue }
-      if (line.includes('【D】')) { answerKeySection = 'D'; continue }
+      if (line.includes('【C】') || line.includes('【C】')) { answerKeySection = 'C'; continue }
+      if (line.includes('【D】') || line.includes('【D】')) { answerKeySection = 'D'; continue }
+      // Fallback: infer answerKeySection from question number if header detection fails
+      if (answerKeySection !== 'D') {
+        const akM = line.match(/^\((\d+)\)/)
+        if (akM) {
+          const num = parseInt(akM[1])
+          if (num >= 46) answerKeySection = 'D'
+          else if (num >= 41 && answerKeySection === 'AB') answerKeySection = 'C'
+        }
+      }
       if (answerKeySection === 'C') {
         // Format: "(41) Full correct sentence. ｢p.16.3｣"
         const m = line.match(/^\((\d+)\)\s+(.+)$/)
@@ -418,15 +427,23 @@ function parseRtfTarget1000(buffer: ArrayBuffer): { title: string; questions: Qu
       continue
     }
 
-    if (line.includes('【A】')) {
+    if (line.includes('【A】') || line.includes('【A】')) {
       sectionACount++
       if (sectionACount >= 2) { inAnswerKey = true; continue }
       section = 'A'; continue
     }
-    if (line.includes('【B】')) { section = 'B'; continue }
-    if (line.includes('【C】')) { section = 'C'; continue }
-    if (line.includes('【D】')) { section = 'D'; continue }
+    if (line.includes('【B】') || line.includes('【B】')) { section = 'B'; continue }
+    if (line.includes('【C】') || line.includes('【C】')) { section = 'C'; continue }
+    if (line.includes('【D】') || line.includes('【D】')) { section = 'D'; continue }
     if (!section) continue
+
+    // Fallback: infer section from question number if header detection failed
+    const numFallbackM = line.match(/^\((\d+)\)/)
+    if (numFallbackM) {
+      const num = parseInt(numFallbackM[1])
+      if (num >= 46 && section !== 'D') { section = 'D' }
+      else if (num >= 41 && section !== 'C' && section !== 'D') { section = 'C' }
+    }
 
     const last = rawQs[rawQs.length - 1]
 
