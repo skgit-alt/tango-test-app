@@ -178,24 +178,24 @@ export default function ReviewClient({
                 </div>
                 <div className="px-5 py-4 space-y-3">
                   <p className="text-gray-500 text-sm">{a.question_text}</p>
-                  <div>
-                    <p className="text-xs text-gray-400 mb-1.5">並べ替える単語：</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {words.map((w, i) => <span key={i} className="bg-gray-100 text-gray-600 px-2 py-1 rounded-lg text-sm">{w}</span>)}
+                  {/* 自分の回答 */}
+                  {studentArranged ? (
+                    <div className={`rounded-xl p-3 text-sm ${isCorrect ? 'bg-green-50' : 'bg-red-50'}`}>
+                      <p className={`text-xs font-medium mb-1 ${isCorrect ? 'text-green-600' : 'text-red-500'}`}>
+                        {isCorrect ? '✓ あなたの回答（正解）：' : 'あなたの回答：'}
+                      </p>
+                      <p className={`font-medium ${isCorrect ? 'text-green-800' : 'text-red-700'}`}>{prefix}{studentArranged}{suffix}</p>
                     </div>
-                  </div>
-                  {/* 自分の回答（記録がある場合・不正解時のみ） */}
-                  {studentArranged && !isCorrect && (
-                    <div className="bg-red-50 rounded-xl p-3 text-sm">
-                      <p className="text-xs font-medium mb-1 text-red-500">あなたの回答：</p>
-                      <p className="font-medium text-red-700">{prefix}{studentArranged}{suffix}</p>
+                  ) : (
+                    <p className="text-xs text-gray-400 px-1">（あなたの回答は記録されていません）</p>
+                  )}
+                  {/* 正解（不正解のときのみ） */}
+                  {!isCorrect && (
+                    <div className="bg-green-50 rounded-xl p-3 text-sm">
+                      <p className="text-xs text-green-600 font-medium mb-1">正解：</p>
+                      <p className="text-green-800 font-medium">{prefix}{answer}{suffix}</p>
                     </div>
                   )}
-                  {/* 正解（常に表示） */}
-                  <div className="bg-green-50 rounded-xl p-3 text-sm">
-                    <p className="text-xs text-green-600 font-medium mb-1">{isCorrect ? '✓ あなたの回答（正解）：' : '正解：'}</p>
-                    <p className="text-green-800 font-medium">{prefix}{answer}{suffix}</p>
-                  </div>
                 </div>
               </div>
             )
