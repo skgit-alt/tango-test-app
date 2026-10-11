@@ -75,7 +75,7 @@ export default async function ReviewPage({
 
   const { data: rawAnswers } = await admin
     .from('answers')
-    .select('question_id, selected_answer, is_correct, flagged, questions(*)')
+    .select('question_id, selected_answer, is_correct, flagged, student_answer_text, questions(*)')
     .eq('session_id', session.id)
 
   const answers = ((rawAnswers ?? []) as any[])
@@ -96,6 +96,7 @@ export default async function ReviewPage({
       correct_answer: a.questions.correct_answer,
       points: a.questions.points,
       word_slots: a.questions.word_slots ?? null,
+      student_answer_text: (a as any).student_answer_text ?? null,
     }))
 
   const backUrl = sessionId ? `/student/result?sessionId=${sessionId}` : '/student/result'

@@ -132,19 +132,19 @@ export default function TestClient({
             // Section D: fill-in-the-blank
             const inputs = fillInputs[q.id] ?? []
             const allFilled = inputs.length === ws.blanks.length && inputs.every(inp => inp.trim().length > 0)
-            if (!allFilled) return { question_id: q.id, selected_answer: null as null, flagged: flagged.has(q.id) }
+            if (!allFilled) return { question_id: q.id, selected_answer: null as null, flagged: flagged.has(q.id), student_answer_text: null as string | null }
             const isCorrect = ws.blanks.every((b, i) => normalize(inputs[i] ?? '') === normalize(b))
-            return { question_id: q.id, selected_answer: isCorrect ? 1 : 2, flagged: flagged.has(q.id) }
+            return { question_id: q.id, selected_answer: isCorrect ? 1 : 2, flagged: flagged.has(q.id), student_answer_text: inputs.join(' / ') }
           }
           // Section C: word arrangement
           const words = ws.words ?? []
           const answer = ws.answer ?? ''
           const order = wordOrders[q.id] ?? []
-          if (order.length !== words.length) return { question_id: q.id, selected_answer: null as null, flagged: flagged.has(q.id) }
+          if (order.length !== words.length) return { question_id: q.id, selected_answer: null as null, flagged: flagged.has(q.id), student_answer_text: null as string | null }
           const arranged = order.map(i => words[i]).join(' ')
           const isCorrect = arranged.toLowerCase() === answer.toLowerCase()
-          return { question_id: q.id, selected_answer: isCorrect ? 1 : 2, flagged: flagged.has(q.id) }
-        } catch { return { question_id: q.id, selected_answer: null as null, flagged: flagged.has(q.id) } }
+          return { question_id: q.id, selected_answer: isCorrect ? 1 : 2, flagged: flagged.has(q.id), student_answer_text: arranged }
+        } catch { return { question_id: q.id, selected_answer: null as null, flagged: flagged.has(q.id), student_answer_text: null as string | null } }
       }
       return { question_id: q.id, selected_answer: answers[q.id] ?? null, flagged: flagged.has(q.id) }
     })

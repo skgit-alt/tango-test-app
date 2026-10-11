@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
 
   const { sessionId, answers } = await req.json() as {
     sessionId: string
-    answers: { question_id: string; selected_answer: number | null; flagged?: boolean }[]
+    answers: { question_id: string; selected_answer: number | null; flagged?: boolean; student_answer_text?: string | null }[]
   }
   if (!sessionId || !Array.isArray(answers)) {
     return NextResponse.json({ error: 'sessionId and answers required' }, { status: 400 })
@@ -91,6 +91,19 @@ export async function POST(req: NextRequest) {
       points_earned: pointsEarned,
       cycle: 1,
     })
+  }
+
+  // 生徒の実際の回答テキスト（Section C/D）を保存
+  const wordSlotAnswers = answers.filter((a) => a.student_answer_text != null)
+  if (wordSlotAnswers.length > 0) {
+    await admin.from('answers').upsert(
+      wordSlotAnswers.map((a) => ({
+        session_id: sessionId,
+        question_id: a.question_id,
+        student_answer_text: a.student_answer_text,
+      })),
+      { onConflict: 'session_id,question_id' }
+    )
   }
 
   // ★マーク（flagged）をanswersテーブルに保存
