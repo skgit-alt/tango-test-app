@@ -114,6 +114,7 @@ export default function ReviewClient({
               const sentence = ws.sentence ?? ''
               const parts = sentence.split('(     )')
               const studentWords = a.student_answer_text ? a.student_answer_text.split(' / ') : []
+              const hasStudentAnswer = studentWords.length > 0
               return (
                 <div key={a.question_id} className={`bg-white rounded-2xl border-2 overflow-hidden ${isCorrect ? 'border-green-200' : 'border-red-200'}`}>
                   <div className={`px-5 py-3 flex items-center gap-2 ${isCorrect ? 'bg-green-50' : 'bg-red-50'}`}>
@@ -124,16 +125,16 @@ export default function ReviewClient({
                   </div>
                   <div className="px-5 py-4 space-y-3">
                     <p className="text-gray-500 text-sm">{a.question_text}</p>
-                    {/* 自分の回答 */}
-                    {studentWords.length > 0 && (
-                      <div className={`rounded-xl p-3 text-sm leading-loose ${isCorrect ? 'bg-green-50' : 'bg-red-50'}`}>
-                        <p className={`text-xs font-medium mb-1 ${isCorrect ? 'text-green-600' : 'text-red-500'}`}>あなたの回答：</p>
+                    {/* 自分の回答（記録がある場合・不正解時のみ） */}
+                    {hasStudentAnswer && !isCorrect && (
+                      <div className="bg-red-50 rounded-xl p-3 text-sm leading-loose">
+                        <p className="text-xs font-medium mb-1 text-red-500">あなたの回答：</p>
                         <div className="text-gray-700">
                           {parts.map((part, pi) => (
                             <span key={pi}>
                               <span>{part}</span>
                               {pi < parts.length - 1 && (
-                                <span className={`inline-block border-b-2 font-bold px-2 mx-0.5 ${isCorrect ? 'border-green-500 text-green-700' : 'border-red-400 text-red-700'}`}>
+                                <span className="inline-block border-b-2 border-red-400 text-red-700 font-bold px-2 mx-0.5">
                                   {studentWords[pi] ?? '？'}
                                 </span>
                               )}
@@ -142,10 +143,10 @@ export default function ReviewClient({
                         </div>
                       </div>
                     )}
-                    {/* 正解（不正解のときだけ表示） */}
-                    {!isCorrect && (
-                      <div className="bg-gray-50 rounded-xl p-3 text-sm leading-loose">
-                        <p className="text-xs text-gray-500 font-medium mb-1">正解：</p>
+                    {/* 正解（常に表示） */}
+                    <div className="bg-green-50 rounded-xl p-3 text-sm leading-loose">
+                      <p className="text-xs text-green-600 font-medium mb-1">{isCorrect ? '✓ あなたの回答（正解）：' : '正解：'}</p>
+                      <div>
                         {parts.map((part, pi) => (
                           <span key={pi}>
                             <span className="text-gray-700">{part}</span>
@@ -155,7 +156,7 @@ export default function ReviewClient({
                           </span>
                         ))}
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               )
@@ -183,20 +184,18 @@ export default function ReviewClient({
                       {words.map((w, i) => <span key={i} className="bg-gray-100 text-gray-600 px-2 py-1 rounded-lg text-sm">{w}</span>)}
                     </div>
                   </div>
-                  {/* 自分の回答 */}
-                  {studentArranged && (
-                    <div className={`rounded-xl p-3 text-sm ${isCorrect ? 'bg-green-50' : 'bg-red-50'}`}>
-                      <p className={`text-xs font-medium mb-1 ${isCorrect ? 'text-green-600' : 'text-red-500'}`}>あなたの回答：</p>
-                      <p className={`font-medium ${isCorrect ? 'text-green-800' : 'text-red-700'}`}>{prefix}{studentArranged}{suffix}</p>
+                  {/* 自分の回答（記録がある場合・不正解時のみ） */}
+                  {studentArranged && !isCorrect && (
+                    <div className="bg-red-50 rounded-xl p-3 text-sm">
+                      <p className="text-xs font-medium mb-1 text-red-500">あなたの回答：</p>
+                      <p className="font-medium text-red-700">{prefix}{studentArranged}{suffix}</p>
                     </div>
                   )}
-                  {/* 正解（不正解のときだけ表示） */}
-                  {!isCorrect && (
-                    <div className="bg-gray-50 rounded-xl p-3 text-sm">
-                      <p className="text-xs text-gray-500 font-medium mb-1">正解：</p>
-                      <p className="text-green-800 font-medium">{prefix}{answer}{suffix}</p>
-                    </div>
-                  )}
+                  {/* 正解（常に表示） */}
+                  <div className="bg-green-50 rounded-xl p-3 text-sm">
+                    <p className="text-xs text-green-600 font-medium mb-1">{isCorrect ? '✓ あなたの回答（正解）：' : '正解：'}</p>
+                    <p className="text-green-800 font-medium">{prefix}{answer}{suffix}</p>
+                  </div>
                 </div>
               </div>
             )
