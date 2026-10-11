@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Test, Session, CheatLog, Student, Question, calcPoints } from '@/lib/supabase/types'
 import * as XLSX from 'xlsx'
+import InteractivePreview from '@/app/components/InteractivePreview'
 
 interface SessionWithStudent extends Session {
   students: Pick<Student, 'name' | 'class_name' | 'seat_number' | 'test_name'> | null
@@ -1598,154 +1599,11 @@ export default function TestManagerClient({
 
       {/* 問題プレビューモーダル */}
       {showPreview && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex flex-col">
-          {/* モーダルヘッダー */}
-          <div className="bg-blue-600 text-white px-4 py-4 flex items-center gap-3 shrink-0">
-            <button
-              onClick={() => setShowPreview(false)}
-              className="text-blue-200 hover:text-white transition"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            <div>
-              <h2 className="font-bold text-lg leading-tight">問題プレビュー</h2>
-              <p className="text-blue-200 text-sm">{test.title} — {questions.length}問 / 正解は緑でハイライト</p>
-            </div>
-          </div>
-
-          {/* スクロールエリア */}
-          <div className="flex-1 overflow-y-auto bg-gray-50">
-            <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
-              {questions.length === 0 && (
-                <div className="text-center text-gray-400 py-12">問題がありません</div>
-              )}
-              {questions.map((q) => {
-                const choices = [
-                  { num: 1, text: q.choice1 },
-                  { num: 2, text: q.choice2 },
-                  { num: 3, text: q.choice3 },
-                  { num: 4, text: q.choice4 },
-                  { num: 5, text: q.choice5 },
-                ].filter((c) => c.text && c.text !== 'None' && c.text !== 'null')
-
-                // word_slots がある場合は整序・空所補充として表示
-                if (q.word_slots) {
-                  let ws: { words?: string[]; prefix?: string; suffix?: string; answer?: string; blanks?: string[]; sentence?: string } = {}
-                  try { ws = JSON.parse(q.word_slots) } catch { /* ignore */ }
-
-                  if (ws.blanks) {
-                    // Section D: 空所補充
-                    const sentence = ws.sentence ?? ''
-                    const parts = sentence.split('(     )')
-                    return (
-                      <div key={q.id} className="bg-white rounded-2xl border-2 border-green-200 p-5">
-                        <div className="flex items-start gap-3 mb-3">
-                          <span className="bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-lg shrink-0 mt-0.5">{q.order_num}</span>
-                          <p className="text-gray-500 text-sm flex-1">{q.question_text}</p>
-                          <span className="text-xs text-gray-400 shrink-0">{q.points}点</span>
-                        </div>
-                        <div className="bg-gray-50 rounded-xl p-3 text-sm mb-2">
-                          {parts.map((part, pi) => (
-                            <span key={pi}>
-                              <span className="text-gray-700">{part}</span>
-                              {pi < parts.length - 1 && (
-                                <span className="inline-block border-b-2 border-green-500 text-green-700 font-bold px-2 mx-0.5">
-                                  {ws.blanks![pi]}
-                                </span>
-                              )}
-                            </span>
-                          ))}
-                        </div>
-                        <p className="text-xs text-green-600">✓ 空所補充問題 （入力欄 {ws.blanks.length}箇所）</p>
-                      </div>
-                    )
-                  }
-
-                  // Section C: 並べ替え
-                  const words = ws.words ?? []
-                  return (
-                    <div key={q.id} className="bg-white rounded-2xl border-2 border-purple-200 p-5">
-                      <div className="flex items-start gap-3 mb-3">
-                        <span className="bg-purple-600 text-white text-xs font-bold px-2 py-1 rounded-lg shrink-0 mt-0.5">{q.order_num}</span>
-                        <p className="text-gray-500 text-sm flex-1">{q.question_text}</p>
-                        <span className="text-xs text-gray-400 shrink-0">{q.points}点</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {words.map((w, i) => (
-                          <span key={i} className="bg-purple-50 border border-purple-200 text-purple-800 text-sm px-2 py-1 rounded-lg">{w}</span>
-                        ))}
-                      </div>
-                      <p className="text-sm text-green-700 font-medium bg-green-50 rounded-lg px-3 py-2">
-                        ✓ 正解: {ws.prefix}{ws.answer}{ws.suffix}
-                      </p>
-                    </div>
-                  )
-                }
-
-                return (
-                  <div key={q.id} className="bg-white rounded-2xl border-2 border-gray-200 p-5">
-                    <div className="flex items-start gap-3 mb-4">
-                      <span className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-lg shrink-0 mt-0.5">
-                        {q.order_num}
-                      </span>
-                      <div className="text-gray-800 font-medium leading-relaxed flex-1">
-                        {q.question_text.includes('\n') ? (
-                          q.question_text.split('\n').map((line, li) => {
-                            if (line.includes('(     )')) {
-                              const parts = line.split('(     )')
-                              return (
-                                <p key={li} className="mt-3">
-                                  {parts.map((part, pi) => (
-                                    <span key={pi}>
-                                      {part}
-                                      {pi < parts.length - 1 && <span>（　　　）</span>}
-                                    </span>
-                                  ))}
-                                </p>
-                              )
-                            }
-                            return (
-                              <p key={li} className="text-gray-500 text-sm mb-1">{line}</p>
-                            )
-                          })
-                        ) : (
-                          <p>{q.question_text}</p>
-                        )}
-                      </div>
-                      <span className="text-xs text-gray-400 shrink-0">{q.points}点</span>
-                    </div>
-                    <div className="space-y-2">
-                      {choices.map((choice) => {
-                        const isCorrect = choice.num === q.correct_answer
-                        return (
-                          <div
-                            key={choice.num}
-                            className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border-2 text-sm ${
-                              isCorrect
-                                ? 'border-green-400 bg-green-50 text-green-800 font-medium'
-                                : 'border-gray-100 text-gray-600'
-                            }`}
-                          >
-                            <span className="text-gray-400 text-xs shrink-0">
-                              {['①', '②', '③', '④', '⑤'][choice.num - 1]}
-                            </span>
-                            <span className="flex-1">{choice.text}</span>
-                            {isCorrect && (
-                              <span className="text-green-600 text-xs font-bold shrink-0">✓ 正解</span>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })}
-              <div className="h-4" />
-            </div>
-          </div>
-        </div>
+        <InteractivePreview
+          questions={questions}
+          title={test.title}
+          onClose={() => setShowPreview(false)}
+        />
       )}
 
       {/* 不正ログ */}

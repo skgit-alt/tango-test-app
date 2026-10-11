@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import * as XLSX from 'xlsx'
 import { renderUnderline } from '@/lib/renderUnderline'
+import InteractivePreview from '@/app/components/InteractivePreview'
 
 // ─── Wordファイル（.docx）パーサー ──────────────────────────────────────────
 
@@ -635,6 +636,7 @@ export default function NewTestPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [preview, setPreview] = useState(false)
+  const [showInteractivePreview, setShowInteractivePreview] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [bookType, setBookType] = useState<'1200' | '1900' | null>(null)
 
@@ -1121,30 +1123,15 @@ export default function NewTestPage() {
           </div>
         )}
 
-        {/* プレビュー */}
+        {/* 問題プレビューボタン */}
         {preview && questions.length > 0 && (
-          <div>
-            <p className="text-sm font-medium text-gray-700 mb-2">先頭3問プレビュー</p>
-            <div className="bg-gray-50 rounded-xl p-4 space-y-3 text-sm">
-              {questions.slice(0, 3).map((q, i) => (
-                <div key={i} className="border-b border-gray-200 pb-3 last:border-0 last:pb-0">
-                  <p className="font-medium text-gray-800">
-                    Q{q.order_num}: {q.question_text.split('\n').map((line, li) => (
-                      <span key={li} className={li > 0 ? 'block' : ''}>{renderUnderline(line)}</span>
-                    ))}
-                  </p>
-                  <div className="mt-1 text-gray-600 space-y-0.5">
-                    <p>① {q.choice1}</p>
-                    <p>② {q.choice2}</p>
-                    <p>③ {q.choice3}</p>
-                    {q.choice4 && <p>④ {q.choice4}</p>}
-                    {q.choice5 && <p>⑤ {q.choice5}</p>}
-                    <p className="text-green-700 font-medium">正解: {q.correct_answer}番</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowInteractivePreview(true)}
+            className="w-full bg-indigo-50 border-2 border-indigo-200 text-indigo-700 py-3 rounded-xl font-semibold hover:bg-indigo-100 transition text-sm"
+          >
+            👀 全{questions.length}問を解いてみる（プレビュー）
+          </button>
         )}
 
         {error && (
@@ -1159,6 +1146,26 @@ export default function NewTestPage() {
           {loading ? '作成中...' : 'テストを作成する'}
         </button>
       </div>
+
+      {/* インタラクティブプレビューモーダル */}
+      {showInteractivePreview && (
+        <InteractivePreview
+          questions={questions.map(q => ({
+            order_num: q.order_num,
+            question_text: q.question_text,
+            choice1: q.choice1,
+            choice2: q.choice2,
+            choice3: q.choice3,
+            choice4: q.choice4 ?? null,
+            choice5: q.choice5 ?? null,
+            correct_answer: q.correct_answer,
+            points: q.points,
+            word_slots: q.word_slots ?? null,
+          }))}
+          title={title || '問題プレビュー'}
+          onClose={() => setShowInteractivePreview(false)}
+        />
+      )}
     </div>
   )
 }
