@@ -649,30 +649,13 @@ export default function NewTestPage() {
       .then(d => {
         if (d?.classes) {
           setAvailableClasses(d.classes)
-          // 実験用クラスはデフォルトで選択
+          // 実験用クラスのみデフォルト選択
           const others = (d.classes as string[]).filter(cls => !/^\d/.test(cls) && !/^[A-Za-z]/.test(cls))
           setSelectedClasses(others)
         }
       })
       .catch(() => {})
   }, [])
-
-  useEffect(() => {
-    if (questions.length === 0 || availableClasses.length === 0) return
-    const mode = questions.length === 600 ? 600
-      : questions.length === 300 ? 300
-      : questions.length === 50 && tab !== 'rtf1000' ? 50
-      : questions.length === 50 && tab === 'rtf1000' ? 55
-      : questions.length
-    setSelectedClasses(availableClasses.filter(cls => {
-      const isNumeric = /^\d/.test(cls)
-      const isAlpha = /^[A-Za-z]/.test(cls)
-      if (!isNumeric && !isAlpha) return true  // 実験用クラスは常に選択
-      if (mode === 50 || mode === 55) return isAlpha
-      if (mode === 300 || mode === 600) return true
-      return isNumeric
-    }))
-  }, [questions.length, tab, availableClasses])
 
   // ─── Excel（300問 / 50問）処理 ─────────────────────────────────────────────
 

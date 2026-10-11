@@ -98,6 +98,9 @@ export default function TestManagerClient({
   // テーブルソート
   const [sortKey, setSortKey] = useState<SortKey | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  // 配信先クラス編集
+  const [editingTargetClasses, setEditingTargetClasses] = useState(false)
+  const [editTargetClasses, setEditTargetClasses] = useState<string[]>(test.target_classes ?? [])
 
   // 配信先クラスを絞り込む（target_classesが設定済みならそれを優先、未設定ならモードで推定）
   const visibleClasses = test.target_classes && test.target_classes.length > 0
@@ -475,6 +478,19 @@ export default function TestManagerClient({
     setShowMessageEditor(false)
     setMessageSaved(true)
     setTimeout(() => setMessageSaved(false), 3000)
+  }
+
+  // 配信先クラスを保存
+  const handleSaveTargetClasses = async () => {
+    setLoading(true)
+    setActionError('')
+    const ok = await updateTest({ target_classes: editTargetClasses })
+    if (!ok) setActionError('配信先クラスの変更に失敗しました')
+    else {
+      setTest(prev => ({ ...prev, target_classes: editTargetClasses }))
+      setEditingTargetClasses(false)
+    }
+    setLoading(false)
   }
 
   // 待機状態に戻す（open_classes・opened_atもリセット）
@@ -898,6 +914,65 @@ export default function TestManagerClient({
               </button>
             )}
           </div>
+
+          {/* 配信先クラス */}
+          {isAdmin && (() => {
+            const numericClasses = classes.filter(cls => /^\d/.test(cls))
+            const alphaClasses = classes.filter(cls => /^[A-Za-z]/.test(cls))
+            const otherClasses = classes.filter(cls => !/^\d/.test(cls) && !/^[A-Za-z]/.test(cls))
+            const current = test.target_classes ?? []
+            const isNumericOn = numericClasses.length > 0 && numericClasses.every(c => editTargetClasses.includes(c))
+            const isAlphaOn = alphaClasses.length > 0 && alphaClasses.every(c => editTargetClasses.includes(c))
+            const isOtherOn = otherClasses.length > 0 && otherClasses.every(c => editTargetClasses.includes(c))
+            const toggleGroup = (group: string[]) => {
+              const allOn = group.every(c => editTargetClasses.includes(c))
+              setEditTargetClasses(prev => allOn ? prev.filter(c => !group.includes(c)) : [...new Set([...prev, ...group])])
+            }
+            return (
+              <div className="bg-gray-50 rounded-xl p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-gray-500">配信先クラス</p>
+                  {!editingTargetClasses ? (
+                    <button onClick={() => { setEditTargetClasses(current); setEditingTargetClasses(true) }}
+                      className="text-xs text-blue-600 hover:underline">変更</button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button onClick={handleSaveTargetClasses} disabled={loading || editTargetClasses.length === 0}
+                        className="text-xs bg-blue-600 text-white px-3 py-1 rounded-lg disabled:opacity-50">保存</button>
+                      <button onClick={() => setEditingTargetClasses(false)}
+                        className="text-xs text-gray-500 hover:underline">キャンセル</button>
+                    </div>
+                  )}
+                </div>
+                {editingTargetClasses ? (
+                  <div className="flex flex-wrap gap-2">
+                    {numericClasses.length > 0 && (
+                      <button type="button" onClick={() => toggleGroup(numericClasses)}
+                        className={`px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all active:scale-95 ${isNumericOn ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-300 text-gray-500'}`}>
+                        1〜6組
+                      </button>
+                    )}
+                    {alphaClasses.length > 0 && (
+                      <button type="button" onClick={() => toggleGroup(alphaClasses)}
+                        className={`px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all active:scale-95 ${isAlphaOn ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-300 text-gray-500'}`}>
+                        A〜D組
+                      </button>
+                    )}
+                    {otherClasses.length > 0 && (
+                      <button type="button" onClick={() => toggleGroup(otherClasses)}
+                        className={`px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all active:scale-95 ${isOtherOn ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-300 text-gray-500'}`}>
+                        実験用クラス
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5 text-xs text-gray-600">
+                    {current.length > 0 ? current.map(c => <span key={c} className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg">{c}</span>) : <span className="text-gray-400">未設定</span>}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {/* 予約済み情報（全クラス一括） */}
           {test.status === 'waiting' && test.scheduled_at && (
