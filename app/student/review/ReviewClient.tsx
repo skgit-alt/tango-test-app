@@ -184,7 +184,11 @@ export default function ReviewClient({
                       <p className={`text-xs font-medium mb-1 ${isCorrect ? 'text-green-600' : 'text-red-500'}`}>
                         {isCorrect ? '✓ あなたの回答（正解）：' : 'あなたの回答：'}
                       </p>
-                      <p className={`font-medium ${isCorrect ? 'text-green-800' : 'text-red-700'}`}>{prefix}{studentArranged}{suffix}</p>
+                      <p className="font-medium">
+                        {prefix && <span className="text-gray-400">{prefix}</span>}
+                        <span className={isCorrect ? 'text-green-800' : 'text-red-700'}>{studentArranged}</span>
+                        {suffix && <span className="text-gray-400">{suffix}</span>}
+                      </p>
                     </div>
                   ) : (
                     <p className="text-xs text-gray-400 px-1">（あなたの回答は記録されていません）</p>
@@ -193,7 +197,11 @@ export default function ReviewClient({
                   {!isCorrect && (
                     <div className="bg-green-50 rounded-xl p-3 text-sm">
                       <p className="text-xs text-green-600 font-medium mb-1">正解：</p>
-                      <p className="text-green-800 font-medium">{prefix}{answer}{suffix}</p>
+                      <p className="font-medium">
+                        {prefix && <span className="text-gray-400">{prefix}</span>}
+                        <span className="text-green-800">{answer}</span>
+                        {suffix && <span className="text-gray-400">{suffix}</span>}
+                      </p>
                     </div>
                   )}
                 </div>
