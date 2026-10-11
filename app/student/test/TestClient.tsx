@@ -469,7 +469,9 @@ export default function TestClient({
 
   const startWordDrag = useCallback((e: React.PointerEvent, qId: string, wordIdx: number, fromPos?: number) => {
     e.preventDefault()
-    dragRef.current = { qId, wordIdx, fromPos, dropPos: fromPos ?? 0 }
+    // バンクからタップしたとき末尾に追加、すでに置いた単語を動かすときは元の位置を基準に
+    const defaultDropPos = fromPos !== undefined ? fromPos : (wordOrders[qId] ?? []).length
+    dragRef.current = { qId, wordIdx, fromPos, dropPos: defaultDropPos }
     setDragInfo({ qId, wordIdx, fromPos, ghostX: e.clientX, ghostY: e.clientY })
 
     const onMove = (ev: PointerEvent) => {
@@ -498,7 +500,7 @@ export default function TestClient({
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
-  }, [insertWordAtPos])
+  }, [insertWordAtPos, wordOrders])
 
   const toggleFlag = (questionId: string) => {
     setFlagged((prev) => {
