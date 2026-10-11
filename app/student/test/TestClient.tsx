@@ -32,6 +32,7 @@ export default function TestClient({
   const [wordOrders, setWordOrders] = useState<Record<string, number[]>>({})
   const [fillInputs, setFillInputs] = useState<Record<string, string[]>>({})
   const [dragInfo, setDragInfo] = useState<{ qId: string; wordIdx: number; fromPos?: number; ghostX: number; ghostY: number } | null>(null)
+  const [dropIndicator, setDropIndicator] = useState<{ qId: string; pos: number } | null>(null)
   const dragRef = useRef<{ qId: string; wordIdx: number; fromPos?: number; dropPos: number | null } | null>(null)
   const [currentPage, setCurrentPage] = useState(session.current_page ?? 1)
   const [flagged, setFlagged] = useState<Set<string>>(new Set())
@@ -473,13 +474,14 @@ export default function TestClient({
     const defaultDropPos = fromPos !== undefined ? fromPos : (wordOrders[qId] ?? []).length
     dragRef.current = { qId, wordIdx, fromPos, dropPos: defaultDropPos }
     setDragInfo({ qId, wordIdx, fromPos, ghostX: e.clientX, ghostY: e.clientY })
+    setDropIndicator({ qId, pos: defaultDropPos })
 
     const onMove = (ev: PointerEvent) => {
       setDragInfo(prev => prev ? { ...prev, ghostX: ev.clientX, ghostY: ev.clientY } : null)
       // drop position detection via pointermove over data-gap elements
       if (!dragRef.current) return
       const chips = Array.from(document.querySelectorAll<HTMLElement>(`[data-wordchip-qid="${dragRef.current.qId}"]`))
-      if (chips.length === 0) { dragRef.current.dropPos = 0; return }
+      if (chips.length === 0) { dragRef.current.dropPos = 0; setDropIndicator({ qId: dragRef.current.qId, pos: 0 }); return }
       let newPos = chips.length
       for (let i = 0; i < chips.length; i++) {
         const rect = chips[i].getBoundingClientRect()
@@ -489,12 +491,14 @@ export default function TestClient({
         }
       }
       dragRef.current.dropPos = newPos
+      setDropIndicator({ qId: dragRef.current.qId, pos: newPos })
     }
     const onUp = () => {
       const d = dragRef.current
       if (d && d.dropPos !== null) insertWordAtPos(d.qId, d.wordIdx, d.dropPos, d.fromPos)
       dragRef.current = null
       setDragInfo(null)
+      setDropIndicator(null)
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
     }
@@ -814,19 +818,37 @@ export default function TestClient({
                     {order.length === 0 && !isDraggingThis && (
                       <span className="text-gray-300 text-sm">ここに単語をドラッグしてください</span>
                     )}
-                    {order.map((wordIdx, pos) => (
-                      <button
-                        key={pos}
-                        data-wordchip-qid={q.id}
-                        onPointerDown={(e) => startWordDrag(e, q.id, wordIdx, pos)}
-                        className={`px-2.5 py-1.5 rounded-lg border-2 text-sm font-medium cursor-grab active:cursor-grabbing select-none touch-none transition-all
-                          ${isDraggingThis && dragRef.current?.fromPos === pos
-                            ? 'opacity-30 border-dashed border-gray-300 bg-white text-gray-400'
-                            : 'bg-blue-100 text-blue-800 border-blue-300 hover:bg-blue-200'}`}
-                      >
-                        {words[wordIdx]}
-                      </button>
-                    ))}
+                    {(() => {
+                      const dropPos = (isDraggingThis && dropIndicator?.qId === q.id) ? dropIndicator.pos : -1
+                      const fromPos = dragRef.current?.fromPos
+                      const result: JSX.Element[] = []
+                      order.forEach((wordIdx, pos) => {
+                        if (dropPos === pos) {
+                          result.push(<span key={`ind-${pos}`} className="w-1 h-8 bg-blue-400 rounded-full transition-all duration-150" />)
+                        }
+                        const isSource = isDraggingThis && fromPos === pos
+                        const isDisplaced = isDraggingThis && dropPos === pos && fromPos !== pos
+                        result.push(
+                          <button
+                            key={pos}
+                            data-wordchip-qid={q.id}
+                            onPointerDown={(e) => startWordDrag(e, q.id, wordIdx, pos)}
+                            className={`px-2.5 py-1.5 rounded-lg border-2 text-sm font-medium cursor-grab active:cursor-grabbing select-none touch-none transition-all duration-150
+                              ${isSource
+                                ? 'opacity-30 border-dashed border-gray-300 bg-white text-gray-400'
+                                : isDisplaced
+                                ? 'opacity-40 border-blue-200 bg-blue-50 text-blue-400'
+                                : 'bg-blue-100 text-blue-800 border-blue-300 hover:bg-blue-200'}`}
+                          >
+                            {words[wordIdx]}
+                          </button>
+                        )
+                      })
+                      if (dropPos === order.length) {
+                        result.push(<span key="ind-end" className="w-1 h-8 bg-blue-400 rounded-full transition-all duration-150" />)
+                      }
+                      return result
+                    })()}
                     {Array.from({ length: words.length - order.length }).map((_, i) => (
                       <span key={i} className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg border-2 border-dashed border-gray-300 text-gray-300 text-xs min-w-[40px]">
                         __
