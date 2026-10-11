@@ -268,7 +268,7 @@ export default function ReviewClient({
                     if (isSelected && isCorrect) {
                       className += ' border-green-400 bg-green-50 text-green-800 font-medium'
                     } else if (isSelected && !isCorrect) {
-                      className += ' border-red-400 bg-red-50 text-red-700 line-through'
+                      className += ' border-red-400 bg-red-50 text-red-700'
                     } else if (isAnswer && !isCorrect) {
                       className += ' border-green-400 bg-green-50 text-green-800 font-medium'
                     } else {
