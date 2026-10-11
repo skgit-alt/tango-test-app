@@ -106,7 +106,7 @@ export default function TestManagerClient({
     const isNumeric = /^\d/.test(cls)
     const isAlpha = /^[A-Za-z]/.test(cls)
     if (!isNumeric && !isAlpha) return true   // 実験用クラス等 → 常に表示
-    if (test.mode === 50 || test.mode === 600) return isAlpha  // 50問・600問 → A～D組のみ
+    if (test.mode === 50 || test.mode === 55 || test.mode === 600) return isAlpha  // 50問・英熟語1000・600問 → A～D組のみ
     if (test.mode === 300) return true                         // 300問 → 全クラス
     return isNumeric                                           // 20問 → 1～6組のみ
   })
