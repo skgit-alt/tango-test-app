@@ -1088,6 +1088,65 @@ export default function TestManagerClient({
         </div>
       )}
 
+      {/* 先生メッセージ — 常に表示 */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-gray-800">先生メッセージ</h2>
+            <p className="text-xs text-gray-400 mt-0.5">テスト開始前・結果画面の両方で生徒に表示されます</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {messageSaved && (
+              <span className="text-green-600 text-sm font-medium">✓ 保存しました</span>
+            )}
+            {isAdmin && !showMessageEditor && (
+              <button
+                onClick={() => { setMessageInput(test.teacher_message ?? DEFAULT_TEACHER_MESSAGE); setShowMessageEditor(true) }}
+                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              >
+                編集
+              </button>
+            )}
+          </div>
+        </div>
+        {showMessageEditor ? (
+          <div className="space-y-3">
+            <textarea
+              value={messageInput}
+              onChange={(e) => setMessageInput(e.target.value)}
+              rows={4}
+              className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+            />
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={() => handleSaveMessage(false)}
+                disabled={savingMessage}
+                className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-50"
+              >
+                {savingMessage ? '保存中...' : 'このテストだけ変更'}
+              </button>
+              <button
+                onClick={() => handleSaveMessage(true)}
+                disabled={savingMessage}
+                className="bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-700 transition disabled:opacity-50"
+              >
+                {savingMessage ? '保存中...' : '今後のデフォルトにする'}
+              </button>
+              <button
+                onClick={() => setShowMessageEditor(false)}
+                className="text-gray-500 px-4 py-2 rounded-xl text-sm hover:text-gray-700"
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-600 bg-amber-50 border border-amber-200 rounded-xl p-3 leading-relaxed">
+            {test.teacher_message ?? DEFAULT_TEACHER_MESSAGE}
+          </p>
+        )}
+      </div>
+
       {/* 結果を返す — テストが開始された後は常に表示 */}
       {((test.open_classes ?? []).length > 0 || test.status === 'open' || test.status === 'finished' || test.status === 'published') && (
         <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-5">
@@ -1146,64 +1205,6 @@ export default function TestManagerClient({
                   <p className="text-sm text-gray-400 italic">未公開（管理者のみ公開可能）</p>
                 )}
               </div>
-            </div>
-          )}
-
-          {/* 先生メッセージ */}
-          {true && (
-            <div className="space-y-2 pt-3 border-t border-gray-100">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">④ 結果画面のメッセージ</p>
-                <div className="flex items-center gap-3">
-                  {messageSaved && (
-                    <span className="text-green-600 text-sm font-medium">✓ 保存しました</span>
-                  )}
-                  {isAdmin && !showMessageEditor && (
-                    <button
-                      onClick={() => { setMessageInput(test.teacher_message ?? DEFAULT_TEACHER_MESSAGE); setShowMessageEditor(true) }}
-                      className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      編集
-                    </button>
-                  )}
-                </div>
-              </div>
-              {showMessageEditor ? (
-                <div className="space-y-3">
-                  <textarea
-                    value={messageInput}
-                    onChange={(e) => setMessageInput(e.target.value)}
-                    rows={4}
-                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
-                  />
-                  <div className="flex gap-2 flex-wrap">
-                    <button
-                      onClick={() => handleSaveMessage(false)}
-                      disabled={savingMessage}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-50"
-                    >
-                      {savingMessage ? '保存中...' : 'このテストだけ変更'}
-                    </button>
-                    <button
-                      onClick={() => handleSaveMessage(true)}
-                      disabled={savingMessage}
-                      className="bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-700 transition disabled:opacity-50"
-                    >
-                      {savingMessage ? '保存中...' : '今後のデフォルトにする'}
-                    </button>
-                    <button
-                      onClick={() => setShowMessageEditor(false)}
-                      className="text-gray-500 px-4 py-2 rounded-xl text-sm hover:text-gray-700"
-                    >
-                      キャンセル
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-gray-600 bg-amber-50 border border-amber-200 rounded-xl p-3 leading-relaxed">
-                  {test.teacher_message ?? DEFAULT_TEACHER_MESSAGE}
-                </p>
-              )}
             </div>
           )}
 
