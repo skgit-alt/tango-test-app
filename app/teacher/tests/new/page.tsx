@@ -621,6 +621,28 @@ export default function NewTestPage() {
       .catch(() => router.push('/teacher'))
   }, [router])
 
+  const xlsxRef = useRef<HTMLInputElement>(null)
+  const rtfRef = useRef<HTMLInputElement>(null)
+  const docxRef = useRef<HTMLInputElement>(null)
+  const xlsx600Ref = useRef<HTMLInputElement>(null)
+  const rtf1000Ref = useRef<HTMLInputElement>(null)
+
+  const [tab, setTab] = useState<'xlsx' | 'rtf' | 'docx' | 'xlsx600' | 'rtf1000'>('xlsx')
+  const [customTimeLimitMin, setCustomTimeLimitMin] = useState('2')
+  const [customTimeLimitSec, setCustomTimeLimitSec] = useState('0')
+  const [title, setTitle] = useState('')
+  const [roundNumber, setRoundNumber] = useState<string>('')
+  const [questions, setQuestions] = useState<QuestionRow[]>([])
+  const [fileName, setFileName] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [preview, setPreview] = useState(false)
+  const [showInteractivePreview, setShowInteractivePreview] = useState(false)
+  const [dragging, setDragging] = useState(false)
+  const [bookType, setBookType] = useState<'1200' | '1900' | null>(null)
+  const [availableClasses, setAvailableClasses] = useState<string[]>([])
+  const [selectedClasses, setSelectedClasses] = useState<string[]>([])
+
   useEffect(() => {
     fetch('/api/teacher/classes')
       .then(r => r.ok ? r.json() : null)
@@ -644,27 +666,6 @@ export default function NewTestPage() {
       return isNumeric
     }))
   }, [questions.length, tab, availableClasses])
-  const xlsxRef = useRef<HTMLInputElement>(null)
-  const rtfRef = useRef<HTMLInputElement>(null)
-  const docxRef = useRef<HTMLInputElement>(null)
-  const xlsx600Ref = useRef<HTMLInputElement>(null)
-  const rtf1000Ref = useRef<HTMLInputElement>(null)
-
-  const [tab, setTab] = useState<'xlsx' | 'rtf' | 'docx' | 'xlsx600' | 'rtf1000'>('xlsx')
-  const [customTimeLimitMin, setCustomTimeLimitMin] = useState('2')
-  const [customTimeLimitSec, setCustomTimeLimitSec] = useState('0')
-  const [title, setTitle] = useState('')
-  const [roundNumber, setRoundNumber] = useState<string>('')
-  const [questions, setQuestions] = useState<QuestionRow[]>([])
-  const [fileName, setFileName] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [preview, setPreview] = useState(false)
-  const [showInteractivePreview, setShowInteractivePreview] = useState(false)
-  const [dragging, setDragging] = useState(false)
-  const [bookType, setBookType] = useState<'1200' | '1900' | null>(null)
-  const [availableClasses, setAvailableClasses] = useState<string[]>([])
-  const [selectedClasses, setSelectedClasses] = useState<string[]>([])
 
   // ─── Excel（300問 / 50問）処理 ─────────────────────────────────────────────
 
