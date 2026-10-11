@@ -71,6 +71,14 @@ export default function WaitingClient({
           )}
         </div>
 
+        {/* 先生からのメッセージ */}
+        {test.teacher_message && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left">
+            <p className="text-xs font-bold text-amber-700 mb-1">先生からのメッセージ</p>
+            <p className="text-xs text-amber-800 leading-relaxed">{test.teacher_message}</p>
+          </div>
+        )}
+
         {/* 注意事項 */}
         <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-left">
           <p className="text-xs font-bold text-yellow-800 mb-1">⚠️ 注意事項</p>

@@ -1149,8 +1149,8 @@ export default function TestManagerClient({
             </div>
           )}
 
-          {/* 先生メッセージ（50問モードのみ） */}
-          {test.mode === 50 && (
+          {/* 先生メッセージ */}
+          {true && (
             <div className="space-y-2 pt-3 border-t border-gray-100">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">④ 結果画面のメッセージ</p>
