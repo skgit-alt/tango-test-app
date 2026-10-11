@@ -75,8 +75,22 @@ export default async function ReviewPage({
 
   const { data: rawAnswers } = await admin
     .from('answers')
-    .select('question_id, selected_answer, is_correct, flagged, student_answer_text, questions(*)')
+    .select('question_id, selected_answer, is_correct, flagged, questions(*)')
     .eq('session_id', session.id)
+
+  // student_answer_text は別クエリで取得（キャッシュ未更新でも本体が壊れないように）
+  let answerTextMap: Record<string, string | null> = {}
+  try {
+    const { data: textRows } = await admin
+      .from('answers')
+      .select('question_id, student_answer_text')
+      .eq('session_id', session.id)
+    if (textRows) {
+      for (const r of textRows as any[]) {
+        answerTextMap[r.question_id] = r.student_answer_text ?? null
+      }
+    }
+  } catch { /* schema cache 未更新時はスキップ */ }
 
   const answers = ((rawAnswers ?? []) as any[])
     .filter((a) => a.questions)
@@ -96,7 +110,7 @@ export default async function ReviewPage({
       correct_answer: a.questions.correct_answer,
       points: a.questions.points,
       word_slots: a.questions.word_slots ?? null,
-      student_answer_text: (a as any).student_answer_text ?? null,
+      student_answer_text: answerTextMap[a.question_id] ?? null,
     }))
 
   const backUrl = sessionId ? `/student/result?sessionId=${sessionId}` : '/student/result'
