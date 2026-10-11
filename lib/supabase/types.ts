@@ -39,6 +39,7 @@ export interface Test {
   scheduled_class_starts: Record<string, string> | null
   cheats_confirmed_at: string | null
   book_type: '1200' | '1900' | null
+  target_classes: string[] | null
 }
 
 /** 生徒がテスト結果を閲覧できるか判定 */

@@ -620,6 +620,30 @@ export default function NewTestPage() {
       .then(d => { if (d.role !== 'admin') router.push('/teacher') })
       .catch(() => router.push('/teacher'))
   }, [router])
+
+  useEffect(() => {
+    fetch('/api/teacher/classes')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.classes) setAvailableClasses(d.classes) })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (questions.length === 0 || availableClasses.length === 0) return
+    const mode = questions.length === 600 ? 600
+      : questions.length === 300 ? 300
+      : questions.length === 50 && tab !== 'rtf1000' ? 50
+      : questions.length === 50 && tab === 'rtf1000' ? 55
+      : questions.length
+    setSelectedClasses(availableClasses.filter(cls => {
+      const isNumeric = /^\d/.test(cls)
+      const isAlpha = /^[A-Za-z]/.test(cls)
+      if (!isNumeric && !isAlpha) return false
+      if (mode === 50 || mode === 55) return isAlpha
+      if (mode === 300 || mode === 600) return true
+      return isNumeric
+    }))
+  }, [questions.length, tab, availableClasses])
   const xlsxRef = useRef<HTMLInputElement>(null)
   const rtfRef = useRef<HTMLInputElement>(null)
   const docxRef = useRef<HTMLInputElement>(null)
@@ -639,6 +663,8 @@ export default function NewTestPage() {
   const [showInteractivePreview, setShowInteractivePreview] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [bookType, setBookType] = useState<'1200' | '1900' | null>(null)
+  const [availableClasses, setAvailableClasses] = useState<string[]>([])
+  const [selectedClasses, setSelectedClasses] = useState<string[]>([])
 
   // ─── Excel（300問 / 50問）処理 ─────────────────────────────────────────────
 
@@ -891,9 +917,10 @@ export default function NewTestPage() {
       const roundNum = mode !== 300 && mode !== 600 && roundNumber.trim() !== '' ? parseInt(roundNumber) : null
       const book_type = (mode === 300 || mode === 600) ? bookType : null
 
+      const target_classes = selectedClasses.length > 0 ? selectedClasses : null
       const { data: test, error: testError } = await supabase
         .from('tests')
-        .insert({ title: title.trim(), mode, status: 'waiting', time_limit, pass_score, round_number: roundNum, book_type })
+        .insert({ title: title.trim(), mode, status: 'waiting', time_limit, pass_score, round_number: roundNum, book_type, target_classes })
         .select()
         .single()
 
@@ -1134,13 +1161,47 @@ export default function NewTestPage() {
           </button>
         )}
 
+        {/* 配信先クラス選択 */}
+        {preview && questions.length > 0 && availableClasses.length > 0 && (
+          <div className="bg-white border-2 border-gray-200 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-gray-800 text-sm">配信先クラス</p>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setSelectedClasses(availableClasses)}
+                  className="text-xs text-blue-600 hover:underline">全選択</button>
+                <button type="button" onClick={() => setSelectedClasses([])}
+                  className="text-xs text-gray-400 hover:underline">全解除</button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {availableClasses.map(cls => (
+                <button key={cls} type="button"
+                  onClick={() => setSelectedClasses(prev =>
+                    prev.includes(cls) ? prev.filter(c => c !== cls) : [...prev, cls]
+                  )}
+                  className={`px-3 py-1.5 rounded-xl border-2 text-sm font-medium transition-all active:scale-95 ${
+                    selectedClasses.includes(cls)
+                      ? 'bg-blue-600 border-blue-600 text-white'
+                      : 'bg-white border-gray-300 text-gray-500 hover:border-blue-400'
+                  }`}
+                >
+                  {cls}
+                </button>
+              ))}
+            </div>
+            {selectedClasses.length === 0 && (
+              <p className="text-xs text-red-500">配信先クラスを1つ以上選んでください</p>
+            )}
+          </div>
+        )}
+
         {error && (
           <div className="bg-red-50 text-red-700 rounded-xl p-4 text-sm">{error}</div>
         )}
 
         <button
           onClick={handleSubmit}
-          disabled={loading || !title.trim() || questions.length === 0 || ((mode === 300 || mode === 600) && !bookType)}
+          disabled={loading || !title.trim() || questions.length === 0 || ((mode === 300 || mode === 600) && !bookType) || (preview && availableClasses.length > 0 && selectedClasses.length === 0)}
           className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? '作成中...' : 'テストを作成する'}

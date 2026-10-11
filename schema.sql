@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS tests (
   published_classes       TEXT[],
   published_student_ids   TEXT[],
   teacher_message         TEXT,
+  target_classes          TEXT[],
   scheduled_class_starts  JSONB DEFAULT '{}',
   cheats_confirmed_at     TIMESTAMPTZ
 );

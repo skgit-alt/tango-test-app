@@ -17,6 +17,7 @@ const ALLOWED_FIELDS = new Set([
   'teacher_message',
   'scheduled_class_starts',
   'cheats_confirmed_at',
+  'target_classes',
 ])
 
 // 先生ロールが操作できるフィールド（テスト開始に関するもののみ）
