@@ -714,7 +714,7 @@ export default function TestManagerClient({
           </div>
           <div className="text-sm text-gray-500 ml-8 flex items-center gap-3 flex-wrap">
             <span className="flex items-center gap-1">
-              {test.mode}問モード /
+              {test.mode === 55 ? '英熟語1000（50問）' : test.mode === 45 ? '英熟語1000（45問）' : test.mode === 40 ? '英熟語1000（40問）' : `${test.mode}問`}モード /
               {isAdmin && editingTimeLimit ? (
                 <>
                   <span className="ml-1">制限時間</span>

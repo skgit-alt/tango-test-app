@@ -37,9 +37,9 @@ async function fetchRankingData(
     .not('round_number', 'is', null)
 
   if (is20) {
-    testsQuery = testsQuery.neq('mode', 50).neq('mode', 300)
+    testsQuery = testsQuery.neq('mode', 50).neq('mode', 55).neq('mode', 300)
   } else {
-    testsQuery = testsQuery.eq('mode', 50)
+    testsQuery = testsQuery.in('mode', [50, 55])
   }
 
   const { data: targetTests } = await testsQuery

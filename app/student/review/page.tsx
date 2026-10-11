@@ -95,6 +95,7 @@ export default async function ReviewPage({
       choice5: a.questions.choice5,
       correct_answer: a.questions.correct_answer,
       points: a.questions.points,
+      word_slots: a.questions.word_slots ?? null,
     }))
 
   const backUrl = sessionId ? `/student/result?sessionId=${sessionId}` : '/student/result'

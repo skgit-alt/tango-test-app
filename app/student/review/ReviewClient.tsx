@@ -17,6 +17,7 @@ type AnswerItem = {
   choice5: string | null
   correct_answer: number
   points: number
+  word_slots: string | null
 }
 
 type SortMode = 'all' | 'incorrect' | 'correct' | 'flagged'
@@ -101,8 +102,79 @@ export default function ReviewClient({
 
         {filtered.map((a) => {
           const isCorrect = a.is_correct
-          const selected = a.selected_answer
 
+          // Section C / D: word_slots あり
+          if (a.word_slots) {
+            let ws: { words?: string[]; prefix?: string; suffix?: string; answer?: string; blanks?: string[]; sentence?: string } = {}
+            try { ws = JSON.parse(a.word_slots) } catch { /* ignore */ }
+
+            if (ws.blanks) {
+              // Section D: 空所補充
+              const sentence = ws.sentence ?? ''
+              const parts = sentence.split('(     )')
+              return (
+                <div key={a.question_id} className={`bg-white rounded-2xl border-2 overflow-hidden ${isCorrect ? 'border-green-200' : 'border-red-200'}`}>
+                  <div className={`px-5 py-3 flex items-center gap-2 ${isCorrect ? 'bg-green-50' : 'bg-red-50'}`}>
+                    <span className={`text-lg font-bold ${isCorrect ? 'text-green-600' : 'text-red-500'}`}>{isCorrect ? '✅' : '❌'}</span>
+                    <span className="text-sm font-medium text-gray-600">問題 {a.order_num}</span>
+                    {a.flagged && <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-medium">★ 自信なし</span>}
+                    <span className="ml-auto text-xs text-gray-400">{a.points}点</span>
+                  </div>
+                  <div className="px-5 py-4 space-y-3">
+                    <p className="text-gray-500 text-sm">{a.question_text}</p>
+                    <div className="bg-gray-50 rounded-xl p-3 text-sm leading-loose">
+                      {parts.map((part, pi) => (
+                        <span key={pi}>
+                          <span className="text-gray-700">{part}</span>
+                          {pi < parts.length - 1 && (
+                            <span className="inline-block border-b-2 border-green-500 text-green-700 font-bold px-2 mx-0.5">{ws.blanks![pi]}</span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                    <p className={`text-xs font-medium px-1 ${isCorrect ? 'text-green-600' : 'text-red-500'}`}>
+                      {isCorrect ? '✓ 正解' : '✗ 不正解（正しい答えは緑で表示）'}
+                    </p>
+                  </div>
+                </div>
+              )
+            }
+
+            // Section C: 並べ替え
+            const words = ws.words ?? []
+            const prefix = ws.prefix ?? ''
+            const suffix = ws.suffix ?? ''
+            const answer = ws.answer ?? ''
+            return (
+              <div key={a.question_id} className={`bg-white rounded-2xl border-2 overflow-hidden ${isCorrect ? 'border-green-200' : 'border-red-200'}`}>
+                <div className={`px-5 py-3 flex items-center gap-2 ${isCorrect ? 'bg-green-50' : 'bg-red-50'}`}>
+                  <span className={`text-lg font-bold ${isCorrect ? 'text-green-600' : 'text-red-500'}`}>{isCorrect ? '✅' : '❌'}</span>
+                  <span className="text-sm font-medium text-gray-600">問題 {a.order_num}</span>
+                  {a.flagged && <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-medium">★ 自信なし</span>}
+                  <span className="ml-auto text-xs text-gray-400">{a.points}点</span>
+                </div>
+                <div className="px-5 py-4 space-y-3">
+                  <p className="text-gray-500 text-sm">{a.question_text}</p>
+                  <div>
+                    <p className="text-xs text-gray-400 mb-1.5">並べ替える単語：</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {words.map((w, i) => <span key={i} className="bg-gray-100 text-gray-600 px-2 py-1 rounded-lg text-sm">{w}</span>)}
+                    </div>
+                  </div>
+                  <div className="bg-green-50 rounded-xl p-3 text-sm">
+                    <p className="text-xs text-green-600 font-medium mb-1">✓ 正解：</p>
+                    <p className="text-green-800 font-medium">{prefix}{answer}{suffix}</p>
+                  </div>
+                  <p className={`text-xs font-medium px-1 ${isCorrect ? 'text-green-600' : 'text-red-500'}`}>
+                    {isCorrect ? '✓ 正解' : '✗ 不正解'}
+                  </p>
+                </div>
+              </div>
+            )
+          }
+
+          // 通常の選択問題
+          const selected = a.selected_answer
           const allChoices = [
             { num: 1, text: a.choice1 },
             { num: 2, text: a.choice2 },

@@ -80,7 +80,7 @@ export default async function ResultPage({
   const mode = test.mode
   const passed = test.pass_score !== null ? score >= test.pass_score : null
   // 練習モードではpt表示なし（50問テストのみポイント対象）
-  const pointsEarned = mode === 50 && !isPractice ? calcPoints(score) : null
+  const pointsEarned = (mode === 50 || mode === 55) && !isPractice ? calcPoints(score) : null
 
   return (
     <div className="min-h-screen bg-blue-50 flex flex-col items-center justify-center p-4">
