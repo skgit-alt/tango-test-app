@@ -57,7 +57,7 @@ export default function WaitingClient({
         <div>
           <h1 className="text-xl font-bold text-gray-800 mb-1">{test.title}</h1>
           <p className="text-sm text-gray-500">
-            {test.mode}問 ／ 制限時間 {formatTime(test.time_limit)}
+            {test.mode === 55 ? '50問' : test.mode === 45 ? '45問' : test.mode === 40 ? '40問' : `${test.mode}問`} ／ 制限時間 {formatTime(test.time_limit)}
           </p>
         </div>
 

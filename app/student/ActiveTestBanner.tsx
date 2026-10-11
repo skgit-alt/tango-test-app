@@ -97,7 +97,7 @@ function TestCard({ test, studentClass }: { test: ActiveTest; studentClass: stri
       <div>
         <p className="text-xs opacity-80 mb-0.5">{statusLabel}</p>
         <p className="font-bold text-sm leading-snug">{test.title}</p>
-        <p className="text-xs mt-0.5 opacity-80">{test.mode}問モード</p>
+        <p className="text-xs mt-0.5 opacity-80">{test.mode === 55 ? '英熟語1000（50問）' : test.mode === 45 ? '英熟語1000（45問）' : test.mode === 40 ? '英熟語1000（40問）' : `${test.mode}問`}モード</p>
       </div>
       {button}
     </div>
