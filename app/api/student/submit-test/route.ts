@@ -93,17 +93,14 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // 生徒の実際の回答テキスト（Section C/D）を保存
+  // 生徒の実際の回答テキスト（Section C/D）を保存（RPC経由でスキーマキャッシュを回避）
   const wordSlotAnswers = answers.filter((a) => a.student_answer_text != null)
-  if (wordSlotAnswers.length > 0) {
-    await admin.from('answers').upsert(
-      wordSlotAnswers.map((a) => ({
-        session_id: sessionId,
-        question_id: a.question_id,
-        student_answer_text: a.student_answer_text,
-      })),
-      { onConflict: 'session_id,question_id' }
-    )
+  for (const a of wordSlotAnswers) {
+    await admin.rpc('update_student_answer_text', {
+      p_session_id: sessionId,
+      p_question_id: a.question_id,
+      p_text: a.student_answer_text,
+    })
   }
 
   // ★マーク（flagged）をanswersテーブルに保存
