@@ -646,7 +646,14 @@ export default function NewTestPage() {
   useEffect(() => {
     fetch('/api/teacher/classes')
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.classes) setAvailableClasses(d.classes) })
+      .then(d => {
+        if (d?.classes) {
+          setAvailableClasses(d.classes)
+          // 実験用クラスはデフォルトで選択
+          const others = (d.classes as string[]).filter(cls => !/^\d/.test(cls) && !/^[A-Za-z]/.test(cls))
+          setSelectedClasses(others)
+        }
+      })
       .catch(() => {})
   }, [])
 
@@ -660,7 +667,7 @@ export default function NewTestPage() {
     setSelectedClasses(availableClasses.filter(cls => {
       const isNumeric = /^\d/.test(cls)
       const isAlpha = /^[A-Za-z]/.test(cls)
-      if (!isNumeric && !isAlpha) return false
+      if (!isNumeric && !isAlpha) return true  // 実験用クラスは常に選択
       if (mode === 50 || mode === 55) return isAlpha
       if (mode === 300 || mode === 600) return true
       return isNumeric
@@ -1163,38 +1170,49 @@ export default function NewTestPage() {
         )}
 
         {/* 配信先クラス選択 */}
-        {preview && questions.length > 0 && availableClasses.length > 0 && (
-          <div className="bg-white border-2 border-gray-200 rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between">
+        {preview && questions.length > 0 && availableClasses.length > 0 && (() => {
+          const numericClasses = availableClasses.filter(cls => /^\d/.test(cls))
+          const alphaClasses = availableClasses.filter(cls => /^[A-Za-z]/.test(cls))
+          const otherClasses = availableClasses.filter(cls => !/^\d/.test(cls) && !/^[A-Za-z]/.test(cls))
+          const isNumericOn = numericClasses.length > 0 && numericClasses.every(c => selectedClasses.includes(c))
+          const isAlphaOn = alphaClasses.length > 0 && alphaClasses.every(c => selectedClasses.includes(c))
+          const isOtherOn = otherClasses.length > 0 && otherClasses.every(c => selectedClasses.includes(c))
+          const toggleGroup = (group: string[]) => {
+            const allOn = group.every(c => selectedClasses.includes(c))
+            setSelectedClasses(prev => allOn
+              ? prev.filter(c => !group.includes(c))
+              : [...new Set([...prev, ...group])]
+            )
+          }
+          return (
+            <div className="bg-white border-2 border-gray-200 rounded-2xl p-4 space-y-3">
               <p className="font-semibold text-gray-800 text-sm">配信先クラス</p>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setSelectedClasses(availableClasses)}
-                  className="text-xs text-blue-600 hover:underline">全選択</button>
-                <button type="button" onClick={() => setSelectedClasses([])}
-                  className="text-xs text-gray-400 hover:underline">全解除</button>
+              <div className="flex flex-wrap gap-2">
+                {numericClasses.length > 0 && (
+                  <button type="button" onClick={() => toggleGroup(numericClasses)}
+                    className={`px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all active:scale-95 ${isNumericOn ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-300 text-gray-500 hover:border-blue-400'}`}>
+                    1〜6組
+                  </button>
+                )}
+                {alphaClasses.length > 0 && (
+                  <button type="button" onClick={() => toggleGroup(alphaClasses)}
+                    className={`px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all active:scale-95 ${isAlphaOn ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-300 text-gray-500 hover:border-blue-400'}`}>
+                    A〜D組
+                  </button>
+                )}
+                {otherClasses.length > 0 && (
+                  <button type="button" onClick={() => toggleGroup(otherClasses)}
+                    className={`px-4 py-2 rounded-xl border-2 text-sm font-medium transition-all active:scale-95 ${isOtherOn ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-300 text-gray-500 hover:border-blue-400'}`}>
+                    実験用クラス
+                  </button>
+                )}
               </div>
+              {selectedClasses.length === 0 && (
+                <p className="text-xs text-red-500">配信先クラスを1つ以上選んでください</p>
+              )}
             </div>
-            <div className="flex flex-wrap gap-2">
-              {availableClasses.map(cls => (
-                <button key={cls} type="button"
-                  onClick={() => setSelectedClasses(prev =>
-                    prev.includes(cls) ? prev.filter(c => c !== cls) : [...prev, cls]
-                  )}
-                  className={`px-3 py-1.5 rounded-xl border-2 text-sm font-medium transition-all active:scale-95 ${
-                    selectedClasses.includes(cls)
-                      ? 'bg-blue-600 border-blue-600 text-white'
-                      : 'bg-white border-gray-300 text-gray-500 hover:border-blue-400'
-                  }`}
-                >
-                  {cls}
-                </button>
-              ))}
-            </div>
-            {selectedClasses.length === 0 && (
-              <p className="text-xs text-red-500">配信先クラスを1つ以上選んでください</p>
-            )}
-          </div>
-        )}
+          )
+        })()}
 
         {error && (
           <div className="bg-red-50 text-red-700 rounded-xl p-4 text-sm">{error}</div>
