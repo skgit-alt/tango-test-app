@@ -678,6 +678,8 @@ export default function NewTestPage() {
       }
       setQuestions(parsed)
       setPreview(true)
+      if (parsed.length === 300) { setCustomTimeLimitMin('17'); setCustomTimeLimitSec('0') }
+      else { setCustomTimeLimitMin('3'); setCustomTimeLimitSec('5') }
     } catch (err) {
       console.error(err)
       setError('ファイルの読み込みに失敗しました。Excelファイルを確認してください。')
@@ -732,6 +734,7 @@ export default function NewTestPage() {
 
       setQuestions(parsed)
       setPreview(true)
+      setCustomTimeLimitMin('35'); setCustomTimeLimitSec('0')
     } catch (err) {
       console.error(err)
       setError('ファイルの読み込みに失敗しました。Excelファイルを確認してください。')
@@ -777,6 +780,7 @@ export default function NewTestPage() {
       setTitle(parsedTitle || file.name.replace(/\.[^.]+$/, ''))
       setQuestions(parsed)
       setPreview(true)
+      setCustomTimeLimitMin('3'); setCustomTimeLimitSec('5')
     } catch (err) {
       console.error(err)
       setError('RTFファイルの読み込みに失敗しました。')
@@ -801,6 +805,9 @@ export default function NewTestPage() {
       setTitle(parsedTitle || file.name.replace(/\.[^.]+$/, ''))
       setQuestions(parsed)
       setPreview(true)
+      if (parsed.length === 50) { setCustomTimeLimitMin('6'); setCustomTimeLimitSec('0') }
+      else if (parsed.length === 45) { setCustomTimeLimitMin('17'); setCustomTimeLimitSec('0') }
+      else { setCustomTimeLimitMin('15'); setCustomTimeLimitSec('0') }
     } catch (err) {
       console.error(err)
       setError('RTFファイルの読み込みに失敗しました。')
@@ -877,13 +884,7 @@ export default function NewTestPage() {
     setError('')
 
     try {
-      const time_limit = mode === 600 ? 2100
-        : mode === 300 ? 1020
-        : mode === 50 ? 185
-        : mode === 55 ? 1200
-        : mode === 45 ? 1020
-        : mode === 40 ? 900
-        : (parseInt(customTimeLimitMin) || 0) * 60 + (parseInt(customTimeLimitSec) || 0) || 120
+      const time_limit = (parseInt(customTimeLimitMin) || 0) * 60 + (parseInt(customTimeLimitSec) || 0) || 120
       const pass_score = mode === 600 ? 570 : mode === 300 ? 285 : null
       const roundNum = mode !== 300 && mode !== 600 && roundNumber.trim() !== '' ? parseInt(roundNumber) : null
       const book_type = (mode === 300 || mode === 600) ? bookType : null
@@ -1094,41 +1095,29 @@ export default function NewTestPage() {
           </div>
         )}
 
-        {/* docxの場合：制限時間を手動入力 */}
-        {tab === 'docx' && questions.length > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">制限時間</label>
-            <div className="flex items-center gap-2">
+        {/* 自動判定結果 */}
+        {mode && (
+          <div className="bg-blue-50 rounded-xl p-4 space-y-2 text-sm">
+            <p className="font-medium text-blue-800">自動設定内容</p>
+            <p className="text-blue-700">問題数: <strong>{questions.length}問</strong></p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-blue-700">制限時間:</span>
               <input
                 type="number" min={0} max={180} value={customTimeLimitMin}
                 onChange={(e) => setCustomTimeLimitMin(e.target.value)}
-                className="w-16 border border-gray-300 rounded-xl px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-14 border border-blue-300 rounded-lg px-2 py-0.5 text-blue-800 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <span className="text-gray-600 text-sm">分</span>
+              <span className="text-blue-700">分</span>
               <input
                 type="number" min={0} max={59} value={customTimeLimitSec}
                 onChange={(e) => setCustomTimeLimitSec(e.target.value)}
-                className="w-16 border border-gray-300 rounded-xl px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-14 border border-blue-300 rounded-lg px-2 py-0.5 text-blue-800 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <span className="text-gray-600 text-sm">秒</span>
+              <span className="text-blue-700">秒</span>
+              <span className="text-blue-400 text-xs">（変更できます）</span>
             </div>
-          </div>
-        )}
-
-        {/* 自動判定結果 */}
-        {mode && (
-          <div className="bg-blue-50 rounded-xl p-4 space-y-1 text-sm">
-            <p className="font-medium text-blue-800">自動設定内容</p>
-            <p className="text-blue-700">問題数: <strong>{questions.length}問</strong></p>
-            {mode === 600 && <><p className="text-blue-700">制限時間: <strong>2100秒（35分）</strong></p><p className="text-blue-700">合格点: <strong>570点</strong></p></>}
-            {mode === 300 && <><p className="text-blue-700">制限時間: <strong>1020秒（17分）</strong></p><p className="text-blue-700">合格点: <strong>285点</strong></p></>}
-            {mode === 50 && <p className="text-blue-700">制限時間: <strong>185秒（3分5秒）</strong></p>}
-            {mode === 55 && <p className="text-blue-700">制限時間: <strong>1200秒（20分）</strong></p>}
-            {mode === 45 && <p className="text-blue-700">制限時間: <strong>1020秒（17分）</strong></p>}
-            {mode === 40 && <p className="text-blue-700">制限時間: <strong>900秒（15分）</strong></p>}
-            {mode !== 50 && mode !== 55 && mode !== 45 && mode !== 40 && mode !== 300 && mode !== 600 && (
-              <p className="text-blue-700">制限時間: <strong>{(parseInt(customTimeLimitMin)||0)}分{(parseInt(customTimeLimitSec)||0)}秒</strong>（上で変更可）</p>
-            )}
+            {(mode === 600) && <p className="text-blue-700">合格点: <strong>570点</strong></p>}
+            {(mode === 300) && <p className="text-blue-700">合格点: <strong>285点</strong></p>}
           </div>
         )}
 
