@@ -6,8 +6,8 @@ import { Student, Test, Session } from '@/lib/supabase/types'
 function renderMessage(text: string): string {
   const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   return escaped
-    .replace(/\*\*(.*?)\*\*/gs, '<strong>$1</strong>')
-    .replace(/__(.*?)__/gs, '<u>$1</u>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.*?)__/g, '<u>$1</u>')
     .replace(/\n/g, '<br>')
 }
 
