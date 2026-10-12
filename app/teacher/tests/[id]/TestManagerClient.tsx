@@ -67,6 +67,14 @@ const statusColor: Record<string, string> = {
 
 type PreviewQuestion = Pick<Question, 'id' | 'order_num' | 'question_text' | 'choice1' | 'choice2' | 'choice3' | 'choice4' | 'choice5' | 'correct_answer' | 'points' | 'word_slots'>
 
+function renderMessage(text: string): string {
+  const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return escaped
+    .replace(/\*\*(.*?)\*\*/gs, '<strong>$1</strong>')
+    .replace(/__(.*?)__/gs, '<u>$1</u>')
+    .replace(/\n/g, '<br>')
+}
+
 export default function TestManagerClient({
   test: initialTest,
   questions,
@@ -133,6 +141,20 @@ export default function TestManagerClient({
   const [messageInput, setMessageInput] = useState(test.teacher_message ?? DEFAULT_TEACHER_MESSAGE)
   const [savingMessage, setSavingMessage] = useState(false)
   const [messageSaved, setMessageSaved] = useState(false)
+  const applyFormat = (format: 'bold' | 'underline') => {
+    const ta = document.getElementById('messageTextarea') as HTMLTextAreaElement | null
+    if (!ta) return
+    const start = ta.selectionStart
+    const end = ta.selectionEnd
+    const marker = format === 'bold' ? '**' : '__'
+    const newText = messageInput.slice(0, start) + marker + messageInput.slice(start, end) + marker + messageInput.slice(end)
+    setMessageInput(newText)
+    requestAnimationFrame(() => {
+      ta.selectionStart = start + marker.length
+      ta.selectionEnd = end + marker.length
+      ta.focus()
+    })
+  }
   // 提出リセット
   const [resettingId, setResettingId] = useState<string | null>(null)
   // 結果公開
@@ -1111,12 +1133,26 @@ export default function TestManagerClient({
         </div>
         {showMessageEditor ? (
           <div className="space-y-3">
+            <div className="flex gap-1 border border-gray-200 rounded-lg p-1 w-fit">
+              <button
+                onMouseDown={(e) => { e.preventDefault(); applyFormat('bold') }}
+                className="px-3 py-1 text-sm font-bold text-gray-700 hover:bg-gray-100 rounded"
+                title="太字"
+              >B</button>
+              <button
+                onMouseDown={(e) => { e.preventDefault(); applyFormat('underline') }}
+                className="px-3 py-1 text-sm underline text-gray-700 hover:bg-gray-100 rounded"
+                title="下線"
+              >U</button>
+            </div>
             <textarea
+              id="messageTextarea"
               value={messageInput}
               onChange={(e) => setMessageInput(e.target.value)}
-              rows={4}
+              rows={5}
               className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
             />
+            <p className="text-xs text-gray-400">選択した文字の上でBまたはUを押すと書式が付きます</p>
             <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => handleSaveMessage(false)}
@@ -1141,9 +1177,10 @@ export default function TestManagerClient({
             </div>
           </div>
         ) : (
-          <p className="text-sm text-gray-600 bg-amber-50 border border-amber-200 rounded-xl p-3 leading-relaxed">
-            {test.teacher_message ?? DEFAULT_TEACHER_MESSAGE}
-          </p>
+          <p
+            className="text-sm text-gray-600 bg-amber-50 border border-amber-200 rounded-xl p-3 leading-relaxed"
+            dangerouslySetInnerHTML={{ __html: renderMessage(test.teacher_message ?? DEFAULT_TEACHER_MESSAGE) }}
+          />
         )}
       </div>
 

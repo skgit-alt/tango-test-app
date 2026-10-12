@@ -3,6 +3,14 @@
 import { useState } from 'react'
 import { Student, Test, Session } from '@/lib/supabase/types'
 
+function renderMessage(text: string): string {
+  const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return escaped
+    .replace(/\*\*(.*?)\*\*/gs, '<strong>$1</strong>')
+    .replace(/__(.*?)__/gs, '<u>$1</u>')
+    .replace(/\n/g, '<br>')
+}
+
 export default function WaitingClient({
   student,
   test,
@@ -75,7 +83,7 @@ export default function WaitingClient({
         {test.teacher_message && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left">
             <p className="text-xs font-bold text-amber-700 mb-1">先生からのメッセージ</p>
-            <p className="text-xs text-amber-800 leading-relaxed">{test.teacher_message}</p>
+            <p className="text-xs text-amber-800 leading-relaxed" dangerouslySetInnerHTML={{ __html: renderMessage(test.teacher_message!) }} />
           </div>
         )}
 

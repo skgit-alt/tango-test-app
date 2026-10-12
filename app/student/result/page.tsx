@@ -4,6 +4,14 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { calcPoints, canSeeResult } from '@/lib/supabase/types'
 
+function renderMessage(text: string): string {
+  const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return escaped
+    .replace(/\*\*(.*?)\*\*/gs, '<strong>$1</strong>')
+    .replace(/__(.*?)__/gs, '<u>$1</u>')
+    .replace(/\n/g, '<br>')
+}
+
 export default async function ResultPage({
   searchParams,
 }: {
@@ -217,9 +225,10 @@ export default async function ResultPage({
 
                 {/* 先生からのメッセージ */}
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                  <p className="text-xs text-amber-800 leading-relaxed">
-                    {test.teacher_message ?? defaultMessage}
-                  </p>
+                  <p
+                    className="text-xs text-amber-800 leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: renderMessage(test.teacher_message ?? defaultMessage) }}
+                  />
                 </div>
               </div>
             )
