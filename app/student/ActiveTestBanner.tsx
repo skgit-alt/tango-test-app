@@ -24,12 +24,11 @@ type ActiveTest = {
 }
 
 function cardColor(mode: number, bookType?: string | null): string {
-  if (mode === 50) return 'bg-violet-600'
-  if (mode === 300 || mode === 600) {
-    return bookType === '1200' ? 'bg-yellow-500' : 'bg-blue-600'
-  }
+  if (mode === 50) return 'bg-blue-600'
+  if (mode === 300) return bookType === '1200' ? 'bg-yellow-500' : 'bg-orange-500'
+  if (mode === 600) return bookType === '1200' ? 'bg-yellow-500' : 'bg-violet-600'
   if (mode === 40 || mode === 45 || mode === 55) return 'bg-pink-600'
-  return 'bg-orange-500'
+  return 'bg-green-600'
 }
 
 function TestCard({ test, studentClass }: { test: ActiveTest; studentClass: string }) {
