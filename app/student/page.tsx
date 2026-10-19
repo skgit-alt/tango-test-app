@@ -28,7 +28,7 @@ export default async function StudentHomePage() {
   // 配信中テストを全件取得（RLSバイパス）
   const { data: activeTests } = await admin
     .from('tests')
-    .select('id, title, mode, status, open_classes, published_classes, published_student_ids, book_type')
+    .select('id, title, mode, status, open_classes, published_classes, published_student_ids, book_type, target_classes')
     .in('status', ['waiting', 'open'])
     .order('created_at', { ascending: false })
 
@@ -54,10 +54,14 @@ export default async function StudentHomePage() {
 
   const initialTestsWithSessions = (activeTests ?? [])
     .filter((t) => {
-      // モード別クラスフィルター
-      if (!isOtherClass) {
-        if ((t.mode === 50 || t.mode === 600) && !isAlphaClass) return false
-        if (t.mode !== 50 && t.mode !== 300 && t.mode !== 600 && !isNumericClass) return false
+      // クラスフィルター
+      const tc = (t as any).target_classes as string[] | null
+      if (tc && tc.length > 0) {
+        if (!tc.includes(studentClass)) return false
+      } else if (!isOtherClass) {
+        const isIdiomatic = t.mode === 55 || t.mode === 45 || t.mode === 40
+        if ((t.mode === 50 || t.mode === 600 || isIdiomatic) && !isAlphaClass) return false
+        if (t.mode !== 50 && t.mode !== 300 && t.mode !== 600 && !isIdiomatic && !isNumericClass) return false
       }
       // openなら常に表示
       if (t.status === 'open') return true

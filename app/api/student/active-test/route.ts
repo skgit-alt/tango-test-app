@@ -13,7 +13,7 @@ export async function GET() {
   const [{ data: tests }, { data: student }] = await Promise.all([
     admin
       .from('tests')
-      .select('id, title, mode, status, open_classes, published_classes, published_student_ids, scheduled_at, scheduled_class_starts, book_type')
+      .select('id, title, mode, status, open_classes, published_classes, published_student_ids, scheduled_at, scheduled_class_starts, book_type, target_classes')
       .in('status', ['waiting', 'open'])
       .order('created_at', { ascending: false }),
     admin.from('students').select('class_name').eq('id', user.id).maybeSingle(),
@@ -74,10 +74,16 @@ export async function GET() {
 
   const result = testList
     .filter((test) => {
-      // ── モード別クラスフィルター ──────────────────────────────────────────
-      if (!isOtherClass) {
-        if ((test.mode === 50 || test.mode === 600) && !isAlphaClass) return false   // 50問・600問 → A～D組のみ
-        if (test.mode !== 50 && test.mode !== 300 && test.mode !== 600 && !isNumericClass) return false // 20問 → 1～6組のみ
+      // ── クラスフィルター ──────────────────────────────────────────────────
+      const tc = (test as any).target_classes as string[] | null
+      if (tc && tc.length > 0) {
+        // target_classesが設定されている場合：自クラスが含まれていなければ非表示
+        if (!tc.includes(studentClass)) return false
+      } else if (!isOtherClass) {
+        // target_classesが未設定の場合：モード別デフォルトフィルター
+        const isIdiomatic = test.mode === 55 || test.mode === 45 || test.mode === 40
+        if ((test.mode === 50 || test.mode === 600 || isIdiomatic) && !isAlphaClass) return false
+        if (test.mode !== 50 && test.mode !== 300 && test.mode !== 600 && !isIdiomatic && !isNumericClass) return false
       }
 
       // ── 表示可否：openまたはopen_classesに自クラスが含まれるテストのみ表示 ──
