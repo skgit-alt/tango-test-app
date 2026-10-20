@@ -26,6 +26,20 @@ export default async function WaitingPage({
   if (!student.test_name) redirect('/student/change-password')
 
   const studentClass = student.class_name ?? ''
+  const isNumericClass = /^\d/.test(studentClass)
+  const isAlphaClass = /^[A-Za-z]/.test(studentClass)
+  const isOtherClass = !isNumericClass && !isAlphaClass
+
+  // このクラスの生徒がこのテストを受けられるか判定（active-test APIと同じロジック）
+  const isClassAllowed = (t: any): boolean => {
+    const tc = t.target_classes as string[] | null
+    if (tc && tc.length > 0) return tc.includes(studentClass)
+    if (isOtherClass) return true
+    const isIdiomatic = t.mode === 55 || t.mode === 45 || t.mode === 40
+    if ((t.mode === 50 || t.mode === 600 || isIdiomatic) && !isAlphaClass) return false
+    if (t.mode !== 50 && t.mode !== 300 && t.mode !== 600 && !isIdiomatic && !isNumericClass) return false
+    return true
+  }
 
   // testIdが指定されていればそのテストを、なければ最新のopenテストを取得
   let test = null
@@ -40,15 +54,14 @@ export default async function WaitingPage({
   }
 
   if (!test) {
-    // フォールバック: 最新のopenテスト
-    const { data } = await admin
+    // フォールバック: 最新のopenテストからクラスに合うものを探す
+    const { data: openTests } = await admin
       .from('tests')
       .select('*')
       .eq('status', 'open')
       .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    test = data
+      .limit(10)
+    test = (openTests ?? []).find(isClassAllowed) ?? null
   }
 
   if (!test) {
@@ -64,10 +77,14 @@ export default async function WaitingPage({
   }
 
   // この生徒がこのテストにアクセスできるか確認
+  // 1. target_classesチェック（配信先クラスに含まれていなければホームへ）
+  if (!isClassAllowed(test)) {
+    redirect('/student')
+  }
+  // 2. open状態またはクラス別開放チェック
   const classOpen = (test.open_classes ?? []).includes(studentClass)
   const isFullyOpen = test.status === 'open'
   if (!isFullyOpen && !classOpen) {
-    // まだ開放されていないクラスはホームに戻す
     redirect('/student')
   }
 
