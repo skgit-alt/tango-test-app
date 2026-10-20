@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   //       全生徒を返す。これにより未受験者も確実に表示できる。
   const { data: testInfo } = await admin
     .from('tests')
-    .select('status, open_classes, mode')
+    .select('status, open_classes, mode, target_classes')
     .eq('id', testId)
     .maybeSingle()
 
@@ -45,9 +45,13 @@ export async function GET(req: NextRequest) {
       if (st?.class_name) classSet.add(st.class_name)
     }
 
-    // 2. open_classes も追加
-    for (const cls of testInfo.open_classes ?? []) {
-      classSet.add(cls)
+    // 2. target_classesが設定されていればそれを使う（配信先クラスを正確に反映）
+    //    未設定の場合はopen_classesを追加
+    const targetClasses = (testInfo as any).target_classes as string[] | null
+    if (targetClasses && targetClasses.length > 0) {
+      for (const cls of targetClasses) classSet.add(cls)
+    } else {
+      for (const cls of testInfo.open_classes ?? []) classSet.add(cls)
     }
 
     // 3. クラスが判明していればそのクラスの全生徒を取得
@@ -63,7 +67,8 @@ export async function GET(req: NextRequest) {
         .from('students')
         .select('id, name, class_name, seat_number, test_name')
       let filtered = allDb ?? []
-      if (testInfo.mode === 50 || testInfo.mode === 600) {
+      const isIdiomatic = testInfo.mode === 55 || testInfo.mode === 45 || testInfo.mode === 40
+      if (testInfo.mode === 50 || testInfo.mode === 600 || isIdiomatic) {
         filtered = filtered.filter((s) => /^[A-Za-z]/.test(s.class_name))
       } else if (testInfo.mode !== 300) {
         filtered = filtered.filter((s) => /^\d/.test(s.class_name))
