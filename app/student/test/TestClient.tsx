@@ -68,6 +68,7 @@ export default function TestClient({
   const submittingRef = useRef(false)
   const currentSectionLabelRef = useRef<string | null>(null)
   const deviceTokenRef = useRef<string>('')
+  const fullScreenWidthRef = useRef<number>(0)
   const topRef = useRef<HTMLDivElement>(null)
   const answersRef = useRef(answers)
   const submitTestRef = useRef<() => void>(() => {})
@@ -334,7 +335,10 @@ export default function TestClient({
 
   useEffect(() => {
     const fn = () => {
-      setTimeout(() => { if (!document.hidden) logCheat('app_switch') }, 100)
+      // blurの瞬間にキーボードが出ていた場合はiOSキーボードの▼ボタン操作なので無視
+      const vv = window.visualViewport
+      const keyboardVisible = vv ? window.innerHeight - vv.height > 100 : false
+      setTimeout(() => { if (!document.hidden && !keyboardVisible) logCheat('app_switch') }, 100)
     }
     window.addEventListener('blur', fn)
     return () => window.removeEventListener('blur', fn)
@@ -356,16 +360,21 @@ export default function TestClient({
   }, [logCheat])
 
   useEffect(() => {
+    // テスト開始時の幅を記録（Split View判定の基準）
+    fullScreenWidthRef.current = window.innerWidth
+
     const isSplitView = () => {
       // Method 1: screen.widthが全画面幅を返す場合（デスクトップ・iPhone等）
       if (screen.width > 0 && (window.innerWidth / screen.width) < 0.65) return true
-      // Method 2: iPadOSはscreen.width = window.innerWidthになるため絶対値で判定
+      // Method 2: iPadOS（screen.width = window.innerWidthになるため別途判定）
       // iPadOS 13以降はMacintoshとして検出されるため両方チェック
       const isIPad = /iPad/.test(navigator.userAgent) ||
         (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
       if (!isIPad) return false
-      // 横向き全画面の最小幅(iPad mini)=1024px → 1000px未満ならSplit View
-      // 縦向き全画面の最小幅(iPad mini)=744px  →  700px未満ならSplit View
+      // 起動時の幅から15%以上縮小された場合はSplit View/Stage Managerとみなす
+      // （大型iPadでは絶対値より相対値の方が確実）
+      if (fullScreenWidthRef.current > 0 && window.innerWidth < fullScreenWidthRef.current * 0.85) return true
+      // フォールバック: 絶対値チェック（iPad mini等の小型モデル）
       const isLandscape = screen.orientation
         ? screen.orientation.type.includes('landscape')
         : window.matchMedia('(orientation: landscape)').matches
