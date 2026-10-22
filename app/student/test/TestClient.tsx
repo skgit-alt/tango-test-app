@@ -363,6 +363,13 @@ export default function TestClient({
     // テスト開始時の幅を記録（Split View判定の基準）
     fullScreenWidthRef.current = window.innerWidth
 
+    // 向きが変わったらベースライン幅をリセット（縦↔横の変化で誤検知しないよう）
+    const resetBaseline = () => {
+      setTimeout(() => { fullScreenWidthRef.current = window.innerWidth }, 400)
+    }
+    window.addEventListener('orientationchange', resetBaseline)
+    screen.orientation?.addEventListener('change', resetBaseline)
+
     const isSplitView = () => {
       // Method 1: screen.widthが全画面幅を返す場合（デスクトップ・iPhone等）
       if (screen.width > 0 && (window.innerWidth / screen.width) < 0.65) return true
@@ -371,9 +378,9 @@ export default function TestClient({
       const isIPad = /iPad/.test(navigator.userAgent) ||
         (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
       if (!isIPad) return false
-      // 起動時の幅から15%以上縮小された場合はSplit View/Stage Managerとみなす
-      // （大型iPadでは絶対値より相対値の方が確実）
-      if (fullScreenWidthRef.current > 0 && window.innerWidth < fullScreenWidthRef.current * 0.85) return true
+      // 起動時の幅から8%以上縮小された場合はSplit View/Stage Managerとみなす
+      // iPadOS 16以降のSplit Viewは自由ドラッグ可能なため相対値で判定
+      if (fullScreenWidthRef.current > 0 && window.innerWidth < fullScreenWidthRef.current * 0.92) return true
       // フォールバック: 絶対値チェック（iPad mini等の小型モデル）
       const isLandscape = screen.orientation
         ? screen.orientation.type.includes('landscape')
@@ -427,6 +434,8 @@ export default function TestClient({
 
     return () => {
       window.removeEventListener('resize', check)
+      window.removeEventListener('orientationchange', resetBaseline)
+      screen.orientation?.removeEventListener('change', resetBaseline)
       clearInterval(interval)
       if (splitViewTimerRef.current) { clearInterval(splitViewTimerRef.current); splitViewTimerRef.current = null }
     }
