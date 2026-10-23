@@ -69,6 +69,7 @@ export default function TestClient({
   const currentSectionLabelRef = useRef<string | null>(null)
   const deviceTokenRef = useRef<string>('')
   const fullScreenWidthRef = useRef<number>(0)
+  const keyboardLastVisibleRef = useRef<number>(0)
   const topRef = useRef<HTMLDivElement>(null)
   const answersRef = useRef(answers)
   const submitTestRef = useRef<() => void>(() => {})
@@ -335,14 +336,32 @@ export default function TestClient({
 
   useEffect(() => {
     const fn = () => {
-      // blurの瞬間にキーボードが出ていた場合はiOSキーボードの▼ボタン操作なので無視
       const vv = window.visualViewport
-      const keyboardVisible = vv ? window.innerHeight - vv.height > 100 : false
-      setTimeout(() => { if (!document.hidden && !keyboardVisible) logCheat('app_switch') }, 100)
+      // blurの瞬間にキーボードが出ているか確認
+      const keyboardCurrentlyVisible = vv ? window.innerHeight - vv.height > 100 : false
+      // 最後の入力欄ではiOSがvisualViewportを先にリサイズしてからblurを発火するため、
+      // 直近800ms以内にキーボードが表示されていた場合も▼ボタン操作とみなして無視
+      const recentKeyboard = Date.now() - keyboardLastVisibleRef.current < 800
+      setTimeout(() => {
+        if (!document.hidden && !keyboardCurrentlyVisible && !recentKeyboard) logCheat('app_switch')
+      }, 100)
     }
     window.addEventListener('blur', fn)
     return () => window.removeEventListener('blur', fn)
   }, [logCheat])
+
+  // キーボード表示タイムスタンプを常時追跡（セクション問わず・blurハンドラーが参照）
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const track = () => {
+      if (window.innerHeight - vv.height > 100) {
+        keyboardLastVisibleRef.current = Date.now()
+      }
+    }
+    vv.addEventListener('resize', track)
+    return () => vv.removeEventListener('resize', track)
+  }, [])
 
   // Slide Over等でキーボードが出たことを検知（Dページのみスキップ）
   useEffect(() => {
