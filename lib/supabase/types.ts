@@ -1,6 +1,6 @@
 export type TestMode = number
 export type TestStatus = 'waiting' | 'open' | 'finished' | 'published'
-export type CheatEventType = 'tab_leave' | 'app_switch' | 'split_view'
+export type CheatEventType = 'tab_leave' | 'app_switch' | 'split_view' | 'dock'
 
 export interface Admin {
   id: string

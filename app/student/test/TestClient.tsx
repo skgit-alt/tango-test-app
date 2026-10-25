@@ -404,7 +404,13 @@ export default function TestClient({
       const isLandscape = screen.orientation
         ? screen.orientation.type.includes('landscape')
         : window.matchMedia('(orientation: landscape)').matches
-      return window.innerWidth < (isLandscape ? 1000 : 700)
+      if (window.innerWidth < (isLandscape ? 1000 : 700)) return true
+      // Method 3（2026-10-23 追加・iPad で確認済み）: 新しい iPadOS は Safari の窓を少し小さくしても screen が画面全体（例 1024×1366）を返す。
+      // 全画面なら幅は画面全体の長い辺（縦向きは短い辺）と同じ。少しでも狭ければ横に別アプリを置ける＝全画面でない（テスト開始前から小さくしていても検知）
+      const longSide = Math.max(screen.width, screen.height)
+      const shortSide = Math.min(screen.width, screen.height)
+      const full = isLandscape ? longSide : shortSide
+      return full > 0 && window.innerWidth < full - 4
     }
     const startSplitViewTracking = () => {
       cheatCountRef.current += 1
@@ -459,6 +465,45 @@ export default function TestClient({
       if (splitViewTimerRef.current) { clearInterval(splitViewTimerRef.current); splitViewTimerRef.current = null }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.id])
+
+  // Dock・Slide Over（2026-10-23 追加・iPad で確認済み）: Slide Over は画面の上に浮かぶだけで blur も resize も来ない。
+  // ただし画面のはしから Dock を引き出した瞬間に、触っていた指が取り消される（touchcancel）。通常のスクロール・入力では来ない（pointercancel のみ）。
+  // 念のため、画面のはし（下60px・他40px）から始まった指の touchcancel だけ数える。離脱秒数は分からないので即記録
+  useEffect(() => {
+    const fromEdge = new Map<number, boolean>()
+    const onStart = (e: TouchEvent) => {
+      const w = window.innerWidth
+      const h = window.innerHeight
+      for (const t of Array.from(e.changedTouches)) {
+        fromEdge.set(t.identifier, t.clientY > h - 60 || t.clientY < 40 || t.clientX < 40 || t.clientX > w - 40)
+      }
+    }
+    const onEnd = (e: TouchEvent) => { for (const t of Array.from(e.changedTouches)) fromEdge.delete(t.identifier) }
+    const onCancel = (e: TouchEvent) => {
+      const edge = Array.from(e.changedTouches).some(t => fromEdge.get(t.identifier))
+      for (const t of Array.from(e.changedTouches)) fromEdge.delete(t.identifier)
+      if (!edge || submittingRef.current) return
+      const now = Date.now()
+      if (now - lastLeaveCheatRef.current < 2000) return
+      lastLeaveCheatRef.current = now
+      cheatCountRef.current += 1
+      setCheatWarning({ visible: true, count: cheatCountRef.current, eventType: 'dock', durationSeconds: null })
+      setContentHidden(true)
+      fetch('/api/student/log-cheat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session.id, eventType: 'dock', durationSeconds: null }),
+      }).catch(err => console.error('[logCheat dock] failed:', err))
+    }
+    document.addEventListener('touchstart', onStart, { passive: true })
+    document.addEventListener('touchend', onEnd, { passive: true })
+    document.addEventListener('touchcancel', onCancel)
+    return () => {
+      document.removeEventListener('touchstart', onStart)
+      document.removeEventListener('touchend', onEnd)
+      document.removeEventListener('touchcancel', onCancel)
+    }
   }, [session.id])
 
   const saveCurrentPage = useCallback(async (page: number) => {
@@ -601,7 +646,7 @@ export default function TestClient({
   }).length
   const flaggedCount = flagged.size
   const timerColor = timeLeft <= 30 ? 'text-red-600' : timeLeft <= 60 ? 'text-orange-500' : 'text-gray-800'
-  const cheatEventLabel: Record<string, string> = { tab_leave: 'タブ離脱', app_switch: 'アプリ切替', split_view: '画面分割' }
+  const cheatEventLabel: Record<string, string> = { tab_leave: 'タブ離脱', app_switch: 'アプリ切替', split_view: '画面分割', dock: 'Dock・Slide Over の操作' }
 
   // 別端末でテスト中の場合はブロック画面を表示
   if (deviceBlocked) {
@@ -638,13 +683,15 @@ export default function TestClient({
             <h2 className="text-xl font-bold text-red-700">画面分割が検出されました</h2>
             <p className="text-3xl font-bold text-red-600">{splitViewSeconds}秒 分割中</p>
             <p className="text-gray-600 text-sm leading-relaxed">
-              テスト中は画面分割できません。<br />
+              テスト中は画面分割できません（全画面で受けてください）。<br />
               画面分割を解除するとテストに戻れます。
             </p>
             <div className="bg-gray-50 rounded-xl p-3 text-left text-xs text-gray-500 space-y-1">
               <p className="font-medium text-gray-600">解除方法（iPad）</p>
               <p>・画面の境界線を端まで引っ張る</p>
               <p>・または上部の「…」をタップして「フルスクリーン」を選ぶ</p>
+              <p>・窓を小さくしているときは、左上の「●●●」から全画面にする（横に別の App があるときも）</p>
+              <p>・Safari の左のサイドバーを開いているときは、閉じる</p>
             </div>
             <p className="text-xs text-gray-400">この行動は記録されています</p>
           </div>
@@ -737,9 +784,11 @@ export default function TestClient({
               <p className="text-sm text-gray-600 mt-2">{cheatEventLabel[cheatWarning.eventType]} が検知されました。この行動は記録されています。</p>
               <p className="text-sm text-red-600 font-medium mt-2">検出回数: {cheatWarning.count}回</p>
               <p className="text-sm text-orange-600 font-medium">
-                {cheatWarning.durationSeconds !== null
-                  ? `${cheatWarning.durationSeconds}秒 離脱していました`
-                  : `${cheatLiveSeconds}秒 離脱中...`}
+                {cheatWarning.eventType === 'dock'
+                  ? 'テスト中は、Dock や Slide Over（別の App を浮かせる画面）を出さないでください'
+                  : cheatWarning.durationSeconds !== null
+                    ? `${cheatWarning.durationSeconds}秒 離脱していました`
+                    : `${cheatLiveSeconds}秒 離脱中...`}
               </p>
             </div>
             <button onClick={handleDismissWarning} className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 transition">テストに戻る</button>
@@ -764,7 +813,8 @@ export default function TestClient({
         </div>
       </header>
 
-      {contentHidden ? (
+      {/* 画面分割で止めている間も問題を隠す（2026-10-23：後ろに問題が見えていた） */}
+      {contentHidden || splitViewBlocked ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center text-gray-400">
             <p className="text-xl font-medium">問題を表示できません</p>

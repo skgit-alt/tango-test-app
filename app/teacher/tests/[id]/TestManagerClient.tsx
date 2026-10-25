@@ -703,6 +703,7 @@ export default function TestManagerClient({
     tab_leave: 'タブ離脱',
     app_switch: 'アプリ切替',
     split_view: '画面分割',
+    dock: 'Dock・Slide Over',
   }
 
   return (
