@@ -8,6 +8,7 @@ import {
 import {
   DEFAULT_POINT_RULES, ruleLabel, type PointRule,
   DEFAULT_MEDAL_RULES, type MedalRule,
+  type RankingKind,
 } from '@/lib/supabase/types'
 
 // ─── 型定義 ──────────────────────────────────────────────────────────────────
@@ -49,6 +50,8 @@ interface RankingData {
 
 const COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4']
 
+const EMPTY_DATA: RankingData = { settings: null, rounds: [], ranking: [], classAverages: [], medalsByStudentId: {} }
+
 // ─── 集計期間設定パネル ──────────────────────────────────────────────────────
 
 function SettingsPanel({
@@ -58,7 +61,7 @@ function SettingsPanel({
   isAdmin = true,
 }: {
   settings: Settings | null
-  activeMode: 50 | 20
+  activeMode: RankingKind
   onSaved: () => void
   isAdmin?: boolean
 }) {
@@ -68,12 +71,11 @@ function SettingsPanel({
   const [label, setLabel] = useState('')
   const [saving, setSaving] = useState(false)
 
+  // タブ切替で未設定のランキングに移ったとき、前のタブの値が残らないようにする
   useEffect(() => {
-    if (settings) {
-      setFromRound(String(settings.from_round))
-      setToRound(String(settings.to_round))
-      setLabel(settings.label ?? '')
-    }
+    setFromRound(settings ? String(settings.from_round) : '')
+    setToRound(settings ? String(settings.to_round) : '')
+    setLabel(settings?.label ?? '')
   }, [settings])
 
   const handleSave = async () => {
@@ -115,6 +117,9 @@ function SettingsPanel({
                 （{settings.to_round - settings.from_round + 1}回分）
               </span>
             </p>
+          )}
+          {!settings && !editing && (
+            <p className="text-sm text-orange-500 mt-0.5">まだ設定されていません。「期間を変更」から集計する回を決めてください。</p>
           )}
         </div>
         {isAdmin && !editing && (
@@ -197,7 +202,7 @@ function AdvancedSettingsPanel({
   onClose,
 }: {
   settings: Settings | null
-  activeMode: 50 | 20
+  activeMode: RankingKind
   onSaved: () => void
   onClose: () => void
 }) {
@@ -209,13 +214,11 @@ function AdvancedSettingsPanel({
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (settings) {
-      setRankingType((settings.ranking_type as 'points' | 'score') ?? (activeMode === 20 ? 'score' : 'points'))
-      setMaxRank(String(settings.max_rank ?? 30))
-      setPointRules(settings.point_rules ?? DEFAULT_POINT_RULES)
-      setMedalsEnabled(settings.medals_enabled !== false)
-      setMedalRules(settings.medal_rules ?? DEFAULT_MEDAL_RULES)
-    }
+    setRankingType((settings?.ranking_type as 'points' | 'score') ?? (activeMode === 20 ? 'score' : 'points'))
+    setMaxRank(String(settings?.max_rank ?? 30))
+    setPointRules(settings?.point_rules ?? DEFAULT_POINT_RULES)
+    setMedalsEnabled(settings?.medals_enabled !== false)
+    setMedalRules(settings?.medal_rules ?? DEFAULT_MEDAL_RULES)
   }, [settings, activeMode])
 
   const updateMedalRule = (i: number, field: keyof MedalRule, value: string) => {
@@ -278,7 +281,7 @@ function AdvancedSettingsPanel({
     <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-5 shadow-md">
       <div className="flex items-center justify-between">
         <h2 className="font-semibold text-gray-800">
-          各種設定 <span className="text-sm text-gray-400 font-normal ml-1">（{activeMode === 50 ? '50問' : '20問'}ランキング）</span>
+          各種設定 <span className="text-sm text-gray-400 font-normal ml-1">（{activeMode === 50 ? '50問' : activeMode === 20 ? '20問' : '英熟語1000'}ランキング）</span>
         </h2>
         <button
           onClick={onClose}
@@ -516,6 +519,7 @@ function RankingTable({
   rounds,
   loading,
   is20,
+  enableMedals,
   settings,
   medalsByStudentId = {},
   onMedalAwarded,
@@ -525,13 +529,16 @@ function RankingTable({
   rounds: number[]
   loading: boolean
   is20: boolean
+  enableMedals: boolean
   settings: Settings | null
   medalsByStudentId?: Record<string, string>
   onMedalAwarded?: () => void
   isAdmin?: boolean
 }) {
   const unit = settings?.ranking_type === 'score' ? '点' : (is20 ? '点' : 'pt')
-  const noDataMsg = is20
+  const noDataMsg = !settings
+    ? '上の「期間を変更」から集計する回を設定してください'
+    : is20
     ? 'テストに「第何回」を設定してください'
     : 'テストに「第何回」を設定し、ポイントが記録されるとここに表示されます'
 
@@ -548,7 +555,7 @@ function RankingTable({
   const roundsWithData = rounds.filter(r =>
     ranking.some(entry => entry.roundValues[String(r)] != null)
   )
-  const allRoundsFilled = !is20 && totalExpected > 0 && roundsWithData.length >= totalExpected
+  const allRoundsFilled = enableMedals && totalExpected > 0 && roundsWithData.length >= totalExpected
   const medalsOn = settings?.medals_enabled !== false
   const canAward = medalsOn && allRoundsFilled && !loading && !medalSuccess
 
@@ -605,7 +612,7 @@ function RankingTable({
         <h2 className="font-semibold text-gray-800">
           個人ランキング（上位{settings?.max_rank ?? 30}名）
         </h2>
-        {!is20 && medalsOn && isAdmin && (
+        {enableMedals && medalsOn && isAdmin && (
           <div className="flex items-center gap-3">
             {medalSuccess && (
               <span className="text-green-600 text-sm font-medium">✅ 勲章を付与しました！</span>
@@ -778,11 +785,9 @@ function ClassAveragesChart({
 // ─── メインコンポーネント ─────────────────────────────────────────────────────
 
 export default function PointsPage() {
-  const [activeTab, setActiveTab] = useState<50 | 20>(50)
-  const [data50, setData50] = useState<RankingData>({ settings: null, rounds: [], ranking: [], classAverages: [], medalsByStudentId: {} })
-  const [data20, setData20] = useState<RankingData>({ settings: null, rounds: [], ranking: [], classAverages: [], medalsByStudentId: {} })
-  const [loading50, setLoading50] = useState(true)
-  const [loading20, setLoading20] = useState(true)
+  const [activeTab, setActiveTab] = useState<RankingKind>(50)
+  const [dataByKind, setDataByKind] = useState<Record<string, RankingData>>({})
+  const [loadingByKind, setLoadingByKind] = useState<Record<string, boolean>>({})
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [isAdmin, setIsAdmin] = useState<boolean>(true) // デフォルトtrue（ロード完了前に操作できないよう後でfalseに）
 
@@ -790,31 +795,33 @@ export default function PointsPage() {
     fetch('/api/teacher/me').then(r => r.json()).then(d => setIsAdmin(d.role === 'admin')).catch(() => setIsAdmin(false))
   }, [])
 
-  const fetchData = async (mode: 50 | 20) => {
-    const setter = mode === 50 ? setData50 : setData20
-    const loadSetter = mode === 50 ? setLoading50 : setLoading20
-    loadSetter(true)
-    const res = await fetch(`/api/teacher/ranking-data?mode=${mode}`, { cache: 'no-store' })
+  const fetchData = async (kind: RankingKind) => {
+    setLoadingByKind((prev) => ({ ...prev, [kind]: true }))
+    const res = await fetch(`/api/teacher/ranking-data?mode=${kind}`, { cache: 'no-store' })
     if (res.ok) {
       const json = await res.json()
-      setter({
-        settings: json.settings ?? null,
-        rounds: json.rounds ?? [],
-        ranking: json.ranking ?? [],
-        classAverages: json.classAverages ?? [],
-        medalsByStudentId: json.medalsByStudentId ?? {},
-      })
+      setDataByKind((prev) => ({
+        ...prev,
+        [kind]: {
+          settings: json.settings ?? null,
+          rounds: json.rounds ?? [],
+          ranking: json.ranking ?? [],
+          classAverages: json.classAverages ?? [],
+          medalsByStudentId: json.medalsByStudentId ?? {},
+        },
+      }))
     }
-    loadSetter(false)
+    setLoadingByKind((prev) => ({ ...prev, [kind]: false }))
   }
 
   useEffect(() => {
     fetchData(50)
     fetchData(20)
+    fetchData('idiom')
   }, [])
 
-  const activeData = activeTab === 50 ? data50 : data20
-  const activeLoading = activeTab === 50 ? loading50 : loading20
+  const activeData = dataByKind[activeTab] ?? EMPTY_DATA
+  const activeLoading = loadingByKind[activeTab] ?? true
 
   const handleDownload = () => {
     const { ranking, rounds, settings } = activeData
@@ -839,7 +846,7 @@ export default function PointsPage() {
 
     const wb = XLSX.utils.book_new()
     const ws = XLSX.utils.json_to_sheet(rows)
-    const sheetName = activeTab === 50 ? 'Ⅱ類50問ポイントランキング' : 'Ⅰ類20問スコアランキング'
+    const sheetName = activeTab === 50 ? 'Ⅱ類50問ポイントランキング' : activeTab === 20 ? 'Ⅰ類20問スコアランキング' : '英熟語1000ランキング'
     XLSX.utils.book_append_sheet(wb, ws, sheetName)
     XLSX.writeFile(wb, `${sheetName}_${settings?.label ?? ''}.xlsx`)
   }
@@ -850,7 +857,7 @@ export default function PointsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">ランキング管理</h1>
         <div className="flex gap-2">
-          {activeTab === 50 && data50.ranking.length > 0 && (
+          {activeTab === 50 && activeData.ranking.length > 0 && (
             <a
               href="/api/teacher/ranking-excel"
               download
@@ -892,6 +899,16 @@ export default function PointsPage() {
         >
           📄 Ⅰ類20問スコアランキング
         </button>
+        <button
+          onClick={() => setActiveTab('idiom')}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+            activeTab === 'idiom'
+              ? 'bg-pink-600 text-white'
+              : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+          }`}
+        >
+          📚 英熟語1000ランキング
+        </button>
         {isAdmin && (
           <button
             onClick={() => setShowAdvanced((v) => !v)}
@@ -924,8 +941,8 @@ export default function PointsPage() {
         isAdmin={isAdmin}
       />
 
-      {/* ポイント早見表（50問かつポイントランキングのみ） */}
-      {activeTab === 50 && activeData.settings?.ranking_type !== 'score' && (
+      {/* ポイント早見表（20問以外のポイントランキングのみ） */}
+      {activeTab !== 20 && activeData.settings?.ranking_type !== 'score' && (
         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
           <div className="px-4 py-2.5 bg-green-700">
             <p className="text-xs font-bold text-white">ポイント早見表</p>
@@ -973,6 +990,7 @@ export default function PointsPage() {
         rounds={activeData.rounds}
         loading={activeLoading}
         is20={activeTab === 20}
+        enableMedals={activeTab === 50}
         settings={activeData.settings}
         medalsByStudentId={activeData.medalsByStudentId}
         onMedalAwarded={() => fetchData(50)}

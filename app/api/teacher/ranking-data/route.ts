@@ -1,6 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { calcPointsFromRules, DEFAULT_POINT_RULES, getMedalEmoji, DEFAULT_MEDAL_RULES, type MedalRule } from '@/lib/supabase/types'
+import {
+  calcPointsFromRules, DEFAULT_POINT_RULES, getMedalEmoji, DEFAULT_MEDAL_RULES, type MedalRule,
+  parseRankingKind, rankingSettingsId, isTestInRanking, isClassInRanking,
+} from '@/lib/supabase/types'
 import { NextRequest, NextResponse } from 'next/server'
 
 // ─── 型定義 ──────────────────────────────────────────────────────────────────
@@ -30,9 +33,8 @@ export async function GET(req: NextRequest) {
 
   const admin = createAdminClient()
 
-  const modeParam = req.nextUrl.searchParams.get('mode')
-  const is20 = modeParam === '20'
-  const settingsId = is20 ? 2 : 1
+  const kind = parseRankingKind(req.nextUrl.searchParams.get('mode'))
+  const settingsId = rankingSettingsId(kind)
 
   // ランキング設定を取得
   const { data: settings } = await admin
@@ -45,25 +47,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ settings: null, rounds: [], ranking: [], classAverages: [] })
   }
 
-  // 対象テストを取得（round_number が範囲内、モードでフィルタ）
-  let testsQuery = admin
+  // 対象テストを取得（round_number が範囲内で、このランキングの種別に該当するもの）
+  const { data: rangeTests } = await admin
     .from('tests')
     .select('id, round_number, mode')
     .gte('round_number', settings.from_round)
     .lte('round_number', settings.to_round)
     .not('round_number', 'is', null)
 
-  if (is20) {
-    // 20Qモード: mode≠50 かつ mode≠300
-    testsQuery = testsQuery.neq('mode', 50).neq('mode', 300)
-  } else {
-    // 50Qモード: mode=50
-    testsQuery = testsQuery.eq('mode', 50)
-  }
+  const targetTests = (rangeTests ?? []).filter((t: { mode: number }) => isTestInRanking(t.mode, kind))
 
-  const { data: targetTests } = await testsQuery
-
-  if (!targetTests || targetTests.length === 0) {
+  if (targetTests.length === 0) {
     return NextResponse.json({ settings, rounds: [], ranking: [], classAverages: [] })
   }
 
@@ -115,13 +109,8 @@ export async function GET(req: NextRequest) {
         const st = Array.isArray(s.students) ? (s.students as { name: string; class_name: string; seat_number: number; test_name: string }[])[0] : s.students as { name: string; class_name: string; seat_number: number; test_name: string } | null
         if (!st) continue
 
-        // クラスフィルタ: 実験用クラスを除外
         const className = st.class_name ?? ''
-        if (is20) {
-          if (!/^\d/.test(className)) continue   // 20Q: 数字始まりのみ
-        } else {
-          if (!/^[A-Za-z]/.test(className)) continue  // 50Q: 英字始まりのみ
-        }
+        if (!isClassInRanking(className, kind)) continue
 
         const round = testRoundMap[s.test_id]
         if (!round) continue
@@ -183,12 +172,7 @@ export async function GET(req: NextRequest) {
       const st = Array.isArray(s.students) ? (s.students as { class_name: string }[])[0] : s.students as { class_name: string } | null
       const className = st?.class_name ?? ''
 
-      // クラスフィルタ（50Q: A～D組 英字始まり / 20Q: 1～6組 数字始まり）
-      if (is20) {
-        if (!/^\d/.test(className)) continue
-      } else {
-        if (!/^[A-Za-z]/.test(className)) continue
-      }
+      if (!isClassInRanking(className, kind)) continue
 
       const key = `${s.student_id}_${s.test_id}`
       if (!bestScoreMap[key] || s.score > bestScoreMap[key].score) {
@@ -219,7 +203,7 @@ export async function GET(req: NextRequest) {
 
   // ─── 勲章情報（50問のみ）──────────────────────────────────────────────────────
   const medalsByStudentId: Record<string, string> = {}
-  if (!is20 && ranking.length > 0) {
+  if (kind === 50 && ranking.length > 0) {
     const studentIds = ranking.map((r) => r.student_id)
     const { data: medals } = await admin
       .from('medals')
@@ -265,7 +249,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: '無効な値です' }, { status: 400 })
   }
 
-  const settingsId = mode === 20 ? 2 : 1
+  const settingsId = rankingSettingsId(parseRankingKind(String(mode)))
   const admin = createAdminClient()
 
   const upsertData: Record<string, unknown> = {

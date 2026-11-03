@@ -3,7 +3,7 @@
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
-import { DEFAULT_POINT_RULES, ruleLabel, type PointRule, type MedalRule } from '@/lib/supabase/types'
+import { DEFAULT_POINT_RULES, ruleLabel, type PointRule, type MedalRule, type RankingKind } from '@/lib/supabase/types'
 
 // ─── 型定義 ──────────────────────────────────────────────────────────────────
 
@@ -35,7 +35,7 @@ export interface ClassAvg {
 }
 
 export interface RankingViewProps {
-  mode: 50 | 20
+  mode: RankingKind
   settings: Settings | null
   rounds: number[]
   ranking: RankEntry[]
@@ -109,8 +109,8 @@ export default function RankingView({
         </div>
       )}
 
-      {/* ポイント早見表（50問かつポイントランキングのみ） */}
-      {mode === 50 && settings?.ranking_type !== 'score' && (
+      {/* ポイント早見表（20問以外のポイントランキングのみ） */}
+      {mode !== 20 && settings?.ranking_type !== 'score' && (
         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
           <div className="px-4 py-2.5 bg-green-700">
             <p className="text-xs font-bold text-white">ポイント早見表</p>

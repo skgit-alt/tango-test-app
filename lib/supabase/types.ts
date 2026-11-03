@@ -178,3 +178,34 @@ export function ruleLabel(rule: PointRule): string {
   if (rule.min === 0) return `${rule.max}点以下`
   return `${rule.max}〜${rule.min}点`
 }
+
+// ─── ランキング種別 ──────────────────────────────────────────────────────────
+// 50: Ⅱ類50問 / 20: Ⅰ類20問 / idiom: 英熟語1000（先生画面・生徒画面で共通の集計ルール）
+export type RankingKind = 50 | 20 | 'idiom'
+
+export const IDIOM_MODES = [40, 45, 55]
+
+export function parseRankingKind(value: string | null | undefined): RankingKind {
+  if (value === '20') return 20
+  if (value === 'idiom') return 'idiom'
+  return 50
+}
+
+// ranking_settings テーブルの行ID
+export function rankingSettingsId(kind: RankingKind): number {
+  if (kind === 20) return 2
+  if (kind === 'idiom') return 3
+  return 1
+}
+
+export function isTestInRanking(mode: number, kind: RankingKind): boolean {
+  if (kind === 50) return mode === 50
+  if (kind === 'idiom') return IDIOM_MODES.includes(mode)
+  return mode !== 50 && mode !== 300 && mode !== 600 && !IDIOM_MODES.includes(mode)
+}
+
+// 20問は1〜6組、50問・英熟語はA〜D組（実験用クラスはどのランキングにも含めない）
+export function isClassInRanking(className: string, kind: RankingKind): boolean {
+  if (kind === 20) return /^\d/.test(className)
+  return /^[A-Za-z]/.test(className)
+}

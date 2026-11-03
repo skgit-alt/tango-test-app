@@ -168,6 +168,7 @@ CREATE TABLE IF NOT EXISTS test_name_change_requests (
 
 -- ランキング設定の初期レコード
 -- id=1: 50問ポイントランキング, id=2: 20問スコアランキング
+-- id=3: 英熟語1000ランキング（初期レコードなし。先生がランキング管理画面で集計期間を保存すると作成される）
 INSERT INTO ranking_settings (id, from_round, to_round, label, ranking_type, max_rank)
 VALUES
   (1, 1, 5, '第1回〜第5回', 'points', 30),

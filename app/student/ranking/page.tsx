@@ -1,6 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { calcPointsFromRules, DEFAULT_POINT_RULES, getMedalEmoji, DEFAULT_MEDAL_RULES, type MedalRule } from '@/lib/supabase/types'
+import {
+  calcPointsFromRules, DEFAULT_POINT_RULES, getMedalEmoji, DEFAULT_MEDAL_RULES, type MedalRule,
+  type RankingKind, rankingSettingsId, isTestInRanking, isClassInRanking,
+} from '@/lib/supabase/types'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import RankingView, { type RankEntry, type Settings, type ClassAvg } from './RankingView'
@@ -9,42 +12,34 @@ import RankingView, { type RankEntry, type Settings, type ClassAvg } from './Ran
 
 async function fetchRankingData(
   admin: ReturnType<typeof createAdminClient>,
-  is20: boolean
+  kind: RankingKind
 ): Promise<{
   settings: Settings | null
   rounds: number[]
   ranking: RankEntry[]
   classAverages: ClassAvg[]
 }> {
-  const settingsId = is20 ? 2 : 1
-
   const { data: settings } = await admin
     .from('ranking_settings')
     .select('*')
-    .eq('id', settingsId)
+    .eq('id', rankingSettingsId(kind))
     .maybeSingle()
 
   if (!settings) {
     return { settings: null, rounds: [], ranking: [], classAverages: [] }
   }
 
-  // 対象テストを取得
-  let testsQuery = admin
+  // 対象テストを取得（round_number が範囲内で、このランキングの種別に該当するもの）
+  const { data: rangeTests } = await admin
     .from('tests')
     .select('id, round_number, mode')
     .gte('round_number', settings.from_round)
     .lte('round_number', settings.to_round)
     .not('round_number', 'is', null)
 
-  if (is20) {
-    testsQuery = testsQuery.neq('mode', 50).neq('mode', 55).neq('mode', 300)
-  } else {
-    testsQuery = testsQuery.in('mode', [50, 55])
-  }
+  const targetTests = (rangeTests ?? []).filter((t: { mode: number }) => isTestInRanking(t.mode, kind))
 
-  const { data: targetTests } = await testsQuery
-
-  if (!targetTests || targetTests.length === 0) {
+  if (targetTests.length === 0) {
     return { settings, rounds: [], ranking: [], classAverages: [] }
   }
 
@@ -96,13 +91,8 @@ async function fetchRankingData(
           : s.students as { name: string; class_name: string; seat_number: number; test_name: string } | null
         if (!st) continue
 
-        // クラスフィルタ: 実験用クラスを除外
         const className = st.class_name ?? ''
-        if (is20) {
-          if (!/^\d/.test(className)) continue   // 20Q: 数字始まりのみ
-        } else {
-          if (!/^[A-Za-z]/.test(className)) continue  // 50Q: 英字始まりのみ
-        }
+        if (!isClassInRanking(className, kind)) continue
 
         const round = testRoundMap[s.test_id]
         if (!round) continue
@@ -163,12 +153,7 @@ async function fetchRankingData(
         ? (s.students as { class_name: string }[])[0]
         : s.students as { class_name: string } | null
       const className = st?.class_name ?? ''
-
-      if (is20) {
-        if (!/^\d/.test(className)) continue
-      } else {
-        if (!/^[A-Za-z]/.test(className)) continue
-      }
+      if (!isClassInRanking(className, kind)) continue
 
       const key = `${s.student_id}_${s.test_id}`
       if (!bestScoreMap[key] || s.score > bestScoreMap[key].score) {
@@ -223,11 +208,16 @@ export default async function RankingPage() {
   const show20 = /^\d/.test(className)
   const showBoth = !show50 && !show20
 
-  // データ取得
-  const [data50, data20] = await Promise.all([
-    (show50 || showBoth) ? fetchRankingData(admin, false) : Promise.resolve(null),
-    (show20 || showBoth) ? fetchRankingData(admin, true) : Promise.resolve(null),
+  // データ取得（英熟語はA〜D組向け）
+  const [data50, data20, dataIdiom] = await Promise.all([
+    (show50 || showBoth) ? fetchRankingData(admin, 50) : Promise.resolve(null),
+    (show20 || showBoth) ? fetchRankingData(admin, 20) : Promise.resolve(null),
+    (show50 || showBoth) ? fetchRankingData(admin, 'idiom') : Promise.resolve(null),
   ])
+
+  // 英熟語ランキングは先生が集計期間を設定するまで表示しない
+  const idiomSettings = dataIdiom?.settings ?? null
+  const showHeaders = [data50, data20, idiomSettings].filter(Boolean).length > 1
 
   const myTestName = student.test_name ?? ''
 
@@ -265,9 +255,9 @@ export default async function RankingPage() {
         {/* 50問ポイントランキング */}
         {data50 && (
           <section>
-            {showBoth && (
+            {showHeaders && (
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                ⚡ 50問ポイントランキング
+                ⚡ Ⅱ類50問ポイントランキング
               </h2>
             )}
             <RankingView
@@ -283,10 +273,30 @@ export default async function RankingPage() {
           </section>
         )}
 
+        {/* 英熟語1000ランキング */}
+        {dataIdiom && idiomSettings && (
+          <section>
+            {showHeaders && (
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                📚 英熟語1000ランキング
+              </h2>
+            )}
+            <RankingView
+              mode="idiom"
+              settings={idiomSettings}
+              rounds={dataIdiom.rounds}
+              ranking={dataIdiom.ranking}
+              classAverages={dataIdiom.classAverages}
+              myTestName={myTestName}
+              label={idiomSettings.ranking_type === 'score' ? 'スコアランキング' : 'ポイントランキング'}
+            />
+          </section>
+        )}
+
         {/* 20問スコアランキング */}
         {data20 && (
           <section>
-            {showBoth && (
+            {showHeaders && (
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
                 📄 Ⅰ類20問スコアランキング
               </h2>
