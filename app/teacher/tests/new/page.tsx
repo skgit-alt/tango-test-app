@@ -128,7 +128,9 @@ function rtfToPlainText(buffer: ArrayBuffer): string {
     if (!hexBuf.length) return
     if (!isIgnored()) {
       try {
-        const decoded = new TextDecoder('shift-jis').decode(new Uint8Array(hexBuf))
+        // Wordは「“ ”」を欧文の1バイトで保存する。単独の1バイトはShift-JISの全角文字になり得ないので欧文として読む
+        const isLoneWestern = hexBuf.length === 1 && (hexBuf[0] < 0xA1 || hexBuf[0] > 0xDF)
+        const decoded = new TextDecoder(isLoneWestern ? 'windows-1252' : 'shift-jis').decode(new Uint8Array(hexBuf))
         result.push(isUl() ? `【${decoded}】` : decoded)
       } catch {
         result.push('?')
@@ -177,6 +179,10 @@ function rtfToPlainText(buffer: ArrayBuffer): string {
             ignoreStack[ignoreStack.length - 1] = true
           } else if (!isIgnored()) {
             if (word === 'par' || word === 'line') result.push('\n')
+            else if (word === 'lquote') result.push('‘')
+            else if (word === 'rquote') result.push('’')
+            else if (word === 'ldblquote') result.push('“')
+            else if (word === 'rdblquote') result.push('”')
             else if (word === 'ul' && param !== '0') ulStack[ulStack.length - 1] = true
             else if (word === 'ul' && param === '0') ulStack[ulStack.length - 1] = false
             else if (word === 'ulnone') ulStack[ulStack.length - 1] = false
@@ -389,8 +395,8 @@ function parseRtfTarget1000(buffer: ArrayBuffer): { title: string; questions: Qu
     }
   }
 
-  // Strip trailing page reference like "｢p.16・1｣" (non-ASCII chars from Shift-JIS page refs)
-  const stripPageRef = (s: string) => s.replace(/[^\x00-\x7F].*$/, '').trim()
+  // 文末のページ参照「〔p.16，1〕」を除く。文中の「“ ”」などの欧文記号では切らない
+  const stripPageRef = (s: string) => s.replace(/[^\x00-\x7F -ɏ‐-‧].*$/, '').trim()
 
   for (const line of lines) {
     if (!title) {
@@ -449,8 +455,9 @@ function parseRtfTarget1000(buffer: ArrayBuffer): { title: string; questions: Qu
     const last = rawQs[rawQs.length - 1]
 
     if (section === 'A') {
-      const qM = line.match(/^\((\d+)\)\s+([A-Za-z].*)$/)
-      if (qM) {
+      // 熟語は「(just) ...」「～ will do」のように英字以外でも始まる。「(1) ＿＿＿＿」は解答欄なので除外
+      const qM = line.match(/^\((\d+)\)\s+(.+)$/)
+      if (qM && !/^[＿_\s]+$/.test(qM[2])) {
         const rest = qM[2]
         const idx1 = rest.indexOf('①')
         if (idx1 >= 0) {
