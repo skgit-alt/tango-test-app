@@ -252,6 +252,26 @@ export default async function RankingPage() {
       </header>
 
       <div className="max-w-lg mx-auto px-4 py-6 space-y-8">
+        {/* 英熟語1000ランキング */}
+        {dataIdiom && idiomSettings && (
+          <section>
+            {showHeaders && (
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                📚 英熟語1000ランキング
+              </h2>
+            )}
+            <RankingView
+              mode="idiom"
+              settings={idiomSettings}
+              rounds={dataIdiom.rounds}
+              ranking={dataIdiom.ranking}
+              classAverages={dataIdiom.classAverages}
+              myTestName={myTestName}
+              label={idiomSettings.ranking_type === 'score' ? 'スコアランキング' : 'ポイントランキング'}
+            />
+          </section>
+        )}
+
         {/* 50問ポイントランキング */}
         {data50 && (
           <section>
@@ -269,26 +289,6 @@ export default async function RankingPage() {
               myTestName={myTestName}
               label="ポイントランキング"
               medalsByStudentId={medalsByStudentId50}
-            />
-          </section>
-        )}
-
-        {/* 英熟語1000ランキング */}
-        {dataIdiom && idiomSettings && (
-          <section>
-            {showHeaders && (
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                📚 英熟語1000ランキング
-              </h2>
-            )}
-            <RankingView
-              mode="idiom"
-              settings={idiomSettings}
-              rounds={dataIdiom.rounds}
-              ranking={dataIdiom.ranking}
-              classAverages={dataIdiom.classAverages}
-              myTestName={myTestName}
-              label={idiomSettings.ranking_type === 'score' ? 'スコアランキング' : 'ポイントランキング'}
             />
           </section>
         )}
